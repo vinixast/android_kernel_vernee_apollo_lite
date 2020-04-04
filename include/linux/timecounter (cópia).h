@@ -17,7 +17,6 @@
 #ifndef _LINUX_TIMECOUNTER_H
 #define _LINUX_TIMECOUNTER_H
 
-typedef u64 cycle_t;
 #include <linux/types.h>
 
 /* simplify initialization of mask field */
