@@ -293,6 +293,16 @@ struct sdio_func *sdio_alloc_func(struct mmc_card *card)
 	if (!func)
 		return ERR_PTR(-ENOMEM);
 
+	/*
+	 * allocate buffer separately to make sure it's properly aligned for
+	 * DMA usage (incl. 64 bit DMA)
+	 */
+	func->tmpbuf = kmalloc(4, GFP_KERNEL);
+	if (!func->tmpbuf) {
+		kfree(func);
+		return ERR_PTR(-ENOMEM);
+	}
+
 	func->card = card;
 
 	device_initialize(&func->dev);
