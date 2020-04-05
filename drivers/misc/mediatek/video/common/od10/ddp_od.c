@@ -35,6 +35,8 @@
 #include <m4u.h>
 #include <ddp_drv.h>
 #include <ddp_reg.h>
+#include <ddp_debug.h>
+#include <ddp_log.h>
 #include <lcm_drv.h>
 #include <ddp_dither.h>
 #include <ddp_od.h>
@@ -43,13 +45,6 @@
 #include "ddp_od_reg.h"
 #include "ddp_od_table.h"
 
-#if defined(COMMON_DISP_LOG)
-#include <disp_debug.h>
-#include <disp_log.h>
-#else
-#include <disp_drv_log.h>
-#include <ddp_log.h>
-#endif
 
 #define OD_ALLOW_DEFAULT_TABLE
 /* #define OD_LINEAR_TABLE_IF_NONE */
@@ -157,12 +152,9 @@ static volatile struct {
 	unsigned int rdma_normal;
 } g_od_debug_cnt = { 0 };
 
+
 static void od_dump_all(void);
 static ddp_module_notify g_od_ddp_notify;
-
-#if defined(CONFIG_MTK_OD_SUPPORT)
-
-static int od_start(DISP_MODULE_ENUM module, void *cmdq);
 
 static void _od_reg_init(void *cmdq)
 {
@@ -204,20 +196,11 @@ static void _od_reg_init(void *cmdq)
 	DISP_REG_SET(cmdq, OD_REG69, 0x000200C0);
 }
 
-#endif /* defined(CONFIG_MTK_OD_SUPPORT) */
 
 static void od_refresh_screen(void)
 {
-#if defined(CONFIG_ARCH_ELBRUS)
-	return;
-#elif defined(CONFIG_ARCH_MT6753) || defined(CONFIG_ARCH_MT6795)
 	if (g_od_ddp_notify != NULL)
 		g_od_ddp_notify(DISP_MODULE_OD, DISP_PATH_EVENT_TRIGGER);
-#else
-
-	if (g_od_ddp_notify != NULL)
-		g_od_ddp_notify(DISP_MODULE_OD, DISP_PATH_EVENT_OD_TRIGGER);
-#endif
 }
 
 
@@ -662,6 +645,7 @@ void disp_config_od(unsigned int width, unsigned int height, void *cmdq, unsigne
 		BUG();
 	}
 
+	_od_reg_init(cmdq);
 	_od_set_table(cmdq, od_table_select, od_table, 0);
 	_od_set_dram_buffer_addr(cmdq, manual_cpr, width, height);
 	_od_set_frame_protect_init(cmdq, width, height);
@@ -707,28 +691,17 @@ void disp_od_hwc_force(int allow_enabled)
 
 void disp_od_set_smi_clock(int enabled)
 {
-#ifndef CONFIG_MTK_CLKMGR
-	eDDP_CLK_ID larb_clk;
-
 	ODDBG(OD_LOG_ALWAYS, "disp_od_set_smi_clock(%d), od_enabled=%d", enabled, g_od_is_enabled);
-
-#if defined(CONFIG_ARCH_MT6757) || defined(CONFIG_ARCH_ELBRUS)
-	larb_clk = DISP0_SMI_LARB4;
-#else
-	larb_clk = DISP0_SMI_LARB5;
-#endif
 
 	if (enabled) {
 		ddp_clk_prepare_enable(DISP0_SMI_COMMON);
-		ddp_clk_prepare_enable(larb_clk);
+		ddp_clk_prepare_enable(DISP0_SMI_LARB5);
 	} else {
-		ddp_clk_disable_unprepare(larb_clk);
+		ddp_clk_disable_unprepare(DISP0_SMI_LARB5);
 		ddp_clk_disable_unprepare(DISP0_SMI_COMMON);
 	}
-#else
-	ODDBG(OD_LOG_ALWAYS, "disp_od_set_smi_clock not support");
-#endif
 }
+
 
 void disp_od_set_enabled(void *cmdq, int enabled)
 {
@@ -926,7 +899,7 @@ static int od_config_od(DISP_MODULE_ENUM module, disp_ddp_path_config *pConfig, 
 		void *od_table = lcm_param->od_table;
 
 		if (od_table != NULL)
-			ODDBG(OD_LOG_ALWAYS, "od_config_od: LCD OD table size = %u", od_table_size);
+			ODDBG(OD_LOG_ALWAYS, "od_config_od: LCD OD table");
 
 	#if defined(OD_ALLOW_DEFAULT_TABLE)
 		if (od_table == NULL) {
@@ -945,7 +918,6 @@ static int od_config_od(DISP_MODULE_ENUM module, disp_ddp_path_config *pConfig, 
 
 		if (od_table != NULL) {
 			/* spm_enable_sodi(0); */
-			od_start(module, cmdq);
 			disp_config_od(pConfig->dst_w, pConfig->dst_h, cmdq, od_table_size, od_table);
 	#if 0
 			/* For debug */
@@ -953,12 +925,10 @@ static int od_config_od(DISP_MODULE_ENUM module, disp_ddp_path_config *pConfig, 
 	#endif
 		} else {
 			ddp_bypass_od(pConfig->dst_w, pConfig->dst_h, cmdq);
-			ODDBG(OD_LOG_ALWAYS, "od_config_od: No od table bypass");
 		}
 
 #else /* Not support OD */
 		ddp_bypass_od(pConfig->dst_w, pConfig->dst_h, cmdq);
-		ODDBG(OD_LOG_ALWAYS, "od_config_od: Not support od bypass");
 #endif
 	}
 
@@ -993,12 +963,10 @@ static void od_set_debug_function(void *cmdq)
 }
 
 
-#if defined(CONFIG_MTK_OD_SUPPORT)
 static int od_start(DISP_MODULE_ENUM module, void *cmdq)
 {
+#if defined(CONFIG_MTK_OD_SUPPORT)
 	ODDBG(OD_LOG_ALWAYS, "od_start()");
-
-	_od_reg_init(cmdq);
 
 	/* OD on/off align to vsync */
 	DISP_REG_SET(cmdq, OD_REG53, 0x6BFB7E00);
@@ -1096,10 +1064,10 @@ static int od_start(DISP_MODULE_ENUM module, void *cmdq)
 	mutex_lock(&g_od_global_lock);
 	_od_core_set_enabled(cmdq, g_od_is_enabled);
 	mutex_unlock(&g_od_global_lock);
+#endif
 
 	return 0;
 }
-#endif /* defined(CONFIG_MTK_OD_SUPPORT) */
 
 
 static int od_clock_on(DISP_MODULE_ENUM module, void *handle)
@@ -1109,7 +1077,7 @@ static int od_clock_on(DISP_MODULE_ENUM module, void *handle)
 #ifdef ENABLE_CLK_MGR
 #ifdef CONFIG_MTK_CLKMGR
 	enable_clock(MT_CG_DISP0_DISP_OD, "od");
-	DISPMSG("od_clock on CG 0x%x\n", DISP_REG_GET(DISP_REG_CONFIG_MMSYS_CG_CON0));
+	DDPMSG("od_clock on CG 0x%x\n", DISP_REG_GET(DISP_REG_CONFIG_MMSYS_CG_CON0));
 #else
 	ddp_clk_enable(DISP0_DISP_OD);
 #endif /* CONFIG_MTK_CLKMGR */
@@ -1141,7 +1109,7 @@ static int od_clock_off(DISP_MODULE_ENUM module, void *handle)
 #ifdef ENABLE_CLK_MGR
 #ifdef CONFIG_MTK_CLKMGR
 	disable_clock(MT_CG_DISP0_DISP_OD , "od");
-	DISPMSG("od_clock off CG 0x%x\n", DISP_REG_GET(DISP_REG_CONFIG_MMSYS_CG_CON0));
+	DDPMSG("od_clock off CG 0x%x\n", DISP_REG_GET(DISP_REG_CONFIG_MMSYS_CG_CON0));
 #else
 	ddp_clk_disable(DISP0_DISP_OD);
 #endif /* CONFIG_MTK_CLKMGR */
@@ -1177,6 +1145,7 @@ DDP_MODULE_DRIVER ddp_driver_od = {
 	.init            = od_clock_on,
 	.deinit          = od_clock_off,
 	.config          = od_config_od,
+	.start           = od_start,
 	.trigger         = NULL,
 	.stop            = NULL,
 	.reset           = NULL,
@@ -1384,16 +1353,6 @@ void od_test(const char *cmd, char *debug_output)
 
 	debug_output[0] = '\0';
 
-	/* Following part does not need cmdq and refresh. */
-	if (strncmp(cmd, "log:", 4) == 0) {
-		int level = cmd[4] - '0';
-
-		if (OD_LOG_ALWAYS <= level && level <= OD_LOG_DEBUG)
-			od_log_level = level;
-		return;
-	}
-
-	/* Start cmdq to set registers. */
 	DISP_CMDQ_BEGIN(cmdq, CMDQ_SCENARIO_DISP_CONFIG_OD);
 
 	if (strncmp(cmd, "set:", 4) == 0) {
@@ -1477,6 +1436,11 @@ void od_test(const char *cmd, char *debug_output)
 			DISP_REG_MASK(cmdq, OD_REG02, 0, (0xf << 9));
 			break;
 		}
+	} else if (strncmp(cmd, "log:", 4) == 0) {
+		int level = cmd[4] - '0';
+
+		if (OD_LOG_ALWAYS <= level && level <= OD_LOG_DEBUG)
+			od_log_level = level;
 	}
 
 	DISP_CMDQ_CONFIG_STREAM_DIRTY(cmdq);

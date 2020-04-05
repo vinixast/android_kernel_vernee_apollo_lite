@@ -56,7 +56,6 @@
 /*reserve some bit*/
 #define CMDM_IOCTL_GET_SDIO_STATUS      _IO('c', 0x10)
 #define CMDM_IOCTL_DUMP_C2K_IRAM      _IO('c', 0x11)
-#define CMDM_IOCTL_DUMP_BOOTUP_STATUS      _IO('c', 0x12)
 
 /*event for vmodem, which must be same as viatelutilis.h */
 enum ASC_USERSPACE_NOTIFIER_CODE {
@@ -75,7 +74,6 @@ enum ASC_USERSPACE_NOTIFIER_CODE {
 	ASC_USER_MDM_IPOH = (__SI_POLL | 400),
 	ASC_USER_MDM_WDT,
 	ASC_USER_MDM_EXCEPTION,
-	ASC_USER_MDM_RESET_ON_SINGLE,
 };
 
 #define MDM_RST_LOCK_TIME   (120)
@@ -122,7 +120,7 @@ static void modem_signal_user(int event)
 /*Protection for the above */
 static DEFINE_RAW_SPINLOCK(rslock);
 
-void c2k_reset_modem(int type)
+void c2k_reset_modem(void)
 {
 	unsigned long flags;
 
@@ -141,9 +139,7 @@ void c2k_reset_modem(int type)
 	spin_unlock_irqrestore(&cmdata->modem->status_lock, flags);
 
 	atomic_set(&cmdata->modem->tx_fifo_cnt, TX_FIFO_SZ);
-	wake_up_all(&cmdata->modem->wait_tx_done_q);
-
-	modem_pre_stop();
+	wake_up(&cmdata->modem->wait_tx_done_q);
 
 	c2k_wake_host(0);
 
@@ -155,19 +151,16 @@ void c2k_reset_modem(int type)
 		c2k_gpio_direction_output(GPIO_C2K_MDM_RST, 0);
 		mdelay(MDM_RST_HOLD_DELAY);
 	}
-	if (type == 0)
-		modem_notify_event(MDM_EVT_NOTIFY_RESET_ON);
-	else if (type == 1)
-		modem_notify_event(MDM_EVT_NOTIFY_RESET_ON_SINGLE);
+	modem_notify_event(MDM_EVT_NOTIFY_RESET_ON);
 	pr_debug("[C2K] Warnning: reset vmodem\n");
 	atomic_set(&reset_on_going, 0);
 }
 
 void c2k_power_on_modem(void)
 {
-	/* c2k may be powered on by muxreport before,
-	 to make sure power on success, power off first */
-	c2k_modem_power_off_platform();
+	/*add by yfu to control LDO VGP2 */
+	/*turn on VGP2 and set 2.8v */
+	/*hwPowerOn(MT6323_POWER_LDO_VGP2, VOL_2800,"VIA"); */
 	c2k_modem_power_on_platform();
 
 	if (GPIO_C2K_VALID(GPIO_C2K_MDM_PWR_EN)) {
@@ -214,9 +207,7 @@ void c2k_power_off_modem(void)
 	spin_unlock_irqrestore(&cmdata->modem->status_lock, flags);
 
 	atomic_set(&cmdata->modem->tx_fifo_cnt, TX_FIFO_SZ);
-	wake_up_all(&cmdata->modem->wait_tx_done_q);
-
-	modem_pre_stop();
+	wake_up(&cmdata->modem->wait_tx_done_q);
 
 	c2k_wake_host(0);
 	c2k_modem_power_off_platform();
@@ -241,9 +232,9 @@ ssize_t modem_power_show(struct kobject *kobj, struct kobj_attribute *attr,
 		power = !!c2k_gpio_get_value(GPIO_C2K_MDM_RST);
 	}
 	if (power)
-		ret += snprintf(buf + ret, 8, "on\n");
+		ret += sprintf(buf + ret, "on\n");
 	else
-		ret += snprintf(buf + ret, 8, "off\n");
+		ret += sprintf(buf + ret, "off\n");
 
 	return ret;
 }
@@ -284,9 +275,9 @@ ssize_t modem_reset_show(struct kobject *kobj, struct kobj_attribute *attr,
 		reset = !!c2k_gpio_get_value(GPIO_C2K_MDM_RST);
 
 	if (reset)
-		ret += snprintf(buf + ret, 8, "reset\n");
+		ret += sprintf(buf + ret, "reset\n");
 	else
-		ret += snprintf(buf + ret, 8, "work\n");
+		ret += sprintf(buf + ret, "work\n");
 
 	return ret;
 }
@@ -295,7 +286,7 @@ ssize_t modem_reset_store(struct kobject *kobj, struct kobj_attribute *attr,
 			  const char *buf, size_t n)
 {
 	/*reset the modem */
-	c2k_reset_modem(0);
+	c2k_reset_modem();
 	return n;
 }
 
@@ -308,7 +299,7 @@ ssize_t modem_ets_select_show(struct kobject *kobj,
 	if (GPIO_C2K_VALID(GPIO_C2K_MDM_ETS_SEL))
 		level = !!c2k_gpio_get_value(GPIO_C2K_MDM_ETS_SEL);
 
-	ret += snprintf(buf, 8, "%d\n", level);
+	ret += sprintf(buf, "%d\n", level);
 	return ret;
 }
 
@@ -337,7 +328,7 @@ ssize_t modem_boot_select_show(struct kobject *kobj,
 	if (GPIO_C2K_VALID(GPIO_C2K_MDM_BOOT_SEL))
 		level = !!c2k_gpio_get_value(GPIO_C2K_MDM_BOOT_SEL);
 
-	ret += snprintf(buf, 8, "%d\n", level);
+	ret += sprintf(buf, "%d\n", level);
 	return ret;
 }
 
@@ -399,7 +390,7 @@ ssize_t modem_diecbp_show(struct kobject *kobj, struct kobj_attribute *attr,
 	if (GPIO_C2K_VALID(GPIO_C2K_CRASH_CBP))
 		level = !!c2k_gpio_get_value(GPIO_C2K_CRASH_CBP);
 
-	ret += snprintf(buf, 8, "%d\n", level);
+	ret += sprintf(buf, "%d\n", level);
 	return ret;
 }
 
@@ -429,7 +420,7 @@ ssize_t modem_hderr_show(struct kobject *kobj, struct kobj_attribute *attr,
 	if (GPIO_C2K_VALID(GPIO_C2K_CRASH_CBP))
 		level = !!c2k_gpio_get_value(GPIO_C2K_CRASH_CBP);
 
-	ret += snprintf(buf, 8, "%d\n", level);
+	ret += sprintf(buf, "%d\n", level);
 	return ret;
 }
 
@@ -463,7 +454,7 @@ ssize_t modem_force_assert_show(struct kobject *kobj,
 {
 	int ret = 0;
 
-	ret += snprintf(buf + ret, 16, "capable\n");
+	ret += sprintf(buf + ret, "capable\n");
 
 	return ret;
 }
@@ -482,9 +473,6 @@ static int modem_reset_notify_misc(struct notifier_block *nb,
 	switch (event) {
 	case MDM_EVT_NOTIFY_RESET_ON:
 		modem_signal_user(ASC_USER_MDM_RESET_ON);
-		break;
-	case MDM_EVT_NOTIFY_RESET_ON_SINGLE:
-		modem_signal_user(ASC_USER_MDM_RESET_ON_SINGLE);
 		break;
 	case MDM_EVT_NOTIFY_RESET_OFF:
 		modem_signal_user(ASC_USER_MDM_RESET_OFF);
@@ -521,10 +509,7 @@ static int modem_err_notify_misc(struct notifier_block *nb, unsigned long event,
 	switch (event) {
 	case MDM_EVT_NOTIFY_HD_ERR:
 		pr_debug("%s %d ASC_USER_MDM_ERR\n", __func__, __LINE__);
-		if (cmdata->modem->status == MD_READY)
-			modem_signal_user(ASC_USER_MDM_ERR);
-		else
-			pr_debug("%s %d modem is not ready, ignore\n", __func__, __LINE__);
+		modem_signal_user(ASC_USER_MDM_ERR);
 		break;
 	case MDM_EVT_NOTIFY_HD_ENHANCE:
 		pr_debug("%s %d ASC_USER_MDM_ERR_ENHANCE\n", __func__,
@@ -552,9 +537,6 @@ static int modem_wdt_notify_misc(struct notifier_block *nb, unsigned long event,
 	case MDM_EVT_NOTIFY_WDT:
 		pr_debug("%s %d ASC_USER_MDM_WDT\n", __func__, __LINE__);
 		modem_signal_user(ASC_USER_MDM_WDT);
-#ifdef CONFIG_MTK_SVLTE_SUPPORT
-		exec_ccci_kern_func_by_md_id(0, ID_RESET_MD, NULL, 0);
-#endif
 		break;
 	default:
 		break;
@@ -618,7 +600,7 @@ static struct attribute_group g_attr_group = {
 
 static void modem_shutdown(struct platform_device *dev)
 {
-	/*c2k_power_off_modem();*/
+	c2k_power_off_modem();
 }
 
 /*
@@ -885,7 +867,7 @@ static long misc_modem_ioctl(struct file *file, unsigned int
 	switch (cmd) {
 	case CMDM_IOCTL_RESET:
 		pr_debug("[C2K]Reset C2K.\n");
-		c2k_reset_modem(0);
+		c2k_reset_modem();
 		break;
 	case CMDM_IOCTL_READY:
 		pr_debug("[C2K SDIO]modem boot up done.\n");
@@ -897,10 +879,10 @@ static long misc_modem_ioctl(struct file *file, unsigned int
 		break;
 	case CMDM_IOCTL_RESET_FROM_RIL:
 		pr_debug("[C2K]Reset C2K from RIL.\n");
-		c2k_reset_modem(0);
-		if (ccci_get_opt_val("opt_c2k_lte_mode") == 1) /* SVLTE */
-			exec_ccci_kern_func_by_md_id(0, ID_RESET_MD, NULL, 0);
-
+		c2k_reset_modem();
+#ifdef CONFIG_MTK_SVLTE_SUPPORT
+		exec_ccci_kern_func_by_md_id(0, ID_RESET_MD, NULL, 0);
+#endif
 		break;
 	case CMDM_IOCTL_POWER:
 		if (copy_from_user(&flag, argp, sizeof(flag)))
@@ -915,8 +897,9 @@ static long misc_modem_ioctl(struct file *file, unsigned int
 			break;
 		case 2:
 			c2k_power_off_modem();
-			if (ccci_get_opt_val("opt_c2k_lte_mode") == 1) /* SVLTE */
-				exec_ccci_kern_func_by_md_id(0, ID_RESET_MD, NULL, 0);
+#ifdef CONFIG_MTK_SVLTE_SUPPORT
+			exec_ccci_kern_func_by_md_id(0, ID_RESET_MD, NULL, 0);
+#endif
 			break;
 		default:
 			return -EINVAL;
@@ -974,9 +957,9 @@ static long misc_modem_ioctl(struct file *file, unsigned int
 
 	case CMDM_IOCTL_ENTER_FLIGHT_MODE:
 		pr_debug("[C2K SDIO]enter flight mode.\n");
-		c2k_power_off_modem();
 		if (!GPIO_C2K_VALID(GPIO_C2K_MDM_PWR_IND))
 			modem_notify_event(MDM_EVT_NOTIFY_POWER_OFF);
+		c2k_power_off_modem();
 		asc_rx_reset(SDIO_RX_HD_NAME);	/*to let AP release Rx wakelock */
 		break;
 	case CMDM_IOCTL_LEAVE_FLIGHT_MODE:
@@ -1000,10 +983,6 @@ static long misc_modem_ioctl(struct file *file, unsigned int
 	case CMDM_IOCTL_DUMP_C2K_IRAM:
 		pr_debug("[C2K SDIO]dump c2k iram.\n");
 		dump_c2k_iram_seg2();
-		break;
-	case CMDM_IOCTL_DUMP_BOOTUP_STATUS:
-		pr_debug("[C2K SDIO]dump c2k bootup status.\n");
-		dump_c2k_bootup_status();
 		break;
 	default:
 		break;

@@ -1,23 +1,21 @@
-/*
-* Copyright (C) 2016 MediaTek Inc.
-*
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License version 2 as
-* published by the Free Software Foundation.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-* See http://www.gnu.org/licenses/gpl-2.0.html for more details.
-*/
+/******************************************************************************
+ * mt_gpio_base.c - MTKLinux GPIO Device Driver
+ *
+ * Copyright 2008-2009 MediaTek Co.,Ltd.
+ *
+ * DESCRIPTION:
+ *     This file provid the other drivers GPIO relative functions
+ *
+ ******************************************************************************/
 
-#include "6797_gpio.h"
+
+#include <6797_gpio.h>
 #include <linux/types.h>
 #include "mt-plat/sync_write.h"
 #include <mt-plat/mt_gpio.h>
 #include <mt-plat/mt_gpio_core.h>
-#include "mt_gpio_base.h"
-#include "gpio_cfg.h"
+#include <mt_gpio_base.h>
+#include <gpio_cfg.h>
 #ifdef CONFIG_OF
 #include <linux/of_address.h>
 #endif
@@ -720,14 +718,8 @@ int mt_set_gpio_mode_base(unsigned long pin, unsigned long mode)
 
 /* #ifdef GPIO_BRINGUP */
 #if 1
-	if (MODEXT_offset[pin].offset != -1) {
-		reg = GPIO_RD32(GPIO_BASE + 0x600);
-		reg &= (~(0x1 << MODEXT_offset[pin].offset));
-		reg |= ((mode >> 0x3) << MODEXT_offset[pin].offset);
-		GPIO_WR32(GPIO_BASE + 0x600, reg);
-	}
 
-	mode = mode & 0x7;
+	mode = mode & mask;
 	/* printk("fwq pin=%d,mode=%d, offset=%d\n",pin,mode,bit); */
 
 	reg = GPIO_RD32(addr);
@@ -775,9 +767,6 @@ int mt_get_gpio_mode_base(unsigned long pin)
 	/* reg = GPIO_RD32(&obj->reg->mode[pos].val); */
 	reg = GPIO_RD32(addr);
 	/* printf("fwqread  pin=%d,moderead=%x, bit=%d\n",pin,GPIO_RD32(MODE_addr[pin].addr),bit); */
-	if (MODEXT_offset[pin].offset != -1 &&
-		(GPIO_RD32(GPIO_BASE + 0x600) >> MODEXT_offset[pin].offset) & 0x1)
-		return ((reg >> bit) & mask) | 0x8;
 	return (reg >> bit) & mask;
 }
 

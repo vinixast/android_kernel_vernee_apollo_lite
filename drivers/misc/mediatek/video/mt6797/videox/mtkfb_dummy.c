@@ -22,6 +22,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/earlysuspend.h>
 #include <linux/kthread.h>
+#include <linux/rtpm_prio.h>
 #include <linux/vmalloc.h>
 #include <linux/disp_assert_layer.h>
 #include <linux/semaphore.h>

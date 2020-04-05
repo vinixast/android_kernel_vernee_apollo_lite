@@ -24,10 +24,3 @@ config MICROTRUST_FP_DRIVER
 	default y
 	---help---
 	  Enable TEEI Fingerprint Driver
-
-config MICROTRUST_KEYMASTER_DRIVER
-	tristate "Microtrust keymaster Driver"
-	depends on MICROTRUST_TEE_SUPPORT
-	default y
-	---help---
-	  Enable TEEI Keymaster Driver

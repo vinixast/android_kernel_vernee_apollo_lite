@@ -374,10 +374,7 @@ void __init early_print(const char *str, ...)
 
 static void __init cpuid_init_hwcaps(void)
 {
-	unsigned int divide_instrs, vmsa, features;
-#ifdef CONFIG_MTK_ADVERTISE_CE_SUPPORT
-	unsigned int block;
-#endif
+	unsigned int divide_instrs, vmsa, features, block;
 
 	if (cpu_architecture() < CPU_ARCH_ARMv7)
 		return;
@@ -396,7 +393,6 @@ static void __init cpuid_init_hwcaps(void)
 	if (vmsa >= 5)
 		elf_hwcap |= HWCAP_LPAE;
 
-#ifdef CONFIG_MTK_ADVERTISE_CE_SUPPORT
 	/*
 	 * ID_ISAR5 contains 4-bit wide signed feature blocks.
 	 * The blocks we test below represent incremental functionality
@@ -427,15 +423,6 @@ static void __init cpuid_init_hwcaps(void)
 	block = (features >> 16) & 0xf;
 	if (block && !(block & 0x8))
 		elf_hwcap2 |= HWCAP2_CRC32;
-#else
-	/* check for supported v8 Crypto instructions */
-	features = read_cpuid_ext(CPUID_EXT_ISAR5);
-
-	vmsa = cpuid_feature_extract_field(features, 12);
-	if (vmsa >= 1)
-		elf_hwcap2 |= HWCAP2_SHA2;
-#endif
-
 }
 
 static void __init elf_hwcap_fixup(void)
@@ -792,7 +779,7 @@ static void __init request_standard_resources(const struct machine_desc *mdesc)
 	struct resource *res;
 
 	kernel_code.start   = virt_to_phys(_text);
-	kernel_code.end     = virt_to_phys(__init_begin - 1);
+	kernel_code.end     = virt_to_phys(_etext - 1);
 	kernel_data.start   = virt_to_phys(_sdata);
 	kernel_data.end     = virt_to_phys(_end - 1);
 
@@ -964,9 +951,9 @@ void __init setup_arch(char **cmdline_p)
 
 	early_paging_init(mdesc, lookup_processor_type(read_cpuid_id()));
 	setup_dma_zone(mdesc);
+	sanity_check_meminfo();
 	arm_memblock_init(mdesc);
 
-	sanity_check_meminfo();
 	paging_init(mdesc);
 	request_standard_resources(mdesc);
 

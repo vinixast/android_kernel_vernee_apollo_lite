@@ -144,7 +144,7 @@ static int step_d_real_enable(int enable)
 	struct step_c_context *cxt = NULL;
 
 	cxt = step_c_context_obj;
-	if (1 == enable) {
+	if (1 == enable) {	
 		if (NULL != cxt->step_c_ctl.step_d_set_delay) {
 			if (cxt->is_step_d_batch_enable == false)
 				cxt->step_c_ctl.step_d_set_delay(66000000);
@@ -501,12 +501,13 @@ static ssize_t step_c_store_batch(struct device *dev, struct device_attribute *a
 			STEP_C_ERR(" step_c_store_batch error !!\n");
 		}
 	} else if (handle == ID_STEP_DETECTOR) {
-		if (en == 1)
+		if (en == 1) {
 			cxt->is_step_d_batch_enable = true;
-		else if (0 == en)
+		} else if (0 == en) {
 			cxt->is_step_d_batch_enable = false;
-		else
+		} else {
 			STEP_C_ERR(" step_d_store_batch error !!\n");
+		}
 	}
 	mutex_unlock(&step_c_context_obj->step_c_op_mutex);
 	STEP_C_LOG(" step_c_store_batch done: %d\n", cxt->is_step_c_batch_enable);
@@ -533,14 +534,8 @@ static ssize_t step_c_show_flush(struct device *dev, struct device_attribute *at
 static ssize_t step_c_show_devnum(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	const char *devname = NULL;
-	struct input_handle *handle;
 
-	list_for_each_entry(handle, &step_c_context_obj->idev->h_list, d_node)
-		if (strncmp(handle->name, "event", 5) == 0) {
-			devname = handle->name;
-			break;
-		}
-
+	devname = dev_name(&step_c_context_obj->idev->dev);
 	return snprintf(buf, PAGE_SIZE, "%s\n", devname + 5);
 }
 

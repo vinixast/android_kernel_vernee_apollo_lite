@@ -33,9 +33,6 @@ struct mmc_bus_ops {
 void mmc_attach_bus(struct mmc_host *host, const struct mmc_bus_ops *ops);
 void mmc_detach_bus(struct mmc_host *host);
 
-struct device_node *mmc_of_find_child_device(struct mmc_host *host,
-		unsigned func_num);
-
 void mmc_init_erase(struct mmc_card *card);
 
 void mmc_set_chip_select(struct mmc_host *host, int mode);
@@ -88,6 +85,7 @@ void mmc_remove_card_debugfs(struct mmc_card *card);
 void mmc_init_context_info(struct mmc_host *host);
 #ifdef CONFIG_MTK_EMMC_CQ_SUPPORT
 void mmc_wait_cmdq_empty(struct mmc_host *host);
+int mmc_blk_cmdq_switch_tmp(struct mmc_card *card, int enable);
 void mmc_do_check(struct mmc_host *host);
 void mmc_do_stop(struct mmc_host *host);
 void mmc_do_status(struct mmc_host *host);
@@ -98,5 +96,6 @@ int mmc_run_queue_thread(void *data);
 int mmc_execute_tuning(struct mmc_card *card);
 int mmc_hs200_to_hs400(struct mmc_card *card);
 int mmc_hs400_to_hs200(struct mmc_card *card);
+
 #endif
 

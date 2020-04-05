@@ -12,6 +12,7 @@
  */
 
 #include "sec_osal.h"
+/*#include <mach/mt_typedefs.h>*/
 #include "sec_hal.h"
 #include "sec_osal_light.h"
 #include "sec_boot_lib.h"
@@ -29,8 +30,8 @@
 /******************************************************************************
  * GLOBAL VARIABLES
  ******************************************************************************/
-bool bHACC_HWWrapKeyInit = false;
-bool bHACC_SWKeyInit = false;
+bool bHACC_HWWrapKeyInit = FALSE;
+bool bHACC_SWKeyInit = FALSE;
 
 /******************************************************************************
  *  INTERNAL VARIABLES
@@ -62,7 +63,7 @@ static unsigned char *sp_hacc_internal(unsigned char *buf, unsigned int size, bo
 	/* ---------------------------- */
 	/* get hacc lock                 */
 	/* ---------------------------- */
-	if (true == bDoLock) {
+	if (TRUE == bDoLock) {
 		/* If the semaphore is successfully acquired, this function returns 0. */
 		err = osal_hacc_lock();
 
@@ -102,7 +103,7 @@ static unsigned char *sp_hacc_internal(unsigned char *buf, unsigned int size, bo
 	case HACC_USER3:
 		/* use smart phone hacc function 3 */
 		/* ---------------------------- */
-		if (false == bHACC_HWWrapKeyInit) {
+		if (FALSE == bHACC_HWWrapKeyInit) {
 			err = ERR_HACC_HW_WRAP_KEY_NOT_INIT;
 			goto _err;
 		}
@@ -138,13 +139,13 @@ static unsigned char *sp_hacc_internal(unsigned char *buf, unsigned int size, bo
 	/* ---------------------------- */
 	/* release hacc lock             */
 	/* ---------------------------- */
-	if (true == bDoLock)
+	if (TRUE == bDoLock)
 		osal_hacc_unlock();
 
 	return buf;
 
 _err:
-	if (true == bDoLock)
+	if (TRUE == bDoLock)
 		osal_hacc_unlock();
 
 	pr_debug("[%s] HACC Fail (0x%x)\n", MOD, err);
@@ -160,7 +161,7 @@ _err:
 unsigned char *masp_hal_sp_hacc_enc(unsigned char *buf, unsigned int size, unsigned char bAC,
 				    HACC_USER user, unsigned char bDoLock)
 {
-	return sp_hacc_internal(buf, size, true, user, bDoLock, AES_ENC, true);
+	return sp_hacc_internal(buf, size, TRUE, user, bDoLock, AES_ENC, TRUE);
 }
 
 
@@ -170,7 +171,7 @@ unsigned char *masp_hal_sp_hacc_enc(unsigned char *buf, unsigned int size, unsig
 unsigned char *masp_hal_sp_hacc_dec(unsigned char *buf, unsigned int size, unsigned char bAC,
 				    HACC_USER user, unsigned char bDoLock)
 {
-	return sp_hacc_internal(buf, size, true, user, bDoLock, AES_DEC, false);
+	return sp_hacc_internal(buf, size, TRUE, user, bDoLock, AES_DEC, FALSE);
 }
 
 /******************************************************************************

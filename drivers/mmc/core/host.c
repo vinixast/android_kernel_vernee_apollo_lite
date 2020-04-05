@@ -30,6 +30,8 @@
 #include "core.h"
 #include "host.h"
 
+#define cls_dev_to_mmc_host(d)	container_of(d, struct mmc_host, class_dev)
+
 static void mmc_host_classdev_release(struct device *dev)
 {
 	struct mmc_host *host = cls_dev_to_mmc_host(dev);
@@ -615,10 +617,8 @@ struct mmc_host *mmc_alloc_host(int extra, struct device *dev)
 #ifdef CONFIG_MTK_EMMC_CQ_SUPPORT
 	host->align_size = 4;
 
-	for (i = 0; i < EMMC_MAX_QUEUE_DEPTH; i++) {
+	for (i = 0; i < EMMC_MAX_QUEUE_DEPTH; i++)
 		host->areq_que[i] = NULL;
-		host->task_queue_time[i] = 0;
-	}
 	atomic_set(&host->areq_cnt, 0);
 	host->areq_cur = NULL;
 	host->done_mrq = NULL;
@@ -666,9 +666,7 @@ int mmc_add_host(struct mmc_host *host)
 	mmc_add_host_debugfs(host);
 #endif
 	mmc_host_clk_sysfs_init(host);
-#ifdef CONFIG_BLOCK
-	mmc_latency_hist_sysfs_init(host);
-#endif
+
 	mmc_start_host(host);
 	if (!(host->pm_flags & MMC_PM_IGNORE_PM_NOTIFY))
 		register_pm_notifier(&host->pm_notify);
@@ -695,9 +693,6 @@ void mmc_remove_host(struct mmc_host *host)
 
 #ifdef CONFIG_DEBUG_FS
 	mmc_remove_host_debugfs(host);
-#endif
-#ifdef CONFIG_BLOCK
-	mmc_latency_hist_sysfs_exit(host);
 #endif
 
 	device_del(&host->class_dev);

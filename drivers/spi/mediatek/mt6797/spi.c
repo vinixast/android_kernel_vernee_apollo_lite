@@ -1,15 +1,3 @@
-/*
-* Copyright (C) 2016 MediaTek Inc.
-*
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License version 2 as
-* published by the Free Software Foundation.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-* See http://www.gnu.org/licenses/gpl-2.0.html for more details.
-*/
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/device.h>
@@ -39,10 +27,18 @@
 #include <linux/of_address.h>
 #endif
 /*#include <mach/irqs.h>*/
-#include "mt_spi.h"
+#include <mt_spi.h>
 #include "mt_spi_hal.h"
 /*#include <mach/mt_gpio.h>*/
 #include <mt-plat/mt_lpae.h>/* DMA */
+
+#include <linux/of_reserved_mem.h>
+#include <linux/memblock.h>
+#include <asm/page.h>
+#include <asm-generic/memory_model.h>
+#include <mt-plat/mt_lpae.h> /* DMA */
+#include <mt-plat/aee.h>
+#include <linux/dma-mapping.h>
 
 
 #if defined(CONFIG_MTK_CLKMGR)
@@ -98,6 +94,23 @@ struct mt_spi_t {
 #endif
 /*open time record debug, log can't affect transfer*/
 /*	#define SPI_REC_DEBUG */
+ dma_addr_t SpiDmaBufTx_pa;
+ dma_addr_t SpiDmaBufRx_pa;
+ 
+int finger_is_connect = 0;
+// char *spi_tx_local_buf;
+// char *spi_rx_local_buf;
+
+static int reserve_memory_spi_fn(struct reserved_mem *rmem)
+{
+	printk(" 2222name: %s, base: 0x%llx, size: 0x%llx\n", rmem->name,
+			(unsigned long long)rmem->base, (unsigned long long)rmem->size);
+	BUG_ON(rmem->size < 0x8000);
+	SpiDmaBufTx_pa = rmem->base;
+	SpiDmaBufRx_pa = rmem->base+0x4000;
+	return 0;
+}
+RESERVEDMEM_OF_DECLARE(reserve_memory_test, "mediatek,spi-reserve-memory", reserve_memory_spi_fn);
 
 struct platform_device *spi_pdev[6];
 static void enable_clk(struct mt_spi_t *ms)
@@ -118,11 +131,6 @@ void mt_spi_enable_clk(struct mt_spi_t *ms)
 	enable_clk(ms);
 }
 
-void mt_spi_enable_master_clk(struct spi_device *ms)
-{
-	enable_clk(spi_master_get_devdata(ms->master));
-}
-
 static void disable_clk(struct mt_spi_t *ms)
 {
 #if (!defined(CONFIG_MT_SPI_FPGA_ENABLE))
@@ -141,10 +149,6 @@ void mt_spi_disable_clk(struct mt_spi_t *ms)
 	disable_clk(ms);
 }
 
-void mt_spi_disable_master_clk(struct spi_device *ms)
-{
-	disable_clk(spi_master_get_devdata(ms->master));
-}
 
 #ifdef SPI_DEBUG
 	/*#define SPI_DBG(fmt, args...)  printk(KERN_ALERT "mt-spi.c:%5d: <%s>" fmt, __LINE__, __func__, ##args )*/
@@ -803,13 +807,9 @@ static int mt_spi_next_xfer(struct mt_spi_t *ms, struct spi_message *msg)
 	if ((mode == FIFO_TRANSFER) || (mode == OTHER2)) {
 		cnt = (xfer->len % 4) ? (xfer->len / 4 + 1) : (xfer->len / 4);
 		for (i = 0; i < cnt; i++) {
-			if (xfer->tx_buf == NULL)
-				spi_writel(ms, SPI_TX_DATA_REG, 0);
-			else {
-				spi_writel(ms, SPI_TX_DATA_REG, *((u32 *) xfer->tx_buf + i));
-				SPI_INFO(&msg->spi->dev, "tx_buf data is:%x\n", *((u32 *) xfer->tx_buf + i));
-				SPI_INFO(&msg->spi->dev, "tx_buf addr is:%p\n", (u32 *) xfer->tx_buf + i);
-			}
+			spi_writel(ms, SPI_TX_DATA_REG, *((u32 *) xfer->tx_buf + i));
+			SPI_INFO(&msg->spi->dev, "tx_buf data is:%x\n", *((u32 *) xfer->tx_buf + i));
+			SPI_INFO(&msg->spi->dev, "tx_buf addr is:%p\n", (u32 *) xfer->tx_buf + i);
 		}
 	}
 	/*Using DMA to send data */
@@ -1058,6 +1058,15 @@ static irqreturn_t mt_spi_interrupt(int irq, void *dev_id)
 	reg_val = spi_readl(ms, SPI_STATUS0_REG);
 	SPI_DBG("xfer:0x%p interrupt status:%x\n", xfer, reg_val & 0x3);
 
+	if (unlikely(!msg)) {
+		SPI_DBG("msg in interrupt %d is NULL pointer.\n", reg_val & 0x3);
+		goto out;
+	}
+	if (unlikely(!xfer)) {
+		SPI_DBG("xfer in interrupt %d is NULL pointer.\n", reg_val & 0x3);
+		goto out;
+	}
+
 	chip_config = (struct mt_chip_conf *)msg->state;
 	mode = chip_config->com_mod;
 	/*clear the interrupt status bits by reading the register */
@@ -1219,14 +1228,11 @@ static int mt_spi_setup(struct spi_device *spidev)
 
 	struct mt_chip_conf *chip_config = NULL;
 
-	if (!spidev) {
-		pr_err("spidev is null. error\n");
-		/* dev_err(&spidev->dev, "spi device %s: error.\n", dev_name(&spidev->dev)); */
-		return -EINVAL;
-	}
 	master = spidev->master;
 	ms = spi_master_get_devdata(master);
 
+	if (!spidev)
+		dev_err(&spidev->dev, "spi device %s: error.\n", dev_name(&spidev->dev));
 	if (spidev->chip_select >= master->num_chipselect) {
 		dev_err(&spidev->dev, "spi device chip select excesses the number of master's chipselect number.\n");
 		return -EINVAL;
@@ -1366,7 +1372,7 @@ static int __init mt_spi_probe(struct platform_device *pdev)
 
 	master->dev.of_node = pdev->dev.of_node;
 	/*hardware can only connect 1 slave.if you want to multiple, using gpio CS */
-	master->num_chipselect = 2;
+	master->num_chipselect = 3;
 
 	master->mode_bits = (SPI_CPOL | SPI_CPHA);
 	master->bus_num = pdev->id;

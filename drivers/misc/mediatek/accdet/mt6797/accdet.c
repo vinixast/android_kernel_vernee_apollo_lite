@@ -1,17 +1,3 @@
-/*
- * Copyright (C) 2015 MediaTek Inc.
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- */
-
-
 #include "accdet.h"
 #ifdef CONFIG_ACCDET_EINT
 #include <linux/gpio.h>
@@ -26,9 +12,6 @@
 /*----------------------------------------------------------------------
 static variable defination
 ----------------------------------------------------------------------*/
-/* for accdet_read_audio_res */
-#define RET_LT_5K		-1/* less than 5k ohm, return -1 */
-#define RET_GT_5K		0/* greater than 5k ohm, return 0 */
 
 #define REGISTER_VALUE(x)   (x - 1)
 static int button_press_debounce = 0x400;
@@ -123,29 +106,8 @@ char *accdet_report_string[4] = {
 	/* "Double_check"*/
 };
 /****************************************************************/
-/***        export function                                    **/
+/***        export function                                                                        **/
 /****************************************************************/
-/* get plug-in Resister just for audio call */
-int accdet_read_audio_res(unsigned int res_value)
-{
-	ACCDET_DEBUG("[accdet_read_audio_res]resister value: R=%u(ohm)\n", res_value);
-	/* res < 5k ohm normal device; res >= 5k ohm, lineout device */
-	if (res_value < 5000)
-		return RET_LT_5K;
-
-	mutex_lock(&accdet_eint_irq_sync_mutex);
-	if (1 == eint_accdet_sync_flag) {
-		cable_type = LINE_OUT_DEVICE;
-		accdet_status = LINE_OUT;
-		/* update state */
-		switch_set_state((struct switch_dev *)&accdet_data, cable_type);
-		ACCDET_DEBUG("[accdet_read_audio_res]update state:%d\n", cable_type);
-	}
-	mutex_unlock(&accdet_eint_irq_sync_mutex);
-
-	return RET_GT_5K;
-}
-EXPORT_SYMBOL(accdet_read_audio_res);
 
 void accdet_detect(void)
 {
@@ -1200,9 +1162,10 @@ void accdet_pmic_Read_Efuse_HPOffset(void)
 
 static inline void accdet_init(void)
 {
+#ifdef CONFIG_ACCDET_EINT_IRQ
 	unsigned int reg_val = 0;
+#endif
 
-	reg_val = 0;
 	ACCDET_DEBUG("[Accdet]accdet hardware init\n");
 	/*clock*/
 	pmic_pwrap_write(TOP_CKPDN_CLR, RG_ACCDET_CLK_CLR);
@@ -1264,7 +1227,7 @@ static inline void accdet_init(void)
 	}
 #endif
 
-/*enable INT */
+	/*enable INT */
 #ifdef CONFIG_ACCDET_EINT_IRQ
 	pmic_pwrap_write(ACCDET_IRQ_STS, pmic_pwrap_read(ACCDET_IRQ_STS) & (~IRQ_EINT_CLR_BIT));
 #endif
@@ -1422,40 +1385,27 @@ static int dbug_thread(void *unused)
 
 static ssize_t store_accdet_start_debug_thread(struct device_driver *ddri, const char *buf, size_t count)
 {
-	int error = 0;
-	int ret = 0;
 
-	/* if write 0, Invalid; otherwise, valid */
-	ret = strncmp(buf, "0", 1);
-	if (ret) {
-		g_start_debug_thread = 1;
+	char start_flag;
+	int error;
+	int ret;
+
+	ret = sscanf(buf, "%s", &start_flag);
+	if (ret != 1) {
+		ACCDET_DEBUG("accdet: Invalid values\n");
+		return -EINVAL;
+	}
+
+	ACCDET_DEBUG("[Accdet] start flag =%d\n", start_flag);
+
+	g_start_debug_thread = start_flag;
+
+	if (1 == start_flag) {
 		thread = kthread_run(dbug_thread, 0, "ACCDET");
 		if (IS_ERR(thread)) {
 			error = PTR_ERR(thread);
-			ACCDET_DEBUG("[store_accdet_start_debug_thread] failed to create kernel thread: %d\n", error);
-		} else {
-			ACCDET_INFO("[store_accdet_start_debug_thread] start debug thread!\n");
+			ACCDET_DEBUG(" failed to create kernel thread: %d\n", error);
 		}
-	} else {
-		g_start_debug_thread = 0;
-		ACCDET_INFO("[store_accdet_start_debug_thread] stop debug thread!\n");
-	}
-
-	return count;
-}
-
-static ssize_t store_accdet_dump_register(struct device_driver *ddri, const char *buf, size_t count)
-{
-	int ret = 0;
-
-	/* if write 0, Invalid; otherwise, valid */
-	ret = strncmp(buf, "0", 1);
-	if (ret) {
-		g_dump_register = 1;
-		ACCDET_INFO("[store_accdet_dump_register] start dump regs!\n");
-	} else {
-		g_dump_register = 0;
-		ACCDET_INFO("[store_accdet_dump_register] stop dump regs!\n");
 	}
 
 	return count;
@@ -1474,6 +1424,24 @@ static ssize_t store_accdet_set_headset_mode(struct device_driver *ddri, const c
 	}
 
 	ACCDET_DEBUG("[Accdet]store_accdet_set_headset_mode value =%d\n", value);
+
+	return count;
+}
+
+static ssize_t store_accdet_dump_register(struct device_driver *ddri, const char *buf, size_t count)
+{
+	char value;
+	int ret;
+
+	ret = sscanf(buf, "%s", &value);
+	if (ret != 1) {
+		ACCDET_DEBUG("accdet: Invalid values\n");
+		return -EINVAL;
+	}
+
+	g_dump_register = value;
+
+	ACCDET_DEBUG("[Accdet]store_accdet_dump_register value =%d\n", value);
 
 	return count;
 }

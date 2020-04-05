@@ -1,19 +1,17 @@
 /*
- * Copyright (C) 2015 MediaTek Inc.
+ * Copyright (C) 2007 The Android Open Source Project
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- * You should have received a copy of the GNU General Public License
- * along with this program
- * If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 /*******************************************************************************
  *
@@ -67,7 +65,6 @@ static struct snd_dma_buffer *Capture_dma_buf;
 static AudioDigtalI2S *mAudioDigitalI2S;
 static bool mCaptureUseSram;
 static DEFINE_SPINLOCK(auddrv_ULInCtl_lock);
-static bool mPrepareDone;
 
 /*
  *    function implementation
@@ -101,6 +98,10 @@ static void StopAudioCaptureHardware(struct snd_pcm_substream *substream)
 {
 	pr_aud("StopAudioCaptureHardware\n");
 
+	SetMemoryPathEnable(Soc_Aud_Digital_Block_I2S_IN_ADC, false);
+	if (GetMemoryPathEnable(Soc_Aud_Digital_Block_I2S_IN_ADC) == false)
+		SetI2SAdcEnable(false);
+
 	SetMemoryPathEnable(Soc_Aud_Digital_Block_MEM_VUL, false);
 
 	/* here to set interrupt */
@@ -130,6 +131,30 @@ static void StartAudioCaptureHardware(struct snd_pcm_substream *substream)
 {
 	pr_aud("StartAudioCaptureHardware\n");
 
+	ConfigAdcI2S(substream);
+	SetI2SAdcIn(mAudioDigitalI2S);
+
+	if (substream->runtime->format == SNDRV_PCM_FORMAT_S32_LE ||
+		substream->runtime->format == SNDRV_PCM_FORMAT_U32_LE) {
+		SetMemIfFetchFormatPerSample(Soc_Aud_Digital_Block_MEM_VUL, AFE_WLEN_32_BIT_ALIGN_8BIT_0_24BIT_DATA);
+		SetoutputConnectionFormat(OUTPUT_DATA_FORMAT_24BIT, Soc_Aud_InterConnectionOutput_O09);
+		SetoutputConnectionFormat(OUTPUT_DATA_FORMAT_24BIT, Soc_Aud_InterConnectionOutput_O10);
+	} else {
+		SetMemIfFetchFormatPerSample(Soc_Aud_Digital_Block_MEM_VUL, AFE_WLEN_16_BIT);
+		SetoutputConnectionFormat(OUTPUT_DATA_FORMAT_16BIT, Soc_Aud_InterConnectionOutput_O09);
+		SetoutputConnectionFormat(OUTPUT_DATA_FORMAT_16BIT, Soc_Aud_InterConnectionOutput_O10);
+	}
+
+	SetConnection(Soc_Aud_InterCon_Connection, Soc_Aud_InterConnectionInput_I03, Soc_Aud_InterConnectionOutput_O09);
+	SetConnection(Soc_Aud_InterCon_Connection, Soc_Aud_InterConnectionInput_I04, Soc_Aud_InterConnectionOutput_O10);
+
+	if (GetMemoryPathEnable(Soc_Aud_Digital_Block_I2S_IN_ADC) == false) {
+		SetMemoryPathEnable(Soc_Aud_Digital_Block_I2S_IN_ADC, true);
+		SetI2SAdcEnable(true);
+	} else {
+		SetMemoryPathEnable(Soc_Aud_Digital_Block_I2S_IN_ADC, true);
+	}
+
 	/* here to set interrupt */
 	irq_add_user(substream,
 		     Soc_Aud_IRQ_MCU_MODE_IRQ2_MCU_MODE,
@@ -145,39 +170,6 @@ static void StartAudioCaptureHardware(struct snd_pcm_substream *substream)
 
 static int mtk_capture_pcm_prepare(struct snd_pcm_substream *substream)
 {
-	if (mPrepareDone == false) {
-		ConfigAdcI2S(substream);
-		SetI2SAdcIn(mAudioDigitalI2S);
-
-		if (substream->runtime->format == SNDRV_PCM_FORMAT_S32_LE ||
-			substream->runtime->format == SNDRV_PCM_FORMAT_U32_LE) {
-			SetMemIfFetchFormatPerSample(Soc_Aud_Digital_Block_MEM_VUL,
-						     AFE_WLEN_32_BIT_ALIGN_8BIT_0_24BIT_DATA);
-			SetoutputConnectionFormat(OUTPUT_DATA_FORMAT_24BIT, Soc_Aud_InterConnectionOutput_O09);
-			SetoutputConnectionFormat(OUTPUT_DATA_FORMAT_24BIT, Soc_Aud_InterConnectionOutput_O10);
-		} else {
-			SetMemIfFetchFormatPerSample(Soc_Aud_Digital_Block_MEM_VUL, AFE_WLEN_16_BIT);
-			SetoutputConnectionFormat(OUTPUT_DATA_FORMAT_16BIT, Soc_Aud_InterConnectionOutput_O09);
-			SetoutputConnectionFormat(OUTPUT_DATA_FORMAT_16BIT, Soc_Aud_InterConnectionOutput_O10);
-		}
-
-		SetConnection(Soc_Aud_InterCon_Connection,
-			      Soc_Aud_InterConnectionInput_I03,
-			      Soc_Aud_InterConnectionOutput_O09);
-		SetConnection(Soc_Aud_InterCon_Connection,
-			      Soc_Aud_InterConnectionInput_I04,
-			      Soc_Aud_InterConnectionOutput_O10);
-
-		if (GetMemoryPathEnable(Soc_Aud_Digital_Block_I2S_IN_ADC) == false) {
-			SetMemoryPathEnable(Soc_Aud_Digital_Block_I2S_IN_ADC, true);
-			SetI2SAdcEnable(true);
-		} else {
-			SetMemoryPathEnable(Soc_Aud_Digital_Block_I2S_IN_ADC, true);
-		}
-
-		mPrepareDone = true;
-	}
-
 	return 0;
 }
 
@@ -366,16 +358,6 @@ static int mtk_capture_pcm_open(struct snd_pcm_substream *substream)
 
 static int mtk_capture_pcm_close(struct snd_pcm_substream *substream)
 {
-	if (mPrepareDone == true) {
-		SetMemoryPathEnable(Soc_Aud_Digital_Block_I2S_IN_ADC, false);
-		if (GetMemoryPathEnable(Soc_Aud_Digital_Block_I2S_IN_ADC) == false)
-			SetI2SAdcEnable(false);
-
-		EnableAfe(false);
-
-		mPrepareDone = false;
-	}
-
 	AudDrv_ADC_Clk_Off();
 	AudDrv_Clk_Off();
 	return 0;

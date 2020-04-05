@@ -1,16 +1,8 @@
-/*
-* Copyright (C) 2016 MediaTek Inc.
-*
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License version 2 as
-* published by the Free Software Foundation.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-* See http://www.gnu.org/licenses/gpl-2.0.html for more details.
-*/
-
+/**
+ * @file    mt_ocp.h
+ * @brief   Driver header for Over Current Protect
+ *
+ */
 
 #ifndef __MT_OCP_H__
 #define __MT_OCP_H__
@@ -47,7 +39,7 @@ static noinline int mt_secure_call_ocp(u64 function_id, u64 arg0, u64 arg1, u64 
 
 /* turn on OCP driver */
 #define OCP_ON 0
-#define HQA_TEST 0
+
 
 /**
  * OCP control register

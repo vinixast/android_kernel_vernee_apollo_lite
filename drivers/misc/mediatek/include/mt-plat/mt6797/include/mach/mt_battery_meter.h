@@ -70,11 +70,7 @@
 #define OCV_BOARD_COMPESATE	0 /*mV */
 #define R_FG_BOARD_BASE	1000
 #define R_FG_BOARD_SLOPE	1000 /*slope*/
-#if defined(CONFIG_MTK_PMIC_CHIP_MT6353)
-	#define CAR_TUNE_VALUE	101 /*1.00 */
-#else
-	#define CAR_TUNE_VALUE	110 /*1.00 */
-#endif
+#define CAR_TUNE_VALUE	110 /*1.00 */   //aka.jiang important
 
 
 /* HW Fuel gague  */
@@ -88,15 +84,15 @@
 #define DIFFERENCE_HWOCV_SWOCV		10
 #define DIFFERENCE_SWOCV_RTC		10
 #define DIFFERENCE_HWOCV_VBAT		10
-#define DIFFERENCE_VBAT_RTC			30
+#define DIFFERENCE_VBAT_RTC		30
 #define DIFFERENCE_SWOCV_RTC_POS	15
 #define MAX_SWOCV	3
 
 #define DIFFERENCE_VOLTAGE_UPDATE	20
 #define AGING1_LOAD_SOC	70
 #define AGING1_UPDATE_SOC	30
-#define BATTERYPSEUDO100	95
-#define BATTERYPSEUDO1	        7
+#define BATTERYPSEUDO100	95    //aka.jiang important
+#define BATTERYPSEUDO1		7     //aka.jiang important
 
 /* #define Q_MAX_BY_SYS	*/	/* 8. Qmax variant by system drop voltage. */
 #define Q_MAX_SYS_VOLTAGE		3050
@@ -149,7 +145,6 @@
 
 #define FG_BAT_INT
 #define IS_BATTERY_REMOVE_BY_PMIC
-/* #define USE_EMBEDDED_BATTERY */
 
 /* Calculate do in Kernel */
 /* #define FORCE_D0_IN_KERNEL */
@@ -162,6 +157,4 @@
 #define CUST_TRACKINGOFFSET		0	/* Force offset to shift SOC to 0 */
 #define CUST_TRACKINGEN			0	/* 0:disable, 1:enable */
 
-/* Multi battery */
-/* #define MTK_MULTI_BAT_PROFILE_SUPPORT */
 #endif

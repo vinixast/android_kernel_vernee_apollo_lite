@@ -1,19 +1,17 @@
 /*
- * Copyright (C) 2015 MediaTek Inc.
+ * Copyright (C) 2007 The Android Open Source Project
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- * You should have received a copy of the GNU General Public License
- * along with this program
- * If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 /*******************************************************************************
  *
@@ -181,10 +179,8 @@ static int mtk_capture2_alsa_stop(struct snd_pcm_substream *substream)
 static kal_int32 Previous_Hw_cur;
 static snd_pcm_uframes_t mtk_capture2_pcm_pointer(struct snd_pcm_substream *substream)
 {
-#if 0
 	kal_int32 HW_memory_index = 0;
 	kal_int32 HW_Cur_ReadIdx = 0;
-#endif
 	kal_uint32 Frameidx = 0;
 	snd_pcm_uframes_t return_frame = 0;
 	AFE_BLOCK_T *vul2_Block = &(VUL2_Control_context->rBlock);
@@ -194,7 +190,7 @@ static snd_pcm_uframes_t mtk_capture2_pcm_pointer(struct snd_pcm_substream *subs
 		/* get total bytes to copysinewavetohdmi */
 		Frameidx = audio_bytes_to_frame(substream , vul2_Block->u4WriteIdx);
 		return Frameidx;
-#if 0
+
 		HW_Cur_ReadIdx = Align64ByteSize(Afe_Get_Reg(AFE_VUL_D2_CUR));
 		if (HW_Cur_ReadIdx == 0) {
 			PRINTK_AUD_UL2("[Auddrv] %s  HW_Cur_ReadIdx ==0\n", __func__);
@@ -207,7 +203,6 @@ static snd_pcm_uframes_t mtk_capture2_pcm_pointer(struct snd_pcm_substream *subs
 		VUL2_Control_context->interruptTrigger = 0;
 		return_frame = (HW_memory_index >> 2);
 		return return_frame;
-#endif
 	}
 	return_frame = (Previous_Hw_cur >> 2);
 	return return_frame;
@@ -268,7 +263,6 @@ static int mtk_capture2_pcm_hw_params(struct snd_pcm_substream *substream,
 
 	pr_warn("runtime->hw.buffer_bytes_max = %zu\n", runtime->hw.buffer_bytes_max);
 	SetVULBuffer(substream, hw_params);
-	AudDrv_Emi_Clk_On();
 
 	pr_warn("dma_bytes = %zu dma_area = %p dma_addr = 0x%lx\n",
 	       substream->runtime->dma_bytes, substream->runtime->dma_area, (long)substream->runtime->dma_addr);
@@ -278,9 +272,6 @@ static int mtk_capture2_pcm_hw_params(struct snd_pcm_substream *substream,
 static int mtk_capture2_pcm_hw_free(struct snd_pcm_substream *substream)
 {
 	pr_warn("mtk_capture2_pcm_hw_free\n");
-
-	AudDrv_Emi_Clk_Off();
-
 	if (Capture2_dma_buf->area)
 		return 0;
 	else

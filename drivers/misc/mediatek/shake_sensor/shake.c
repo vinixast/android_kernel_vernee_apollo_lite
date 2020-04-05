@@ -247,15 +247,9 @@ static ssize_t shk_show_flush(struct device *dev, struct device_attribute *attr,
 static ssize_t shk_show_devnum(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	char *devname = NULL;
-	struct input_handle *handle;
 
-	list_for_each_entry(handle, &shk_context_obj->idev->h_list, d_node)
-		if (strncmp(handle->name, "event", 5) == 0) {
-			devname = handle->name;
-			break;
-		}
-
-	return snprintf(buf, PAGE_SIZE, "%s\n", devname + 5);
+	devname = dev_name(&shk_context_obj->idev->dev);
+	return snprintf(buf, PAGE_SIZE, "%s\n", devname + 5);	/* TODO: why +5? */
 }
 
 static int shake_remove(struct platform_device *pdev)

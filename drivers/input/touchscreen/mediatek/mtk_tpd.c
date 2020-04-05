@@ -48,18 +48,14 @@
 #endif
 struct tpd_filter_t tpd_filter;
 struct tpd_dts_info tpd_dts_data;
-EXPORT_SYMBOL(tpd_dts_data);
-
 struct pinctrl *pinctrl1;
 struct pinctrl_state *pins_default;
 struct pinctrl_state *eint_as_int, *eint_output0, *eint_output1, *rst_output0, *rst_output1;
 struct of_device_id touch_of_match[] = {
-	{ .compatible = "mediatek,mt6570-touch", },
 	{ .compatible = "mediatek,mt6735-touch", },
 	{ .compatible = "mediatek,mt6580-touch", },
 	{ .compatible = "mediatek,mt8173-touch", },
 	{ .compatible = "mediatek,mt6755-touch", },
-	{ .compatible = "mediatek,mt6757-touch", },
 	{ .compatible = "mediatek,mt6797-touch", },
 	{ .compatible = "mediatek,mt8163-touch", },
 	{ .compatible = "mediatek,mt8127-touch", },
@@ -67,7 +63,11 @@ struct of_device_id touch_of_match[] = {
 	{ .compatible = "mediatek,mt7623-touch", },
 	{},
 };
-EXPORT_SYMBOL(touch_of_match);
+
+#ifdef CONFIG_TOUCHSCREEN_SMARTWAKE
+#include <linux/input/smartwake.h>
+bool display_off;
+#endif
 
 void tpd_get_dts_info(void)
 {
@@ -76,7 +76,7 @@ void tpd_get_dts_info(void)
 
 	node1 = of_find_matching_node(node1, touch_of_match);
 	if (node1) {
-		of_property_read_u32(node1, "tpd-max-touch-num", &tpd_dts_data.touch_max_num);
+		of_property_read_u32(node1, "tpd-key-dim-local", &tpd_dts_data.touch_max_num);
 		of_property_read_u32(node1, "use-tpd-button", &tpd_dts_data.use_tpd_button);
 		pr_debug("[tpd]use-tpd-button = %d\n", tpd_dts_data.use_tpd_button);
 		of_property_read_u32_array(node1, "tpd-resolution",
@@ -112,7 +112,6 @@ void tpd_get_dts_info(void)
 		pr_err("[tpd]%s can't find touch compatible custom node\n", __func__);
 	}
 }
-EXPORT_SYMBOL(tpd_get_dts_info);
 
 static DEFINE_MUTEX(tpd_set_gpio_mutex);
 void tpd_gpio_as_int(int pin)
@@ -123,7 +122,6 @@ void tpd_gpio_as_int(int pin)
 		pinctrl_select_state(pinctrl1, eint_as_int);
 	mutex_unlock(&tpd_set_gpio_mutex);
 }
-EXPORT_SYMBOL(tpd_gpio_as_int);
 
 void tpd_gpio_output(int pin, int level)
 {
@@ -142,8 +140,6 @@ void tpd_gpio_output(int pin, int level)
 	}
 	mutex_unlock(&tpd_set_gpio_mutex);
 }
-EXPORT_SYMBOL(tpd_gpio_output);
-
 int tpd_get_gpio_info(struct platform_device *pdev)
 {
 	int ret;
@@ -158,7 +154,7 @@ int tpd_get_gpio_info(struct platform_device *pdev)
 	pins_default = pinctrl_lookup_state(pinctrl1, "default");
 	if (IS_ERR(pins_default)) {
 		ret = PTR_ERR(pins_default);
-		/* dev_err(&pdev->dev, "fwq Cannot find touch pinctrl default %d!\n", ret);*/
+		dev_err(&pdev->dev, "fwq Cannot find touch pinctrl default %d!\n", ret);
 	}
 	eint_as_int = pinctrl_lookup_state(pinctrl1, "state_eint_as_int");
 	if (IS_ERR(eint_as_int)) {
@@ -327,6 +323,8 @@ static struct miscdevice tpd_misc_device = {
 
 
 /* function definitions */
+static int __init tpd_device_init(void);
+static void __exit tpd_device_exit(void);
 static int tpd_probe(struct platform_device *pdev);
 static int tpd_remove(struct platform_device *pdev);
 static struct work_struct tpd_init_work;
@@ -365,6 +363,9 @@ static void touch_resume_workqueue_callback(struct work_struct *work)
 	TPD_DEBUG("GTP touch_resume_workqueue_callback\n");
 	g_tpd_drv->resume(NULL);
 	tpd_suspend_flag = 0;
+#ifdef CONFIG_TOUCHSCREEN_SMARTWAKE
+	display_off = false;
+#endif
 }
 static int tpd_fb_notifier_callback(struct notifier_block *self, unsigned long event, void *data)
 {
@@ -385,6 +386,14 @@ static int tpd_fb_notifier_callback(struct notifier_block *self, unsigned long e
 	case FB_BLANK_UNBLANK:
 		TPD_DMESG("LCD ON Notify\n");
 		if (g_tpd_drv && tpd_suspend_flag) {
+#ifdef CONFIG_TOUCHSCREEN_SMARTWAKE
+                        if (smartwake_switch) {
+		                err = cancel_work_sync(&touch_resume_work);
+		                g_tpd_drv->suspend(NULL);
+			        if (!err)
+				        TPD_DMESG("cancel touch_resume_workqueue err = %d\n", err);
+			}
+#endif
 			err = queue_work(touch_resume_workqueue, &touch_resume_work);
 			if (!err) {
 				TPD_DMESG("start touch_resume_workqueue failed\n");
@@ -394,17 +403,70 @@ static int tpd_fb_notifier_callback(struct notifier_block *self, unsigned long e
 		break;
 	case FB_BLANK_POWERDOWN:
 		TPD_DMESG("LCD OFF Notify\n");
-		if (g_tpd_drv && !tpd_suspend_flag) {
+#ifdef CONFIG_TOUCHSCREEN_SMARTWAKE
+	        if (g_tpd_drv && !smartwake_switch) {
+#else
+		if (g_tpd_drv) {
+#endif
 			err = cancel_work_sync(&touch_resume_work);
 			if (!err)
 				TPD_DMESG("cancel touch_resume_workqueue err = %d\n", err);
 			g_tpd_drv->suspend(NULL);
 		}
 		tpd_suspend_flag = 1;
+#ifdef CONFIG_TOUCHSCREEN_SMARTWAKE
+		display_off = true;
+#endif
 		break;
 	default:
 		break;
 	}
+	return 0;
+}
+/* Add driver: if find TPD_TYPE_CAPACITIVE driver successfully, loading it */
+int tpd_driver_add(struct tpd_driver_t *tpd_drv)
+{
+	int i;
+
+	if (g_tpd_drv != NULL) {
+		TPD_DMESG("touch driver exist\n");
+		return -1;
+	}
+	/* check parameter */
+	if (tpd_drv == NULL)
+		return -1;
+	tpd_drv->tpd_have_button = tpd_dts_data.use_tpd_button;
+	/* R-touch */
+	if (strcmp(tpd_drv->tpd_device_name, "generic") == 0) {
+		tpd_driver_list[0].tpd_device_name = tpd_drv->tpd_device_name;
+		tpd_driver_list[0].tpd_local_init = tpd_drv->tpd_local_init;
+		tpd_driver_list[0].suspend = tpd_drv->suspend;
+		tpd_driver_list[0].resume = tpd_drv->resume;
+		tpd_driver_list[0].tpd_have_button = tpd_drv->tpd_have_button;
+		return 0;
+	}
+	for (i = 1; i < TP_DRV_MAX_COUNT; i++) {
+		/* add tpd driver into list */
+		if (tpd_driver_list[i].tpd_device_name == NULL) {
+			tpd_driver_list[i].tpd_device_name = tpd_drv->tpd_device_name;
+			tpd_driver_list[i].tpd_local_init = tpd_drv->tpd_local_init;
+			tpd_driver_list[i].suspend = tpd_drv->suspend;
+			tpd_driver_list[i].resume = tpd_drv->resume;
+			tpd_driver_list[i].tpd_have_button = tpd_drv->tpd_have_button;
+			tpd_driver_list[i].attrs = tpd_drv->attrs;
+#if 0
+			if (tpd_drv->tpd_local_init() == 0) {
+				TPD_DMESG("load %s successfully\n",
+					  tpd_driver_list[i].tpd_device_name);
+				g_tpd_drv = &tpd_driver_list[i];
+			}
+#endif
+			break;
+		}
+		if (strcmp(tpd_driver_list[i].tpd_device_name, tpd_drv->tpd_device_name) == 0)
+			return 1;	/* driver exist */
+	}
+
 	return 0;
 }
 
@@ -423,7 +485,6 @@ int tpd_driver_remove(struct tpd_driver_t *tpd_drv)
 	}
 	return 0;
 }
-EXPORT_SYMBOL(tpd_driver_remove);
 
 static void tpd_create_attributes(struct device *dev, struct tpd_attrs *attrs)
 {
@@ -492,7 +553,7 @@ static int tpd_probe(struct platform_device *pdev)
 			return ret;
 		}
 		TPD_RES_X = tpd_res_x;
-		ret = kstrtoul(CONFIG_LCM_HEIGHT, 0, &tpd_res_y);
+		ret = kstrtoul(CONFIG_LCM_HEIGHT, 0, &tpd_res_x);*/
 		if (ret < 0) {
 			pr_err("Touch down get lcm_y failed");
 			return ret;
@@ -604,9 +665,6 @@ static int tpd_probe(struct platform_device *pdev)
 
 	return 0;
 }
-EXPORT_SYMBOL(tpd_probe);
-EXPORT_SYMBOL(tpd);
-
 static int tpd_remove(struct platform_device *pdev)
 {
 	input_unregister_device(tpd->dev);
@@ -617,52 +675,11 @@ static int tpd_remove(struct platform_device *pdev)
 static void tpd_init_work_callback(struct work_struct *work)
 {
 	TPD_DEBUG("MediaTek touch panel driver init\n");
-	if (platform_driver_register(&tpd_driver) != 0)
+	if (platform_driver_register(&tpd_driver) != 0) {
 		TPD_DMESG("unable to register touch panel driver.\n");
-}
-/* Add driver: if find TPD_TYPE_CAPACITIVE driver successfully, loading it */
-int tpd_driver_add(struct tpd_driver_t *tpd_drv)
-{
-	int i;
-
-	if (g_tpd_drv != NULL) {
-		TPD_DMESG("touch driver exist\n");
-		return -1;
 	}
-	/* check parameter */
-	if (tpd_drv == NULL)
-		return -1;
-	tpd_drv->tpd_have_button = tpd_dts_data.use_tpd_button;
-	/* R-touch */
-	if (strcmp(tpd_drv->tpd_device_name, "generic") == 0) {
-		tpd_driver_list[0].tpd_device_name = tpd_drv->tpd_device_name;
-		tpd_driver_list[0].tpd_local_init = tpd_drv->tpd_local_init;
-		tpd_driver_list[0].suspend = tpd_drv->suspend;
-		tpd_driver_list[0].resume = tpd_drv->resume;
-		tpd_driver_list[0].tpd_have_button = tpd_drv->tpd_have_button;
-	return 0;
 }
-	for (i = 1; i < TP_DRV_MAX_COUNT; i++) {
-		/* add tpd driver into list */
-		if (tpd_driver_list[i].tpd_device_name == NULL) {
-			tpd_driver_list[i].tpd_device_name = tpd_drv->tpd_device_name;
-			tpd_driver_list[i].tpd_local_init = tpd_drv->tpd_local_init;
-			tpd_driver_list[i].suspend = tpd_drv->suspend;
-			tpd_driver_list[i].resume = tpd_drv->resume;
-			tpd_driver_list[i].tpd_have_button = tpd_drv->tpd_have_button;
-			tpd_driver_list[i].attrs = tpd_drv->attrs;
-			break;
-		}
-		if (strcmp(tpd_driver_list[i].tpd_device_name, tpd_drv->tpd_device_name) == 0)
-			return 1;	/* driver exist */
-	}
-
-	return 0;
-}
-EXPORT_SYMBOL(tpd_driver_add);
-
-
-int tpd_device_init(void)
+static int __init tpd_device_init(void)
 {
 	int res = 0;
 
@@ -674,12 +691,17 @@ int tpd_device_init(void)
 		pr_err("tpd : touch device init failed res:%d\n", res);
 	return 0;
 }
-EXPORT_SYMBOL(tpd_device_init);
 /* should never be called */
-void  tpd_device_exit(void)
+static void __exit tpd_device_exit(void)
 {
 	TPD_DMESG("MediaTek touch panel driver exit\n");
 	/* input_unregister_device(tpd->dev); */
 	platform_driver_unregister(&tpd_driver);
 }
-EXPORT_SYMBOL(tpd_device_exit);
+
+late_initcall(tpd_device_init);
+module_exit(tpd_device_exit);
+
+MODULE_LICENSE("GPL");
+MODULE_DESCRIPTION("MediaTek touch panel driver");
+MODULE_AUTHOR("Kirby Wu<kirby.wu@mediatek.com>");

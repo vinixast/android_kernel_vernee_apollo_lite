@@ -1,19 +1,17 @@
 /*
- * Copyright (C) 2015 MediaTek Inc.
+ * Copyright (C) 2007 The Android Open Source Project
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- * You should have received a copy of the GNU General Public License
- * along with this program
- * If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 /*******************************************************************************
  *
@@ -863,10 +861,6 @@ static ssize_t mt_soc_debug_write(struct file *f, const char __user *buf,
 	char delim[] = " ,";
 
 	memset((void *)InputString, 0, 256);
-
-	if (count > 256)
-		count = 256;
-
 	if (copy_from_user((InputString), buf, count))
 		pr_debug("copy_from_user mt_soc_debug_write count = %zu temp = %s\n", count,
 			 InputString);
@@ -1204,22 +1198,26 @@ static struct snd_soc_dai_link mt_soc_dai_common[] = {
 	 .ops = &mt_machine_audio_ops,
 	 },
 #ifdef CONFIG_MTK_BTCVSD_ALSA
-	{
-		.name = "BTCVSD_RX",
-		.stream_name = MT_SOC_BTCVSD_CAPTURE_STREAM_NAME,
-		.cpu_dai_name   = "snd-soc-dummy-dai",
-		.platform_name  = MT_SOC_BTCVSD_RX_PCM,
-		.codec_dai_name = "snd-soc-dummy-dai",
-		.codec_name = "snd-soc-dummy",
-		},
-	{
-		.name = "BTCVSD_TX",
-		.stream_name = MT_SOC_BTCVSD_PLAYBACK_STREAM_NAME,
-		.cpu_dai_name   = "snd-soc-dummy-dai",
-		.platform_name  = MT_SOC_BTCVSD_TX_PCM,
-		.codec_dai_name = "snd-soc-dummy-dai",
-		.codec_name = "snd-soc-dummy",
-	},
+	 {
+	 .name = "BTCVSD_RX",
+	 .stream_name = MT_SOC_BTCVSD_CAPTURE_STREAM_NAME,
+	 .cpu_dai_name   = MT_SOC_BTCVSD_RX_DAI_NAME,
+	 .platform_name  = MT_SOC_BTCVSD_RX_PCM,
+	 .codec_dai_name = MT_SOC_CODEC_BTCVSD_RX_DAI_NAME,
+	 .codec_name = MT_SOC_CODEC_DUMMY_NAME,
+	 .init = mt_soc_audio_init,
+	 .ops = &mt_machine_audio_ops,
+	 },
+	 {
+	 .name = "BTCVSD_TX",
+	 .stream_name = MT_SOC_BTCVSD_PLAYBACK_STREAM_NAME,
+	 .cpu_dai_name   = MT_SOC_BTCVSD_TX_DAI_NAME,
+	 .platform_name  = MT_SOC_BTCVSD_TX_PCM,
+	 .codec_dai_name = MT_SOC_CODEC_BTCVSD_TX_DAI_NAME,
+	 .codec_name = MT_SOC_CODEC_DUMMY_NAME,
+	 .init = mt_soc_audio_init,
+	 .ops = &mt_machine_audio_ops,
+	 },
 #endif
 };
 

@@ -132,8 +132,6 @@ int sdio_modem_get_ccmni_ch(int md_id, int ccmni_idx, struct ccmni_ch *channel)
 		channel->rx_ack = 0xFF;
 		channel->tx = ccmni_idx;
 		channel->tx_ack = 0xFF;
-		channel->dl_ack = ccmni_idx;
-		channel->multiq = 0;
 	} else {
 		pr_debug("[ccci%d/net] invalid ccmni index=%d\n", md_id,
 			 ccmni_idx);
@@ -147,8 +145,17 @@ struct ccmni_ccci_ops sdio_ccmni_ops = {
 	.ccmni_ver = CCMNI_DRV_V0,	/*CCMNI_DRV_VER */
 	.ccmni_num = CCMNI_INTF_COUNT,
 	.name = "cc3mni",	/*"ccmni" or "cc2mni" or "ccemni" */
+#if defined CONFIG_MTK_IRAT_SUPPORT
+#if defined CONFIG_MTK_C2K_SLOT2_SUPPORT
+	.md_ability = MODEM_CAP_CCMNI_IRAT | MODEM_CAP_TXBUSY_STOP | MODEM_CAP_WORLD_PHONE,
+#else
 	.md_ability = MODEM_CAP_CCMNI_IRAT | MODEM_CAP_TXBUSY_STOP,
+#endif
 	.irat_md_id = MD_SYS1,
+#else
+	.md_ability = MODEM_CAP_TXBUSY_STOP,
+	.irat_md_id = -1,
+#endif
 	.napi_poll_weigh = 0,
 	.send_pkt = sdio_modem_ccmni_send_pkt,
 	.napi_poll = NULL,
@@ -217,26 +224,28 @@ static void sdio_tx_rx_printk(const void *buf, unsigned char type)
 	/*return; */
 	if (buf)
 		head = (struct sdio_msg_head *)buf;
-	else
-		return;
 
 	count = calc_payload_len(head, NULL);
 	if (type == 1)
 		LOGPRT(LOG_INFO, "write %d to channel%d/[%d]>>",
-			 count, head->chanInfo + (head->tranHi & EXTEND_CH_BIT), sdio_tx_cnt);
+			 count, head->chanInfo, sdio_tx_cnt);
 	else
 		LOGPRT(LOG_INFO, "read %d from channel%d/[%d]<<",
-			 count, head->chanInfo + (head->tranHi & EXTEND_CH_BIT), sdio_rx_cnt);
+			 count, head->chanInfo, sdio_rx_cnt);
 
 	/*if(count > RECORD_DUMP_MAX) */
 	/*count = RECORD_DUMP_MAX; */
 
 	LOGPRT
-	    (LOG_INFO, "%x-%x-%x-%x-%x-%x-%x-%x-%x-%x-%x-%x\n",
+	    (LOG_INFO, "%x-%x-%x-%x-%x-%x-%x-%x-%x-%x-%x-%x-%x-%x-%x-%x-%x-%x-%x-%x-%x-%x-%x-%x\n",
 	     *print_buf, *(print_buf + 1), *(print_buf + 2), *(print_buf + 3),
 	     *(print_buf + 4), *(print_buf + 5), *(print_buf + 6),
 	     *(print_buf + 7), *(print_buf + 8), *(print_buf + 9),
-	     *(print_buf + 10), *(print_buf + 11));
+	     *(print_buf + 10), *(print_buf + 11), *(print_buf + 12),
+	     *(print_buf + 13), *(print_buf + 14), *(print_buf + 15),
+	     *(print_buf + 16), *(print_buf + 17), *(print_buf + 18),
+	     *(print_buf + 19), *(print_buf + 20), *(print_buf + 21),
+	     *(print_buf + 22), *(print_buf + 23));
 /*
 	for(i = 0; i < count + sizeof(struct sdio_msg_head); i++)
 	{
@@ -328,7 +337,6 @@ static int check_port(struct sdio_modem_port *port)
 	if (!port) {
 		LOGPRT(LOG_ERR, "%s port NULL\n", __func__);
 		ret = -ENODEV;
-		return ret;
 	} else {
 		modem = port->modem;
 		if (!port->func) {
@@ -1021,7 +1029,7 @@ static int ctrl_msg_analyze(struct sdio_modem *modem)
 		break;
 #ifndef CONFIG_EVDO_DT_VIA_SUPPORT
 	case HEART_BEAT_MSG_ID:
-		LOGPRT(LOG_ERR, "heart beat msg received %x\n",
+		LOGPRT(LOG_INFO, "heart beat msg received %x\n",
 		       (msg->chan_num << 8) | msg->option);
 		del_timer(&modem->heart_beat_timer);
 		break;
@@ -1656,7 +1664,7 @@ static void sdio_write_ccmni_work(struct work_struct *work)
 				LOGPRT(LOG_INFO, "ccmni(ch:%d) is resumed.\n",
 				       tx_ch);
 				ccmni_ops.md_state_callback(SDIO_MD_ID, tx_ch,
-							    TX_IRQ, 0);
+							    TX_IRQ);
 				ccmni_port->tx_state = CCMNI_TX_READY;
 			} else {
 				LOGPRT(LOG_INFO,
@@ -1758,8 +1766,6 @@ static void sdio_write_port_work(struct work_struct *work)
 			/*port->index start from 0, chanInfo start from 1, chan0 is ctrl channel. */
 			msg_head->chanInfo = 0x0F & (port->index + 1);
 			msg_head->tranHi = 0x0F & (todo >> 8);
-			if (port->index >= SDIO_AT4_CHANNEL_NUM - 1)
-				msg_head->tranHi |= EXTEND_CH_BIT;
 			msg_head->tranLow = 0xFF & todo;
 #ifndef CONFIG_EVDO_DT_VIA_SUPPORT
 			msg_head->hw_head.len_hi =
@@ -1817,7 +1823,8 @@ static void sdio_write_port_work(struct work_struct *work)
  down_sem_fail:
 	up(&port->write_sem);
  down_out:
-	return;
+	/*for compile warning */
+	ret = ret;
 }
 
 #ifndef CONFIG_EVDO_DT_VIA_SUPPORT
@@ -2857,7 +2864,6 @@ static void sdio_pio_intr_handler(struct sdio_func *func)
 	/*unsigned char pending = 0; */
 	unsigned int hw_len;
 	int raw_val;
-	int ch_id = 0;
 
 	static struct sdio_msg_head *msg_head;
 	static int throughput_count;
@@ -3010,28 +3016,24 @@ static void sdio_pio_intr_handler(struct sdio_func *func)
 			}
 		}
 
-		if ((!(modem->msg->head.tranHi & EXTEND_CH_BIT) &&
-			((modem->msg->head.chanInfo == SDIO_AT_CHANNEL_NUM) ||
+		if ((modem->msg->head.chanInfo == SDIO_AT_CHANNEL_NUM) ||
 		    (modem->msg->head.chanInfo == SDIO_AT2_CHANNEL_NUM) ||
 		    (modem->msg->head.chanInfo == EXCP_MSG_CH_ID) ||
 		    (modem->msg->head.chanInfo == EXCP_CTRL_CH_ID) ||
 		    (modem->msg->head.chanInfo == AGPS_CH_ID) ||
-		    (modem->msg->head.chanInfo == SDIO_AT3_CHANNEL_NUM))) ||
-		    (modem->msg->head.tranHi & EXTEND_CH_BIT)) {
+		    (modem->msg->head.chanInfo == SDIO_AT3_CHANNEL_NUM)) {
 			sdio_tx_rx_printk(modem->msg, 0);
 		}
 
 		if ((modem->status == MD_EXCEPTION
 		     || modem->status == MD_EXCEPTION_ONGOING)) {
 			if (dump_exp_data
-			    && (!(modem->msg->head.tranHi & EXTEND_CH_BIT) &&
-			    modem->msg->head.chanInfo == EXCP_DATA_CH_ID)) {
+			    && modem->msg->head.chanInfo == EXCP_DATA_CH_ID) {
 				sdio_tx_rx_printk(modem->msg, 0);
 				dump_exp_data = 0;
 			}
 			/*make sure each crash file can be dumpped */
-			if (!(modem->msg->head.tranHi & EXTEND_CH_BIT) &&
-				modem->msg->head.chanInfo == EXCP_MSG_CH_ID)
+			if (modem->msg->head.chanInfo == EXCP_MSG_CH_ID)
 				dump_exp_data = 1;
 
 		}
@@ -3103,8 +3105,7 @@ static void sdio_pio_intr_handler(struct sdio_func *func)
 #if 1
 			/*Just for test */
 
-			if (!(modem->msg->head.tranHi & EXTEND_CH_BIT) &&
-				modem->msg->head.chanInfo == CCMNI_AP_LOOPBACK_CH) {
+			if (modem->msg->head.chanInfo == CCMNI_AP_LOOPBACK_CH) {
 				if (!throughput_count) {
 					LOGPRT(LOG_INFO,
 					       "C2K throughput test begin....\n");
@@ -3128,22 +3129,19 @@ static void sdio_pio_intr_handler(struct sdio_func *func)
 				       modem->msg->head.start_flag);
 				goto out;
 			}
-			if (!(modem->msg->head.tranHi & EXTEND_CH_BIT) &&
-				modem->msg->head.chanInfo == EXCP_CTRL_CH_ID
+			if (modem->msg->head.chanInfo == EXCP_CTRL_CH_ID
 			    && (modem->status == MD_EXCEPTION
 				|| modem->status == MD_EXCEPTION_ONGOING))
 				modem_exception_handler(modem);
 
-			if (!(modem->msg->head.tranHi & EXTEND_CH_BIT) &&
-				((modem->msg->head.chanInfo == EXCP_MSG_CH_ID)
-			    || (modem->msg->head.chanInfo == EXCP_DATA_CH_ID))) {
+			if ((modem->msg->head.chanInfo == EXCP_MSG_CH_ID)
+			    || (modem->msg->head.chanInfo == EXCP_DATA_CH_ID)) {
 				LOGPRT(LOG_DEBUG,
 				       "excp msg/data received ch[%d]\n",
 				       modem->msg->head.chanInfo);
 			}
 #if ENABLE_CCMNI
-			if (!(modem->msg->head.tranHi & EXTEND_CH_BIT) &&
-				((modem->msg->head.chanInfo & 0x0F) == CCMNI_CH_ID)) {
+			if ((modem->msg->head.chanInfo & 0x0F) == CCMNI_CH_ID) {
 				index = CCMNI_CH_ID - 1;
 				port = modem->port[index];
 				if (!port->inception) {
@@ -3191,7 +3189,7 @@ static void sdio_pio_intr_handler(struct sdio_func *func)
 					total_copy += rx_len;
 					keep_skb = 1;
 					/*the last packet of skb received */
-					if (!(modem->msg->head.tranHi & MORE_DATA_FOLLOWING)) {
+					if (!(modem->msg->head.tranHi & 0x20)) {
 						LOGPRT(LOG_DEBUG,
 						       "%s: data to ccmni...\n",
 						       __func__);
@@ -3209,20 +3207,16 @@ static void sdio_pio_intr_handler(struct sdio_func *func)
 			}
 #endif
 #if ENABLE_CHAR_DEV
-			if (!(modem->msg->head.tranHi & EXTEND_CH_BIT) &&
-				((modem->msg->head.chanInfo & 0x0F) == MD_LOG2_CH_ID)) {
+			if ((modem->msg->head.chanInfo & 0x0F) == MD_LOG2_CH_ID) {
 				ret = sdio_modem_log_input(modem, index);
 				if (unlikely(ret < 0))
 					goto out;
 			}
 #endif
-
-			ch_id = (modem->msg->head.chanInfo & 0x0F) +
-					(modem->msg->head.tranHi & EXTEND_CH_BIT);
-			if (ch_id > 0
-			    && ch_id < (SDIO_TTY_NR + 1)) {
+			if (msg_head->chanInfo > 0
+			    && msg_head->chanInfo < (SDIO_TTY_NR + 1)) {
 				/*pay attention to channel mapping with rawbulk in rawbulk_push_upstream_buffer() */
-				index = ch_id - 1;
+				index = msg_head->chanInfo - 1;
 
 				/*
 				   because we've already processed offset info when copy data to as_packet buffer.
@@ -3272,7 +3266,7 @@ static void sdio_pio_intr_handler(struct sdio_func *func)
 								      -
 								      payload_offset));
 #if ENABLE_CCMNI
-				} else if (ch_id != CCMNI_CH_ID) {
+				} else if (msg_head->chanInfo != CCMNI_CH_ID) {
 #else
 				} else {
 #endif
@@ -3298,7 +3292,7 @@ static void sdio_pio_intr_handler(struct sdio_func *func)
 						tty_kref_put(tty);
 #endif
 				}
-			} else if (ch_id == 0) {	/*control message analyze */
+			} else if (msg_head->chanInfo == 0) {	/*control message analyze */
 				ctrl_msg_analyze(modem);
 			} else {
 #if ENABLE_CCMNI
@@ -3685,8 +3679,6 @@ static int func_enable_irq(struct sdio_func *func, int enable)
 	u8 cccr = 0;
 	int ret = 0;
 
-	if (!func->card)
-		return -1;
 	/*Hack to access Function-0 */
 	func_num = func->num;
 	func->num = 0;
@@ -3746,12 +3738,8 @@ static void modem_sdio_write(struct sdio_modem *modem, int addr,
 	if (buf) {
 		msg_head = (struct sdio_msg_head *)buf;
 		print_buf = (unsigned char *)buf;
-	} else {
-		LOGPRT(LOG_ERR, "%s %d: buf is NULL\n",
-					       __func__, __LINE__);
-		return;
 	}
-	ch_id = (msg_head->chanInfo & 0x0F) + (msg_head->tranHi & EXTEND_CH_BIT);
+	ch_id = msg_head->chanInfo & 0x0F;
 	tport_id = ch_id - 1;
 
 	if (tport_id >= 0 && tport_id < SDIO_TTY_NR)
@@ -3868,7 +3856,7 @@ static void modem_sdio_write(struct sdio_modem *modem, int addr,
 		/* sdio_tx_rx_printk(buf, 1); */
 		goto terminate;
 	}
-	if (func == modem->func && func && func->card) {
+	if (func == modem->func) {
 		sdio_claim_host(func);
 	} else {
 		LOGPRT(LOG_ERR,
@@ -3898,14 +3886,10 @@ static void modem_sdio_write(struct sdio_modem *modem, int addr,
 	    || (ch_id == SDIO_AT2_CHANNEL_NUM)
 	    || (ch_id == SDIO_AT3_CHANNEL_NUM)
 	    || (ch_id == EXCP_CTRL_CH_ID) || (ch_id == EXCP_MSG_CH_ID)
-	    || (ch_id == AGPS_CH_ID) || (ch_id == MD_LOG_CH_ID)
-	    || (ch_id == SDIO_AT4_CHANNEL_NUM) || (ch_id == SDIO_AT5_CHANNEL_NUM)
-	    || (ch_id == SDIO_AT6_CHANNEL_NUM) || (ch_id == SDIO_AT7_CHANNEL_NUM)
-	    || (ch_id == SDIO_AT8_CHANNEL_NUM)) {
+	    || (ch_id == AGPS_CH_ID) || (ch_id == MD_LOG_CH_ID)) {
 		LOGPRT(LOG_NOTICE, "ch_id(%d)\n", ch_id);
 		sdio_tx_rx_printk(buf, 1);
 	}
-
 #if PADDING_BY_BLOCK_SIZE
 	/*sdio_tx_rx_printk(buf, 1); */
 	block_cnt = len / DEFAULT_BLK_SIZE;
@@ -4083,7 +4067,7 @@ static int sdio_modem_port_init(struct sdio_modem_port *port, int index)
 
 	/*create port's write work queue */
 	port->name = "modem_sdio_write_wq";
-	snprintf(port->work_name, 64, "%s%d", port->name, index);
+	sprintf(port->work_name, "%s%d", port->name, index);
 	port->write_q = create_singlethread_workqueue(port->work_name);
 	if (port->write_q == NULL) {
 		LOGPRT(LOG_ERR, "%s %d error creat write workqueue\n", __func__,
@@ -4137,7 +4121,7 @@ static ssize_t modem_log_level_show(struct kobject *kobj,
 {
 	char *s = buf;
 
-	s += snprintf(s, 32, "%d\n", sdio_log_level);
+	s += sprintf(s, "%d\n", sdio_log_level);
 
 	return s - buf;
 }
@@ -4170,10 +4154,10 @@ static ssize_t modem_refer_show(struct kobject *kobj,
 		return -ENODEV;
 
 	for (i = 0; i < SDIO_TTY_NR; i++) {
-		s += snprintf(s, 64, "TTY port%d Tx:  times %d\n", i,
+		s += sprintf(s, "TTY port%d Tx:  times %d\n", i,
 			     modem->port[i]->tx_count);
-		s += snprintf(s, 64, "\n");
-		s += snprintf(s, 64, "TTY port%d Rx:  times %d\n", i,
+		s += sprintf(s, "\n");
+		s += sprintf(s, "TTY port%d Rx:  times %d\n", i,
 			     modem->port[i]->rx_count);
 	}
 	return s - buf;
@@ -4197,10 +4181,11 @@ static ssize_t modem_ctrl_on_show(struct kobject *kobj,
 
 	LOGPRT(LOG_NOTICE, "%s: enter\n", __func__);
 
-	ctrl_port = modem->ctrl_port;
+	if (modem)
+		ctrl_port = modem->ctrl_port;
 
 /*out:*/
-	s += snprintf(s, 64, "ctrl state: %s\n",
+	s += sprintf(s, "ctrl state: %s\n",
 		     ctrl_port->chan_state ? "enable" : "disable");
 	return s - buf;
 }
@@ -4239,7 +4224,7 @@ static ssize_t modem_dtr_send_show(struct kobject *kobj,
 		LOGPRT(LOG_NOTICE,
 		       "query cp ctrl channel state failed ret=%d\n", ret);
 	}
-	s += snprintf(s, 64, "ctrl state: %d\n", status);
+	s += sprintf(s, "ctrl state: %d\n", status);
 
 	return s - buf;
 }
@@ -4275,9 +4260,9 @@ static ssize_t modem_dtr_query_show(struct kobject *kobj,
 	if (status < 0) {
 		LOGPRT(LOG_NOTICE,
 		       "query cp ctrl channel state failed ret=%d\n", ret);
-		s += snprintf(s, 64, "ctrl state: %s\n", "N/A");
+		s += sprintf(s, "ctrl state: %s\n", "N/A");
 	} else {
-		s += snprintf(s, 64, "ctrl state: %d\n", status);
+		s += sprintf(s, "ctrl state: %d\n", status);
 	}
 	return s - buf;
 }
@@ -4367,12 +4352,12 @@ static ssize_t modem_ack_show(struct kobject *kobj, struct kobj_attribute *attr,
 		cbp_pdata = modem->cbp_data;
 
 	if ((cbp_pdata != NULL) && (cbp_pdata->cbp_data_ack != NULL)) {
-		s += snprintf(s, 64, "gpio[%d]\t state:[%d]\t polar[%d]\t ",
+		s += sprintf(s, "gpio[%d]\t state:[%d]\t polar[%d]\t ",
 			     cbp_pdata->cbp_data_ack->wait_gpio,
 			     atomic_read(&cbp_pdata->cbp_data_ack->state),
 			     cbp_pdata->cbp_data_ack->wait_polar);
 
-		s += snprintf(s, 64, "stored:[%d]\n",
+		s += sprintf(s, "stored:[%d]\n",
 			     c2k_gpio_get_value(modem->cbp_data->
 						cbp_flow_ctrl->wait_gpio));
 	}
@@ -4401,12 +4386,12 @@ static ssize_t modem_flw_show(struct kobject *kobj, struct kobj_attribute *attr,
 		cbp_pdata = modem->cbp_data;
 
 	if ((cbp_pdata != NULL) && (cbp_pdata->cbp_flow_ctrl != NULL)) {
-		s += snprintf(s, 64, "gpio[%d] \tstate:[%d]\t polar[%d]\t ",
+		s += sprintf(s, "gpio[%d] \tstate:[%d]\t polar[%d]\t ",
 			     cbp_pdata->cbp_flow_ctrl->wait_gpio,
 			     atomic_read(&cbp_pdata->cbp_flow_ctrl->state),
 			     cbp_pdata->cbp_flow_ctrl->wait_polar);
 
-		s += snprintf(s, 64, "stored:[%d]\n",
+		s += sprintf(s, "stored:[%d]\n",
 			     c2k_gpio_get_value(modem->cbp_data->
 						cbp_flow_ctrl->wait_gpio));
 	}
@@ -5067,7 +5052,7 @@ int check_img_header(struct sdio_modem *modem)
 			/*LOGPRT(LOG_INFO,  "%s: platform = %s, build_time = %s, build_ver = %s\n",
 			   __func__, img_info->platform, img_info->build_time, img_info->build_ver); */
 
-			snprintf(img_str, 256,
+			sprintf(img_str,
 				"MD:%s*%s*%s*%s*%s\nAP:%s*%s*%08x (MD)%08x\n",
 				img->img_info.image_type,
 				img->img_info.platform, img->img_info.build_ver,
@@ -5249,6 +5234,7 @@ static int c2k_sdio_probe_func(struct sdio_modem *modem, struct sdio_func *func)
 
 	return ret;
 
+	sdio_release_irq(func);
  err_sdio_modem_port_init:
 	modem_port_remove(modem);
 	for (index = 0; index < SDIO_TTY_NR; index++) {
@@ -5366,36 +5352,6 @@ void modem_reset_handler(void)
 	LOGPRT(LOG_INFO, "%s %d: Leave.\n", __func__, __LINE__);
 }
 
-void modem_pre_stop(void)
-{
-	struct sdio_modem *modem = c2k_modem;
-	/*struct sdio_func *func = modem->func; */
-	struct sdio_func *func = NULL;
-	int ret = 0;
-
-	func = modem->func;
-
-	if (!func || !func->card) {
-		LOGPRT(LOG_INFO, "%s %d: card removed, exit.\n", __func__, __LINE__);
-		return;
-	}
-	LOGPRT(LOG_INFO, "%s %d: Enter.\n", __func__, __LINE__);
-	sdio_claim_host(func);
-	ret = sdio_disable_func(func);
-	if (ret < 0)
-		LOGPRT(LOG_ERR, "%s: sdio_disable_func failed.\n", __func__);
-
-	ret = sdio_release_irq(func);
-	if (ret < 0)
-		LOGPRT(LOG_ERR, "%s: sdio_release_irq failed.\n", __func__);
-
-	sdio_release_host(func);
-
-	modem->func = NULL;
-
-	LOGPRT(LOG_INFO, "%s %d: Leave.\n", __func__, __LINE__);
-}
-
 static void modem_sdio_remove(struct sdio_func *func)
 {
 	LOGPRT(LOG_NOTICE, "%s %d: Enter.\n", __func__, __LINE__);
@@ -5458,7 +5414,7 @@ static struct sdio_driver modem_sdio_driver = {
 
 #if ENABLE_CCMNI
 
-int sdio_modem_ccmni_send_pkt(int md_id, int ccmni_idx, void *data, int is_ack)
+int sdio_modem_ccmni_send_pkt(int md_id, int tx_ch, void *data)
 {
 	struct sdio_modem *modem = NULL;
 	struct sdio_modem_port *ccmni_port = NULL;
@@ -5469,8 +5425,6 @@ int sdio_modem_ccmni_send_pkt(int md_id, int ccmni_idx, void *data, int is_ack)
 	unsigned int data_len;
 	unsigned int todo;
 	int chars_in_fifo = 0;
-	struct ccmni_ch *channel = ccmni_ops.get_ch(md_id, ccmni_idx);
-	int tx_ch = is_ack ? channel->dl_ack : channel->tx;
 
 	LOGPRT(LOG_DEBUG, "%s: enter...\n", __func__);
 	if (md_id != SDIO_MD_ID) {
@@ -5481,16 +5435,10 @@ int sdio_modem_ccmni_send_pkt(int md_id, int ccmni_idx, void *data, int is_ack)
 	}
 
 	ccmni_port = sdio_modem_tty_port_get(CCMNI_CH_ID - 1);
-	if (!ccmni_port) {
+	modem = ccmni_port->modem;
+	if (!ccmni_port || modem->status == 0) {
 		LOGPRT(LOG_ERR,
 		       "%s: sdio_modem_send_pkt failed: ccmni port is NULL.\n",
-		       __func__);
-		goto md_not_ready_err_exit;
-	}
-	modem = ccmni_port->modem;
-	if (modem->status == 0) {
-		LOGPRT(LOG_ERR,
-		       "%s: sdio_modem_send_pkt failed: modem not ready.\n",
 		       __func__);
 		goto md_not_ready_err_exit;
 	}
@@ -5540,7 +5488,7 @@ int sdio_modem_ccmni_send_pkt(int md_id, int ccmni_idx, void *data, int is_ack)
 		/* stop tx queue */
 		LOGPRT(LOG_INFO, "ccmni port %d is stopped.\n",
 			       ccmni_port->index);
-		ccmni_ops.md_state_callback(md_id, tx_ch, TX_FULL, 0);
+		ccmni_ops.md_state_callback(md_id, tx_ch, TX_FULL);
 		ccmni_port->tx_state = CCMNI_TX_STOP;
 
 		spin_unlock_irqrestore(&ccmni_port->tx_state_lock, flags);

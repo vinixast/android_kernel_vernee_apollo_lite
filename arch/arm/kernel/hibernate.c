@@ -22,6 +22,7 @@
 #include <asm/suspend.h>
 #include <asm/memory.h>
 #include <asm/sections.h>
+#include <mtk_hibernate_core.h>
 #include "reboot.h"
 
 #ifdef CONFIG_MTK_HIBERNATION

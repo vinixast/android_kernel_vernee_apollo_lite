@@ -24,13 +24,6 @@
 #define CONFIG_HYBRID_CPU_DVFS
 /*#define __TRIAL_RUN__*/
 
-#elif defined(CONFIG_ARCH_MT6757) && !defined(CONFIG_FPGA_EARLY_PORTING)
-#define CONFIG_HYBRID_CPU_DVFS
-#ifdef CONFIG_HYBRID_CPU_DVFS
-/*#define CPUHVFS_HW_GOVERNOR*/
-#endif
-/*#define __TRIAL_RUN__*/
-
 #elif defined(CONFIG_ARCH_MT6797) /*&& defined(CONFIG_MTK_HYBRID_CPU_DVFS)*/
 #include "../mt6797/mt_cpufreq.h"
 #ifdef ENABLE_IDVFS
@@ -52,17 +45,6 @@ enum cpu_cluster {
 	CPU_CLUSTER_LL,
 	CPU_CLUSTER_L,
 	CPU_CLUSTER_B,
-	CPU_CLUSTER_CCI,	/* virtual */
-	NUM_CPU_CLUSTER
-};
-
-#define NUM_PHY_CLUSTER		(NUM_CPU_CLUSTER - 1)
-#define NUM_CPU_OPP		16
-
-#elif defined(CONFIG_ARCH_MT6757)
-enum cpu_cluster {
-	CPU_CLUSTER_LL,
-	CPU_CLUSTER_L,
 	CPU_CLUSTER_CCI,	/* virtual */
 	NUM_CPU_CLUSTER
 };
@@ -102,14 +84,7 @@ enum pause_src {
 	PAUSE_I2CDRV,
 	PAUSE_IDLE,
 	PAUSE_SUSPEND,
-	PAUSE_HWGOV,
 	NUM_PAUSE_SRC
-};
-
-enum power_mode {
-	POWER_NORMAL,
-	POWER_SPORTS,
-	NUM_POWER_MODE
 };
 
 struct init_sta {
@@ -173,6 +148,10 @@ extern unsigned int cpuhvfs_get_curr_volt(unsigned int cluster);
 
 extern void cpuhvfs_set_opp_limit(unsigned int cluster, unsigned int ceiling, unsigned int floor);
 
+#ifdef CPUHVFS_HW_GOVERNOR
+extern void cpuhvfs_register_dvfs_notify(dvfs_notify_t callback);
+#endif
+
 extern int cpuhvfs_get_dvfsp_semaphore(enum sema_user user);
 extern void cpuhvfs_release_dvfsp_semaphore(enum sema_user user);
 
@@ -186,12 +165,13 @@ extern int cpuhvfs_dvfsp_suspend(void);
 extern void cpuhvfs_dvfsp_resume(unsigned int on_cluster, struct init_sta *sta);
 
 extern void cpuhvfs_dump_dvfsp_info(void);
+extern void cpuhvfs_get_pause_status_i2c(void);		/* deprecated */
 #else
 static inline int cpuhvfs_module_init(void)		{ return -ENODEV; }
 static inline int cpuhvfs_kick_dvfsp_to_run(struct init_sta *sta)	{ return -ENODEV; }
 
 static inline void cpuhvfs_notify_cluster_on(unsigned int cluster)	{}
-static inline void cpuhvfs_notify_cluster_off(unsigned int cluster)	{ WARN_ON(1); }
+static inline void cpuhvfs_notify_cluster_off(unsigned int cluster)	{ BUG(); }
 
 static inline int cpuhvfs_set_target_opp(unsigned int cluster, unsigned int index,
 					 unsigned int *ret_volt)	{ return -ENODEV; }
@@ -199,6 +179,8 @@ static inline unsigned int cpuhvfs_get_curr_volt(unsigned int cluster)	{ return 
 
 static inline void cpuhvfs_set_opp_limit(unsigned int cluster, unsigned int ceiling,
 					 unsigned int floor)		{}
+
+static inline void cpuhvfs_register_dvfs_notify(dvfs_notify_t callback)	{}
 
 static inline int cpuhvfs_get_dvfsp_semaphore(enum sema_user user)	{ return 0; }
 static inline void cpuhvfs_release_dvfsp_semaphore(enum sema_user user)	{}
@@ -213,32 +195,7 @@ static inline int cpuhvfs_dvfsp_suspend(void)		{ return 0; }
 static inline void cpuhvfs_dvfsp_resume(unsigned int on_cluster, struct init_sta *sta)	{}
 
 static inline void cpuhvfs_dump_dvfsp_info(void)	{}
-#endif
-
-
-#if defined(CONFIG_HYBRID_CPU_DVFS) && defined(CPUHVFS_HW_GOVERNOR)
-extern void cpuhvfs_register_dvfs_notify(dvfs_notify_t callback);
-
-extern void cpuhvfs_set_power_mode(enum power_mode mode);
-
-extern int cpuhvfs_enable_hw_governor(struct init_sta *sta);
-extern int cpuhvfs_disable_hw_governor(struct init_sta *ret_sta);
-#else
-static inline void cpuhvfs_register_dvfs_notify(dvfs_notify_t callback)	{}
-
-static inline void cpuhvfs_set_power_mode(enum power_mode mode)		{}
-
-static inline int cpuhvfs_enable_hw_governor(struct init_sta *sta)	{ return -EPERM; }
-static inline int cpuhvfs_disable_hw_governor(struct init_sta *ret_sta)	{ return 0; }
-#endif
-
-
-#ifdef CONFIG_ARCH_MT6797
-#ifdef CONFIG_HYBRID_CPU_DVFS
-extern void cpuhvfs_get_pause_status_i2c(void);		/* deprecated */
-#else
-static inline void cpuhvfs_get_pause_status_i2c(void)	{}
-#endif
+static inline void cpuhvfs_get_pause_status_i2c(void)	{}	/* deprecated */
 #endif
 
 #endif	/* _MT_CPUFREQ_HYBRID_ */

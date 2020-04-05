@@ -15,7 +15,6 @@
 #include <linux/interrupt.h>
 #include <linux/cpu.h>
 #include <linux/smp.h>
-#include <asm/topology.h>
 #include <mt-plat/sync_write.h>
 #include "mt_innercache.h"
 
@@ -58,6 +57,17 @@ void inner_dcache_flush_L2(void)
 	__inner_flush_dcache_L2();
 }
 
+/* ARCH ARM64 */
+int get_cluster_core_count(void)
+{
+	unsigned int cores;
+
+	asm volatile ("mrs %0, S3_1_C11_C0_2\n":"=r" (cores)
+		      : : "cc");
+
+	return ((cores >> 24) & 0x3) + 1;
+}
+
 /*
  * smp_inner_dcache_flush_all: Flush (clean + invalidate) the entire L1 data cache.
  *
@@ -72,7 +82,7 @@ void inner_dcache_flush_L2(void)
  */
 void smp_inner_dcache_flush_all(void)
 {
-	int i, total_core, cid, last_cid;
+	int i, j, num_core, total_core, online_cpu;
 	struct cpumask mask;
 #ifdef PERF_MEASURE
 	struct timespec time_stamp0, time_stamp1;
@@ -89,37 +99,36 @@ void smp_inner_dcache_flush_all(void)
 #ifdef PERF_MEASURE
 	getnstimeofday(&time_stamp0);
 #endif
-	/* Find first online cpu in each cluster */
-	last_cid = -1;
-	cpumask_clear(&mask);
+	on_each_cpu((smp_call_func_t) inner_dcache_flush_L1, NULL, true);
+
+	num_core = get_cluster_core_count();
 	total_core = num_possible_cpus();
-	for (i = 0; i < total_core; i++) {
-		if (!cpu_online(i))
-			continue;
 
-		cid = arch_get_cluster_id(i);
-		if (last_cid != cid) {
-			cpumask_set_cpu(i, &mask);
-			last_cid = cid;
-		}
-	}
-
-	on_each_cpu((smp_call_func_t)inner_dcache_flush_L1, NULL, true);
-	smp_call_function_many(&mask, (smp_call_func_t)inner_dcache_flush_L2,
-				NULL, true);
 	/*
-	 * smp_call_function_many only run on "other Cpus".
-	 * Flush L2 here if this is one of the first cores
-	 */
-	if (cpumask_test_cpu(smp_processor_id(), &mask))
-		inner_dcache_flush_L2();
+	printk("In %s:%d: num_core = %d, total_core = %d\n", __func__, __LINE__, num_core, total_core);
+	*/
 
+	for (i = 0; i < total_core; i += num_core) {
+		cpumask_clear(&mask);
+		for (j = i; j < (i + num_core); j++) {
+			/* check the online status, then set bit */
+			if (cpu_online(j))
+				cpumask_set_cpu(j, &mask);
+		}
+		online_cpu = cpumask_first_and(cpu_online_mask, &mask);
+		/*
+		printk("online mask = 0x%x, mask = 0x%x, id =%d\n",
+			*(unsigned int *)cpu_online_mask->bits, *(unsigned int *)mask.bits, online_cpu);
+		*/
+		smp_call_function_single(online_cpu, (smp_call_func_t) inner_dcache_flush_L2, NULL,
+					 true);
+
+	}
 #ifdef PERF_MEASURE
 	getnstimeofday(&time_stamp1);
 	raw_setway = 1000000000 * (time_stamp1.tv_sec - time_stamp0.tv_sec) +
 		(time_stamp1.tv_nsec - time_stamp0.tv_nsec);
 #endif
-
 	preempt_enable();
 	put_online_cpus();
 }
@@ -132,7 +141,6 @@ EXPORT_SYMBOL(smp_inner_dcache_flush_all);
 #include <linux/mm.h>
 #include <linux/vmalloc.h>
 #include <linux/scatterlist.h>
-#include <linux/delay.h>
 #include <asm/spinlock.h>
 
 int (*ion_sync_kernel_func)(unsigned long start, size_t size,
@@ -162,45 +170,6 @@ static void *cache_flush_map_page_va(struct vm_struct *vm, struct page *page)
 static void cache_flush_unmap_page_va(struct vm_struct *vm)
 {
 	unmap_kernel_range((unsigned long) vm->addr, PAGE_SIZE);
-}
-
-/* must be involked after we got hotplug.lock */
-static void _smp_inner_dcache_flush_all(void)
-{
-	int i, j, num_core, total_core, online_cpu;
-	struct cpumask mask;
-#ifdef PERF_MEASURE
-	struct timespec time_stamp0, time_stamp1;
-#endif
-
-	preempt_disable();
-
-#ifdef PERF_MEASURE
-	getnstimeofday(&time_stamp0);
-#endif
-	on_each_cpu((smp_call_func_t) inner_dcache_flush_L1, NULL, true);
-
-	num_core = get_cluster_core_count();
-	total_core = num_possible_cpus();
-
-	for (i = 0; i < total_core; i += num_core) {
-		cpumask_clear(&mask);
-		for (j = i; j < (i + num_core); j++) {
-			/* check the online status, then set bit */
-			if (cpu_online(j))
-				cpumask_set_cpu(j, &mask);
-		}
-		online_cpu = cpumask_first_and(cpu_online_mask, &mask);
-		smp_call_function_single(online_cpu, (smp_call_func_t) inner_dcache_flush_L2, NULL,
-					 true);
-
-	}
-#ifdef PERF_MEASURE
-	getnstimeofday(&time_stamp1);
-	raw_setway = 1000000000 * (time_stamp1.tv_sec - time_stamp0.tv_sec) +
-		(time_stamp1.tv_nsec - time_stamp0.tv_nsec);
-#endif
-	preempt_enable();
 }
 
 typedef enum {
@@ -304,6 +273,11 @@ int smp_sync_cache_by_cpu_pool_ion(struct sg_table *table, unsigned int sync_typ
 	struct timespec time_stamp0, time_stamp1;
 #endif
 
+	if (in_interrupt()) {
+		pr_err("Cannot invoke smp_inner_dcache_flush_all() in interrupt/softirq context\n");
+		return -EFAULT;
+	}
+
 	spin_lock(&smp_cache_flush_lock);
 	preempt_disable();
 
@@ -352,28 +326,7 @@ int smp_sync_cache_by_cpu_pool_ion(struct sg_table *table, unsigned int sync_typ
 
 int mt_smp_cache_flush(struct sg_table *table, unsigned int sync_type, int npages)
 {
-	int ret = -1;
-	bool get_lock = false;
-	long timeout = CACHE_FLUSH_TIMEOUT;
-
-	if (in_interrupt()) {
-		pr_err("Cannot invoke mt_smp_cache_flush() in interrupt/softirq context\n");
-		return -EFAULT;
-	}
-
-	/* trylock for timeout nsec */
-	while (!(get_lock = try_get_online_cpus()) && (timeout-- > 0))
-		udelay(1);
-
-	if (get_lock) {
-		/* call flush all by set/way if we got lock */
-		_smp_inner_dcache_flush_all();
-		put_online_cpus();
-		return CACHE_FLUSH_BY_SETWAY;
-	}
-
-	ret = smp_sync_cache_by_cpu_pool_ion(table, sync_type, npages);
-	return (ret >= 0) ? CACHE_FLUSH_BY_MVA : ret;
+	return smp_sync_cache_by_cpu_pool_ion(table, sync_type, npages);
 }
 EXPORT_SYMBOL(mt_smp_cache_flush);
 
@@ -453,6 +406,11 @@ int smp_sync_cache_by_cpu_pool_m4u(const void *va, const unsigned long size)
 	struct timespec time_stamp0, time_stamp1;
 #endif
 
+	if (in_interrupt()) {
+		pr_err("Cannot invoke smp_inner_dcache_flush_all() in interrupt/softirq context\n");
+		return -EFAULT;
+	}
+
 	spin_lock(&smp_cache_flush_lock);
 	preempt_disable();
 
@@ -501,28 +459,7 @@ int smp_sync_cache_by_cpu_pool_m4u(const void *va, const unsigned long size)
 
 int mt_smp_cache_flush_m4u(const void *va, const unsigned long size)
 {
-	int ret = -1;
-	bool get_lock = false;
-	long timeout = CACHE_FLUSH_TIMEOUT;
-
-	if (in_interrupt()) {
-		pr_err("Cannot invoke mt_smp_cache_flush() in interrupt/softirq context\n");
-		return -EFAULT;
-	}
-
-	/* trylock for timeout nsec */
-	while (!(get_lock = try_get_online_cpus()) && (timeout-- > 0))
-		udelay(1);
-
-	if (get_lock) {
-		/* call flush all by set/way if we got lock */
-		_smp_inner_dcache_flush_all();
-		put_online_cpus();
-		return CACHE_FLUSH_BY_SETWAY;
-	}
-
-	ret = smp_sync_cache_by_cpu_pool_m4u(va, size);
-	return (ret >= 0) ? CACHE_FLUSH_BY_MVA : ret;
+	return smp_sync_cache_by_cpu_pool_m4u(va, size);
 }
 EXPORT_SYMBOL(mt_smp_cache_flush_m4u);
 

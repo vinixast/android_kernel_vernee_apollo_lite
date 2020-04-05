@@ -1,19 +1,17 @@
 /*
- * Copyright (C) 2015 MediaTek Inc.
+ * Copyright (C) 2007 The Android Open Source Project
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- * You should have received a copy of the GNU General Public License
- * along with this program
- * If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 /*******************************************************************************
  *
@@ -73,12 +71,11 @@ void Auddrv_Reg_map(void);
 
 bool SetSampleRate(uint32 Aud_block, uint32 SampleRate);
 bool SetChannels(uint32 Memory_Interface, uint32 channel);
-/*
-DO NOT USER DIRECTLY, use irq manager
+
 bool SetIrqMcuCounter(uint32 Irqmode, uint32 Counter);
 bool SetIrqEnable(uint32 Irqmode, bool bEnable);
 bool SetIrqMcuSampleRate(uint32 Irqmode, uint32 SampleRate);
-*/
+
 bool SetConnection(uint32 ConnectionState, uint32 Input, uint32 Output);
 bool SetMemoryPathEnable(uint32 Aud_block, bool bEnable);
 bool GetMemoryPathEnable(uint32 Aud_block);
@@ -91,8 +88,6 @@ bool Set2ndI2SOutEnable(bool benable);
 bool SetI2SAdcIn(AudioDigtalI2S *DigtalI2S);
 bool Set2ndI2SAdcIn(AudioDigtalI2S *DigtalI2S);
 bool SetDLSrc2(uint32 SampleRate);
-void SetULSrcEnable(bool bEnable);
-void SetADDAEnable(bool bEnable);
 
 bool GetMrgI2SEnable(void);
 bool SetMrgI2SEnable(bool bEnable, unsigned int sampleRate);
@@ -222,29 +217,10 @@ void SetOffloadEnableFlag(bool bEnable);
 
 unsigned int Align64ByteSize(unsigned int insize);
 
-bool AudDrv_checkDLISRStatus(void);
+void AudDrv_checkDLISRStatus(void);
 
 #ifdef CONFIG_OF
 int GetGPIO_Info(int type, int *pin, int *pinmode);
 #endif
-
-/* IRQ Manager */
-int init_irq_manager(void);
-int irq_add_user(const void *_user,
-		 enum Soc_Aud_IRQ_MCU_MODE _irq,
-		 unsigned int _rate,
-		 unsigned int _count);
-int irq_remove_user(const void *_user,
-		    enum Soc_Aud_IRQ_MCU_MODE _irq);
-int irq_update_user(const void *_user,
-		    enum Soc_Aud_IRQ_MCU_MODE _irq,
-		    unsigned int _rate,
-		    unsigned int _count);
-
-/* IRQ Manager */
-
-/* low latency debug */
-int get_LowLatencyDebug(void);
-void set_LowLatencyDebug(bool bFlag);
 
 #endif

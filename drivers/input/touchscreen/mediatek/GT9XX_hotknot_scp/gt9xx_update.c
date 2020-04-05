@@ -2339,7 +2339,6 @@ s32 gup_enter_update_mode_fl(struct i2c_client *client)
 	return SUCCESS;
 }
 
-#if 0
 static s32 gup_prepare_fl_fw(char *path, st_fw_head *fw_head)
 {
 	s32 i = 0;
@@ -2416,11 +2415,9 @@ static s32 gup_prepare_fl_fw(char *path, st_fw_head *fw_head)
 	_CLOSE_FILE(update_msg.file);
 	return ret;
 }
-#endif
 
 static u8 gup_check_update_file_fl(struct i2c_client *client, st_fw_head *fw_head, char *path)
 {
-#if 0
 	s32 i = 0;
 	s32 fw_checksum = 0;
 	s32 ret = 0;
@@ -2447,8 +2444,6 @@ static u8 gup_check_update_file_fl(struct i2c_client *client, st_fw_head *fw_hea
 		return FAIL;
 	}
 	return SUCCESS;
-#endif
-	return FAIL;
 }
 
 static u8 gup_download_fw_ss51(struct i2c_client *client, u8 dwn_mode)

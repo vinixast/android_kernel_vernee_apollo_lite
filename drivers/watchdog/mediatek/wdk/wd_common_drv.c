@@ -1,16 +1,3 @@
-/*
-* Copyright (C) 2016 MediaTek Inc.
-*
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License version 2 as
-* published by the Free Software Foundation.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-* See http://www.gnu.org/licenses/gpl-2.0.html for more details.
-*/
-
 #include <linux/version.h>
 #include <linux/kernel.h>
 #include <linux/sched.h>
@@ -316,10 +303,9 @@ void wk_start_kick_cpu(int cpu)
 void dump_wdk_bind_info(void)
 {
 	int i = 0;
-
 	aee_sram_fiq_log("\n");
 	for (i = 0; i < CPU_NR; i++) {
-		if (wk_tsk[i] != NULL) {
+		if(wk_tsk[i] != NULL) {
 			/*
 			pr_err("[WDK]CPU %d, %d, %lld, %lu, %d, %ld\n", i, wk_tsk_bind[i], wk_tsk_bind_time[i],
 				wk_tsk[i]->cpus_allowed.bits[0], wk_tsk[i]->on_rq, wk_tsk[i]->state);
@@ -674,7 +660,7 @@ ssize_t mtk_rgu_pause_wdt_store(struct kobject *kobj, const char *buffer, size_t
 {
 	char pause_wdt;
 	int pause_wdt_b;
-	int res = sscanf(buffer, "%c", &pause_wdt);
+	int res = sscanf(buffer, "%s", &pause_wdt);
 
 	pause_wdt_b = pause_wdt;
 

@@ -1,19 +1,17 @@
 /*
- * Copyright (C) 2015 MediaTek Inc.
+ * Copyright (C) 2007 The Android Open Source Project
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- * You should have received a copy of the GNU General Public License
- * along with this program
- * If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 /*******************************************************************************
  *
@@ -115,6 +113,9 @@ static void StopAudioModDaiCaptureHardware(struct snd_pcm_substream *substream)
 	SetConnection(Soc_Aud_InterCon_DisConnect, Soc_Aud_InterConnectionInput_I22, Soc_Aud_InterConnectionOutput_O28);
 	SetConnection(Soc_Aud_InterCon_DisConnect, Soc_Aud_InterConnectionInput_I22, Soc_Aud_InterConnectionOutput_O29);
 
+	SetConnection(Soc_Aud_InterCon_DisConnect, Soc_Aud_InterConnectionInput_I05, Soc_Aud_InterConnectionOutput_O24);
+	SetConnection(Soc_Aud_InterCon_DisConnect, Soc_Aud_InterConnectionInput_I05, Soc_Aud_InterConnectionOutput_O27);
+
 	EnableAfe(false);
 }
 
@@ -142,12 +143,6 @@ static void StartAudioModDaiCaptureHardware(struct snd_pcm_substream *substream)
 
 	SetSampleRate(Soc_Aud_Digital_Block_MEM_MOD_DAI, substream->runtime->rate);
 	SetMemoryPathEnable(Soc_Aud_Digital_Block_MEM_MOD_DAI, true);
-
-	irq_add_user(substream,
-		Soc_Aud_IRQ_MCU_MODE_IRQ2_MCU_MODE,
-		substream->runtime->rate,
-		substream->runtime->period_size);
-
 	/*
 	  * connect phone call DL data to dai and disconnect DL to speaker path
 	  */
@@ -155,6 +150,7 @@ static void StartAudioModDaiCaptureHardware(struct snd_pcm_substream *substream)
 	SetConnection(Soc_Aud_InterCon_Connection, Soc_Aud_InterConnectionInput_I09, Soc_Aud_InterConnectionOutput_O12);
 
 	SetConnection(Soc_Aud_InterCon_Connection, Soc_Aud_InterConnectionInput_I05, Soc_Aud_InterConnectionOutput_O24);
+	SetConnection(Soc_Aud_InterCon_Connection, Soc_Aud_InterConnectionInput_I05, Soc_Aud_InterConnectionOutput_O27);
 
 	SetConnection(Soc_Aud_InterCon_DisConnect, Soc_Aud_InterConnectionInput_I14, Soc_Aud_InterConnectionOutput_O28);
 	SetConnection(Soc_Aud_InterCon_DisConnect, Soc_Aud_InterConnectionInput_I14, Soc_Aud_InterConnectionOutput_O29);
@@ -169,6 +165,12 @@ static void StartAudioModDaiCaptureHardware(struct snd_pcm_substream *substream)
 	SetConnection(Soc_Aud_InterCon_DisConnect, Soc_Aud_InterConnectionInput_I22, Soc_Aud_InterConnectionOutput_O29);
 
 	EnableAfe(true);
+
+	irq_add_user(substream,
+	    Soc_Aud_IRQ_MCU_MODE_IRQ2_MCU_MODE,
+	    substream->runtime->rate,
+	    substream->runtime->period_size);
+
 }
 
 static int mtk_mod_dai_pcm_prepare(struct snd_pcm_substream *substream)
@@ -192,12 +194,25 @@ static int mtk_mod_dai_alsa_stop(struct snd_pcm_substream *substream)
 static kal_int32 Previous_Hw_cur;
 static snd_pcm_uframes_t mtk_mod_dai_pcm_pointer(struct snd_pcm_substream *substream)
 {
+	kal_int32 HW_memory_index = 0;
+	kal_int32 HW_Cur_ReadIdx = 0;
 	kal_uint32 Frameidx = 0;
 	AFE_BLOCK_T *pModDai_Block = &(MOD_DAI_Control_context->rBlock);
 
 	if (GetMemoryPathEnable(Soc_Aud_Digital_Block_MEM_MOD_DAI) == true) {
 		Frameidx = audio_bytes_to_frame(substream , pModDai_Block->u4WriteIdx);
 		return Frameidx;
+
+		HW_Cur_ReadIdx = Align64ByteSize(AFE_MOD_DAI_CUR);
+		if (HW_Cur_ReadIdx == 0) {
+			pr_debug("[Auddrv] mtk_mod_dai_pcm_pointer  HW_Cur_ReadIdx ==0\n");
+			HW_Cur_ReadIdx = pModDai_Block->pucPhysBufAddr;
+		}
+		HW_memory_index = (HW_Cur_ReadIdx - pModDai_Block->pucPhysBufAddr);
+		Previous_Hw_cur = HW_memory_index;
+		pr_debug("[Auddrv] mtk_mod_dai_pcm_pointer =0x%x HW_memory_index = 0x%x\n"
+			, HW_Cur_ReadIdx, HW_memory_index);
+		return audio_bytes_to_frame(substream, Previous_Hw_cur);
 	}
 	return audio_bytes_to_frame(substream, Previous_Hw_cur);
 }

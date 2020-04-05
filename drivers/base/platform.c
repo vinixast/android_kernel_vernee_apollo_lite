@@ -375,7 +375,9 @@ int platform_device_add(struct platform_device *pdev)
 
 	while (--i >= 0) {
 		struct resource *r = &pdev->resource[i];
-		if (r->parent)
+		unsigned long type = resource_type(r);
+
+		if (type == IORESOURCE_MEM || type == IORESOURCE_IO)
 			release_resource(r);
 	}
 
@@ -406,20 +408,14 @@ void platform_device_del(struct platform_device *pdev)
 
 		for (i = 0; i < pdev->num_resources; i++) {
 			struct resource *r = &pdev->resource[i];
-			if (r->parent)
+			unsigned long type = resource_type(r);
+
+			if (type == IORESOURCE_MEM || type == IORESOURCE_IO)
 				release_resource(r);
 		}
 	}
 }
 EXPORT_SYMBOL_GPL(platform_device_del);
-
-#ifdef CONFIG_MTPROF
-#include "bootprof.h"
-#else
-#define TIME_LOG_START()
-#define TIME_LOG_END()
-#define bootprof_pdev_register(ts, pdev)
-#endif
 
 /**
  * platform_device_register - add a platform-level device
@@ -427,18 +423,9 @@ EXPORT_SYMBOL_GPL(platform_device_del);
  */
 int platform_device_register(struct platform_device *pdev)
 {
-	int ret;
-#ifdef CONFIG_MTPROF
-	unsigned long long ts = 0;
-#endif
-
-	TIME_LOG_START();
 	device_initialize(&pdev->dev);
 	arch_setup_pdev_archdata(pdev);
-	ret = platform_device_add(pdev);
-	TIME_LOG_END();
-	bootprof_pdev_register(ts, pdev);
-	return ret;
+	return platform_device_add(pdev);
 }
 EXPORT_SYMBOL_GPL(platform_device_register);
 
@@ -744,10 +731,9 @@ static ssize_t driver_override_store(struct device *dev,
 				     const char *buf, size_t count)
 {
 	struct platform_device *pdev = to_platform_device(dev);
-	char *driver_override, *old, *cp;
+	char *driver_override, *old = pdev->driver_override, *cp;
 
-	/* We need to keep extra room for a newline */
-	if (count >= (PAGE_SIZE - 1))
+	if (count > PATH_MAX)
 		return -EINVAL;
 
 	driver_override = kstrndup(buf, count, GFP_KERNEL);
@@ -758,15 +744,12 @@ static ssize_t driver_override_store(struct device *dev,
 	if (cp)
 		*cp = '\0';
 
-	device_lock(dev);
-	old = pdev->driver_override;
 	if (strlen(driver_override)) {
 		pdev->driver_override = driver_override;
 	} else {
 		kfree(driver_override);
 		pdev->driver_override = NULL;
 	}
-	device_unlock(dev);
 
 	kfree(old);
 
@@ -777,12 +760,8 @@ static ssize_t driver_override_show(struct device *dev,
 				    struct device_attribute *attr, char *buf)
 {
 	struct platform_device *pdev = to_platform_device(dev);
-	ssize_t len;
 
-	device_lock(dev);
-	len = sprintf(buf, "%s\n", pdev->driver_override);
-	device_unlock(dev);
-	return len;
+	return sprintf(buf, "%s\n", pdev->driver_override);
 }
 static DEVICE_ATTR_RW(driver_override);
 

@@ -343,6 +343,7 @@ static struct iscsi_np *iscsit_get_np(
 
 struct iscsi_np *iscsit_add_np(
 	struct __kernel_sockaddr_storage *sockaddr,
+	char *ip_str,
 	int network_transport)
 {
 	struct sockaddr_in *sock_in;
@@ -371,9 +372,11 @@ struct iscsi_np *iscsit_add_np(
 	np->np_flags |= NPF_IP_NETWORK;
 	if (sockaddr->ss_family == AF_INET6) {
 		sock_in6 = (struct sockaddr_in6 *)sockaddr;
+		snprintf(np->np_ip, IPV6_ADDRESS_SPACE, "%s", ip_str);
 		np->np_port = ntohs(sock_in6->sin6_port);
 	} else {
 		sock_in = (struct sockaddr_in *)sockaddr;
+		sprintf(np->np_ip, "%s", ip_str);
 		np->np_port = ntohs(sock_in->sin_port);
 	}
 
@@ -410,8 +413,8 @@ struct iscsi_np *iscsit_add_np(
 	list_add_tail(&np->np_list, &g_np_list);
 	mutex_unlock(&np_lock);
 
-	pr_debug("CORE[0] - Added Network Portal: %pISc:%hu on %s\n",
-		&np->np_sockaddr, np->np_port, np->np_transport->name);
+	pr_debug("CORE[0] - Added Network Portal: %s:%hu on %s\n",
+		np->np_ip, np->np_port, np->np_transport->name);
 
 	return np;
 }
@@ -428,7 +431,6 @@ int iscsit_reset_np_thread(
 		return 0;
 	}
 	np->np_thread_state = ISCSI_NP_THREAD_RESET;
-	atomic_inc(&np->np_reset_count);
 
 	if (np->np_thread) {
 		spin_unlock_bh(&np->np_thread_lock);
@@ -481,8 +483,8 @@ int iscsit_del_np(struct iscsi_np *np)
 	list_del(&np->np_list);
 	mutex_unlock(&np_lock);
 
-	pr_debug("CORE[0] - Removed Network Portal: %pISc:%hu on %s\n",
-		&np->np_sockaddr, np->np_port, np->np_transport->name);
+	pr_debug("CORE[0] - Removed Network Portal: %s:%hu on %s\n",
+		np->np_ip, np->np_port, np->np_transport->name);
 
 	iscsit_put_transport(np->np_transport);
 	kfree(np);
@@ -503,8 +505,7 @@ static void iscsit_aborted_task(struct iscsi_conn *conn, struct iscsi_cmd *cmd)
 	bool scsi_cmd = (cmd->iscsi_opcode == ISCSI_OP_SCSI_CMD);
 
 	spin_lock_bh(&conn->cmd_lock);
-	if (!list_empty(&cmd->i_conn_node) &&
-	    !(cmd->se_cmd.transport_state & CMD_T_FABRIC_STOP))
+	if (!list_empty(&cmd->i_conn_node))
 		list_del_init(&cmd->i_conn_node);
 	spin_unlock_bh(&conn->cmd_lock);
 
@@ -674,7 +675,6 @@ static int iscsit_add_reject_from_cmd(
 	unsigned char *buf)
 {
 	struct iscsi_conn *conn;
-	const bool do_put = cmd->se_cmd.se_tfo != NULL;
 
 	if (!cmd->conn) {
 		pr_err("cmd->conn is NULL for ITT: 0x%08x\n",
@@ -705,9 +705,9 @@ static int iscsit_add_reject_from_cmd(
 	 * Perform the kref_put now if se_cmd has already been setup by
 	 * scsit_setup_scsi_cmd()
 	 */
-	if (do_put) {
+	if (cmd->se_cmd.se_tfo != NULL) {
 		pr_debug("iscsi reject: calling target_put_sess_cmd >>>>>>\n");
-		target_put_sess_cmd(&cmd->se_cmd);
+		target_put_sess_cmd(conn->sess->se_sess, &cmd->se_cmd);
 	}
 	return -1;
 }
@@ -997,7 +997,7 @@ int iscsit_setup_scsi_cmd(struct iscsi_conn *conn, struct iscsi_cmd *cmd,
 		hdr->cmdsn, be32_to_cpu(hdr->data_length), payload_length,
 		conn->cid);
 
-	target_get_sess_cmd(&cmd->se_cmd, true);
+	target_get_sess_cmd(conn->sess->se_sess, &cmd->se_cmd, true);
 
 	cmd->sense_reason = transport_lookup_cmd_lun(&cmd->se_cmd,
 						     scsilun_to_int(&hdr->lun));
@@ -1063,7 +1063,7 @@ int iscsit_process_scsi_cmd(struct iscsi_conn *conn, struct iscsi_cmd *cmd,
 		if (cmdsn_ret == CMDSN_ERROR_CANNOT_RECOVER)
 			return -1;
 		else if (cmdsn_ret == CMDSN_LOWER_THAN_EXP) {
-			target_put_sess_cmd(&cmd->se_cmd);
+			target_put_sess_cmd(conn->sess->se_sess, &cmd->se_cmd);
 			return 0;
 		}
 	}
@@ -1079,7 +1079,7 @@ int iscsit_process_scsi_cmd(struct iscsi_conn *conn, struct iscsi_cmd *cmd,
 		if (!cmd->sense_reason)
 			return 0;
 
-		target_put_sess_cmd(&cmd->se_cmd);
+		target_put_sess_cmd(conn->sess->se_sess, &cmd->se_cmd);
 		return 0;
 	}
 
@@ -1110,6 +1110,7 @@ static int
 iscsit_get_immediate_data(struct iscsi_cmd *cmd, struct iscsi_scsi_req *hdr,
 			  bool dump_payload)
 {
+	struct iscsi_conn *conn = cmd->conn;
 	int cmdsn_ret = 0, immed_ret = IMMEDIATE_DATA_NORMAL_OPERATION;
 	/*
 	 * Special case for Unsupported SAM WRITE Opcodes and ImmediateData=Yes.
@@ -1136,7 +1137,7 @@ after_immediate_data:
 
 			rc = iscsit_dump_data_payload(cmd->conn,
 						      cmd->first_burst_len, 1);
-			target_put_sess_cmd(&cmd->se_cmd);
+			target_put_sess_cmd(conn->sess->se_sess, &cmd->se_cmd);
 			return rc;
 		} else if (cmd->unsolicited_data)
 			iscsit_set_unsoliticed_dataout(cmd);
@@ -1751,7 +1752,7 @@ iscsit_handle_task_mgt_cmd(struct iscsi_conn *conn, struct iscsi_cmd *cmd,
 	struct iscsi_tm *hdr;
 	int out_of_order_cmdsn = 0, ret;
 	bool sess_ref = false;
-	u8 function, tcm_function = TMR_UNKNOWN;
+	u8 function;
 
 	hdr			= (struct iscsi_tm *) buf;
 	hdr->flags &= ~ISCSI_FLAG_CMD_FINAL;
@@ -1797,12 +1798,16 @@ iscsit_handle_task_mgt_cmd(struct iscsi_conn *conn, struct iscsi_cmd *cmd,
 	 * LIO-Target $FABRIC_MOD
 	 */
 	if (function != ISCSI_TM_FUNC_TASK_REASSIGN) {
+
+		u8 tcm_function;
+		int ret;
+
 		transport_init_se_cmd(&cmd->se_cmd,
 				      &lio_target_fabric_configfs->tf_ops,
 				      conn->sess->se_sess, 0, DMA_NONE,
 				      MSG_SIMPLE_TAG, cmd->sense_buffer + 2);
 
-		target_get_sess_cmd(&cmd->se_cmd, true);
+		target_get_sess_cmd(conn->sess->se_sess, &cmd->se_cmd, true);
 		sess_ref = true;
 
 		switch (function) {
@@ -1833,14 +1838,15 @@ iscsit_handle_task_mgt_cmd(struct iscsi_conn *conn, struct iscsi_cmd *cmd,
 			return iscsit_add_reject_cmd(cmd,
 				ISCSI_REASON_BOOKMARK_NO_RESOURCES, buf);
 		}
-	}
-	ret = core_tmr_alloc_req(&cmd->se_cmd, cmd->tmr_req, tcm_function,
-				 GFP_KERNEL);
-	if (ret < 0)
-		return iscsit_add_reject_cmd(cmd,
+
+		ret = core_tmr_alloc_req(&cmd->se_cmd, cmd->tmr_req,
+					 tcm_function, GFP_KERNEL);
+		if (ret < 0)
+			return iscsit_add_reject_cmd(cmd,
 				ISCSI_REASON_BOOKMARK_NO_RESOURCES, buf);
 
-	cmd->tmr_req->se_tmr_req = cmd->se_cmd.se_tmr_req;
+		cmd->tmr_req->se_tmr_req = cmd->se_cmd.se_tmr_req;
+	}
 
 	cmd->iscsi_opcode	= ISCSI_OP_SCSI_TMFUNC;
 	cmd->i_state		= ISTATE_SEND_TASKMGTRSP;
@@ -1916,14 +1922,12 @@ attach:
 
 	if (!(hdr->opcode & ISCSI_OP_IMMEDIATE)) {
 		int cmdsn_ret = iscsit_sequence_cmd(conn, cmd, buf, hdr->cmdsn);
-		if (cmdsn_ret == CMDSN_HIGHER_THAN_EXP) {
+		if (cmdsn_ret == CMDSN_HIGHER_THAN_EXP)
 			out_of_order_cmdsn = 1;
-		} else if (cmdsn_ret == CMDSN_LOWER_THAN_EXP) {
-			target_put_sess_cmd(&cmd->se_cmd);
+		else if (cmdsn_ret == CMDSN_LOWER_THAN_EXP)
 			return 0;
-		} else if (cmdsn_ret == CMDSN_ERROR_CANNOT_RECOVER) {
+		else if (cmdsn_ret == CMDSN_ERROR_CANNOT_RECOVER)
 			return -1;
-		}
 	}
 	iscsit_ack_from_expstatsn(conn, be32_to_cpu(hdr->exp_statsn));
 
@@ -1945,7 +1949,7 @@ attach:
 	 */
 	if (sess_ref) {
 		pr_debug("Handle TMR, using sess_ref=true check\n");
-		target_put_sess_cmd(&cmd->se_cmd);
+		target_put_sess_cmd(conn->sess->se_sess, &cmd->se_cmd);
 	}
 
 	iscsit_add_cmd_to_response_queue(cmd, conn, cmd->i_state);
@@ -3478,18 +3482,11 @@ iscsit_build_sendtargets_response(struct iscsi_cmd *cmd,
 					target_name_printed = 1;
 				}
 
-				if (inaddr_any) {
-					len = sprintf(buf, "TargetAddress="
-						      "%s:%hu,%hu",
-						      conn->local_ip,
-						      np->np_port,
-						      tpg->tpgt);
-				} else {
-					len = sprintf(buf, "TargetAddress="
-						      "%pISpc,%hu",
-						      &np->np_sockaddr,
-						      tpg->tpgt);
-				}
+				len = sprintf(buf, "TargetAddress="
+					"%s:%hu,%hu",
+					inaddr_any ? conn->local_ip : np->np_ip,
+					np->np_port,
+					tpg->tpgt);
 				len += 1;
 
 				if ((len + payload_len) > buffer_len) {
@@ -3930,8 +3927,6 @@ int iscsi_target_tx_thread(void *arg)
 {
 	int ret = 0;
 	struct iscsi_conn *conn = arg;
-	bool conn_freed = false;
-
 	/*
 	 * Allow ourselves to be interrupted by SIGINT so that a
 	 * connection recovery / failure event can be triggered externally.
@@ -3957,14 +3952,12 @@ get_immediate:
 			goto transport_err;
 
 		ret = iscsit_handle_response_queue(conn);
-		if (ret == 1) {
+		if (ret == 1)
 			goto get_immediate;
-		} else if (ret == -ECONNRESET) {
-			conn_freed = true;
+		else if (ret == -ECONNRESET)
 			goto out;
-		} else if (ret < 0) {
+		else if (ret < 0)
 			goto transport_err;
-		}
 	}
 
 transport_err:
@@ -3974,13 +3967,8 @@ transport_err:
 	 * responsible for cleaning up the early connection failure.
 	 */
 	if (conn->conn_state != TARG_CONN_STATE_IN_LOGIN)
-		iscsit_take_action_for_connection_exit(conn, &conn_freed);
+		iscsit_take_action_for_connection_exit(conn);
 out:
-	if (!conn_freed) {
-		while (!kthread_should_stop()) {
-			msleep(100);
-		}
-	}
 	return 0;
 }
 
@@ -4063,17 +4051,6 @@ reject:
 	return iscsit_add_reject(conn, ISCSI_REASON_BOOKMARK_NO_RESOURCES, buf);
 }
 
-static bool iscsi_target_check_conn_state(struct iscsi_conn *conn)
-{
-	bool ret;
-
-	spin_lock_bh(&conn->state_lock);
-	ret = (conn->conn_state != TARG_CONN_STATE_LOGGED_IN);
-	spin_unlock_bh(&conn->state_lock);
-
-	return ret;
-}
-
 int iscsi_target_rx_thread(void *arg)
 {
 	int ret, rc;
@@ -4081,7 +4058,6 @@ int iscsi_target_rx_thread(void *arg)
 	u32 checksum = 0, digest = 0;
 	struct iscsi_conn *conn = arg;
 	struct kvec iov;
-	bool conn_freed = false;
 	/*
 	 * Allow ourselves to be interrupted by SIGINT so that a
 	 * connection recovery / failure event can be triggered externally.
@@ -4092,8 +4068,8 @@ int iscsi_target_rx_thread(void *arg)
 	 * incoming iscsi/tcp socket I/O, and/or failing the connection.
 	 */
 	rc = wait_for_completion_interruptible(&conn->rx_login_comp);
-	if (rc < 0 || iscsi_target_check_conn_state(conn))
-		goto out;
+	if (rc < 0)
+		return 0;
 
 	if (conn->conn_transport->transport_type == ISCSI_INFINIBAND) {
 		struct completion comp;
@@ -4178,19 +4154,12 @@ int iscsi_target_rx_thread(void *arg)
 transport_err:
 	if (!signal_pending(current))
 		atomic_set(&conn->transport_failed, 1);
-	iscsit_take_action_for_connection_exit(conn, &conn_freed);
-out:
-	if (!conn_freed) {
-		while (!kthread_should_stop()) {
-			msleep(100);
-		}
-	}
+	iscsit_take_action_for_connection_exit(conn);
 	return 0;
 }
 
 static void iscsit_release_commands_from_conn(struct iscsi_conn *conn)
 {
-	LIST_HEAD(tmp_list);
 	struct iscsi_cmd *cmd = NULL, *cmd_tmp = NULL;
 	struct iscsi_session *sess = conn->sess;
 	/*
@@ -4199,26 +4168,18 @@ static void iscsit_release_commands_from_conn(struct iscsi_conn *conn)
 	 * has been reset -> returned sleeping pre-handler state.
 	 */
 	spin_lock_bh(&conn->cmd_lock);
-	list_splice_init(&conn->conn_cmd_list, &tmp_list);
+	list_for_each_entry_safe(cmd, cmd_tmp, &conn->conn_cmd_list, i_conn_node) {
 
-	list_for_each_entry(cmd, &tmp_list, i_conn_node) {
-		struct se_cmd *se_cmd = &cmd->se_cmd;
-
-		if (se_cmd->se_tfo != NULL) {
-			spin_lock(&se_cmd->t_state_lock);
-			se_cmd->transport_state |= CMD_T_FABRIC_STOP;
-			spin_unlock(&se_cmd->t_state_lock);
-		}
-	}
-	spin_unlock_bh(&conn->cmd_lock);
-
-	list_for_each_entry_safe(cmd, cmd_tmp, &tmp_list, i_conn_node) {
 		list_del_init(&cmd->i_conn_node);
+		spin_unlock_bh(&conn->cmd_lock);
 
 		iscsit_increment_maxcmdsn(cmd, sess);
+
 		iscsit_free_cmd(cmd, true);
 
+		spin_lock_bh(&conn->cmd_lock);
 	}
+	spin_unlock_bh(&conn->cmd_lock);
 }
 
 static void iscsit_stop_timers_for_cmds(
@@ -4560,11 +4521,8 @@ static void iscsit_logout_post_handler_closesession(
 	 * always sleep waiting for RX/TX thread shutdown to complete
 	 * within iscsit_close_connection().
 	 */
-	if (conn->conn_transport->transport_type == ISCSI_TCP) {
+	if (conn->conn_transport->transport_type == ISCSI_TCP)
 		sleep = cmpxchg(&conn->tx_thread_active, true, false);
-		if (!sleep)
-			return;
-	}
 
 	atomic_set(&conn->conn_logout_remove, 0);
 	complete(&conn->conn_logout_comp);
@@ -4580,11 +4538,8 @@ static void iscsit_logout_post_handler_samecid(
 {
 	int sleep = 1;
 
-	if (conn->conn_transport->transport_type == ISCSI_TCP) {
+	if (conn->conn_transport->transport_type == ISCSI_TCP)
 		sleep = cmpxchg(&conn->tx_thread_active, true, false);
-		if (!sleep)
-			return;
-	}
 
 	atomic_set(&conn->conn_logout_remove, 0);
 	complete(&conn->conn_logout_comp);

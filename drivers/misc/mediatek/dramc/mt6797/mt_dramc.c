@@ -260,8 +260,6 @@ void spm_dpd_init(void)
 	PDEF_DRAMC0_CHA_REG_1E4);
 	writel(readl(PDEF_DRAMC0_CHA_REG_1DC) & 0xfffffffe,
 	PDEF_DRAMC0_CHA_REG_1DC);
-	writel(readl(PDEF_DRAMC0_CHA_REG_1E4) & 0xF7FFFFFF,
-	PDEF_DRAMC0_CHA_REG_1E4);
 
 	mb(); /* flush memory */
 	udelay(2);
@@ -292,8 +290,6 @@ void spm_dpd_init(void)
 	PDEF_DRAMC0_CHB_REG_1E4);
 	writel(readl(PDEF_DRAMC0_CHB_REG_1DC) & 0xfffffffe,
 	PDEF_DRAMC0_CHB_REG_1DC);
-	writel(readl(PDEF_DRAMC0_CHB_REG_1E4) & 0xF7FFFFFF,
-	PDEF_DRAMC0_CHB_REG_1E4);
 
 	mb(); /* flush memory */
 	udelay(2);
@@ -322,10 +318,8 @@ void spm_dpd_dram_init(void)
 	unsigned int u4value_E4 = 0;
 	unsigned int u4value_F4 = 0;
 	unsigned int frequency = 0;
-	unsigned int u4AutoRefreshBak = 0;
 
 	/* p->channel = CHANNEL_A; */
-	u4AutoRefreshBak = readl(PDEF_DRAMC0_CHA_REG_008) & 0x10000000;
 	u4value_E4 = readl(PDEF_DRAMC0_CHA_REG_0E4);
 	u4value_F4 = readl(PDEF_DRAMC0_CHA_REG_0F4);
 	writel(readl(PDEF_DRAMC0_CHA_REG_0F4) & 0xffdfffff,
@@ -342,11 +336,6 @@ void spm_dpd_dram_init(void)
 	mb(); /* flush memory */
 	udelay(220);
 
-	writel(readl(PDEF_DRAMC0_CHA_REG_008) | 0x10000000,
-	PDEF_DRAMC0_CHA_REG_008);
-	writel(readl(PDEF_DRAMC0_CHA_REG_1DC) | 0x4000000,
-	PDEF_DRAMC0_CHA_REG_1DC);
-	udelay(1);
 	writel(readl(PDEF_DRAMC0_CHA_REG_0E4) | 0x00000004,
 	PDEF_DRAMC0_CHA_REG_0E4);
 	writel(readl(PDEF_DRAMC0_CHA_REG_0F4) | 0x00100000,
@@ -355,7 +344,6 @@ void spm_dpd_dram_init(void)
 	PDEF_DRAMC0_CHA_REG_1EC);
 	writel(readl(PDEF_DRAMC0_CHA_REG_0F4) | 0x00100000,
 	PDEF_DRAMC0_CHA_REG_0F4);
-	udelay(200);
 	writel(readl(PDEF_DRAMC0_CHA_REG_138) & 0xffff7fff,
 	PDEF_DRAMC0_CHA_REG_138);
 	writel(readl(PDEF_DRAMC0_CHA_REG_1DC) & 0xfffffffd,
@@ -436,10 +424,6 @@ void spm_dpd_dram_init(void)
 	writel(u4value_E4, PDEF_DRAMC0_CHA_REG_0E4);
 	writel(u4value_F4, PDEF_DRAMC0_CHA_REG_0F4);
 
-	writel(readl(PDEF_DRAMC0_CHA_REG_1DC) & 0xFBFFFFFF,
-	PDEF_DRAMC0_CHA_REG_1DC);
-	writel(readl(PDEF_DRAMC0_CHA_REG_008) | u4AutoRefreshBak,
-	PDEF_DRAMC0_CHA_REG_008);
 	u4value = readl(PDEF_SPM_PASR_DPD_0);
 	recover7_0 = (u4value & 0x00ff0000);
 	recover8 = u4value & 0x00000001;
@@ -448,14 +432,11 @@ void spm_dpd_dram_init(void)
 	PDEF_DRAMC0_CHA_REG_1DC);
 	writel(readl(PDEF_DRAMC0_CHA_REG_1E4) | recover7_0,
 	PDEF_DRAMC0_CHA_REG_1E4);
-	writel(readl(PDEF_DRAMC0_CHA_REG_1E4) | 0x8000000,
-	PDEF_DRAMC0_CHA_REG_1E4);
 	writel(readl(PDEF_DRAMC0_CHA_REG_1E8) & 0xfbffffff,
 	PDEF_DRAMC0_CHA_REG_1E8);
 	writel(0x00000000, PDEF_DRAMC0_CHA_REG_088);
 
 	/* p->channel = CHANNEL_B; */
-	u4AutoRefreshBak = readl(PDEF_DRAMC0_CHB_REG_008) & 0x10000000;
 	u4value_E4 = readl(PDEF_DRAMC0_CHB_REG_0E4);
 	u4value_F4 = readl(PDEF_DRAMC0_CHB_REG_0F4);
 	writel(readl(PDEF_DRAMC0_CHB_REG_0F4) & 0xffdfffff,
@@ -472,11 +453,6 @@ void spm_dpd_dram_init(void)
 	mb(); /* flush memory */
 	udelay(220);
 
-	writel(readl(PDEF_DRAMC0_CHB_REG_008) | 0x10000000,
-	PDEF_DRAMC0_CHB_REG_008);
-	writel(readl(PDEF_DRAMC0_CHB_REG_1DC) | 0x4000000,
-	PDEF_DRAMC0_CHB_REG_1DC);
-	udelay(1);
 	writel(readl(PDEF_DRAMC0_CHB_REG_0E4) | 0x00000004,
 	PDEF_DRAMC0_CHB_REG_0E4);
 	writel(readl(PDEF_DRAMC0_CHB_REG_0F4) | 0x00100000,
@@ -485,7 +461,6 @@ void spm_dpd_dram_init(void)
 	PDEF_DRAMC0_CHB_REG_1EC);
 	writel(readl(PDEF_DRAMC0_CHB_REG_0F4) | 0x00100000,
 	PDEF_DRAMC0_CHB_REG_0F4);
-	udelay(200);
 	writel(readl(PDEF_DRAMC0_CHB_REG_138) & 0xffff7fff,
 	PDEF_DRAMC0_CHB_REG_138);
 	writel(readl(PDEF_DRAMC0_CHB_REG_1DC) & 0xfffffffd,
@@ -565,10 +540,6 @@ void spm_dpd_dram_init(void)
 	PDEF_DRAMC0_CHB_REG_110);
 	writel(u4value_E4, PDEF_DRAMC0_CHB_REG_0E4);
 	writel(u4value_F4, PDEF_DRAMC0_CHB_REG_0F4);
-	writel(readl(PDEF_DRAMC0_CHB_REG_1DC) & 0xFBFFFFFF,
-	PDEF_DRAMC0_CHB_REG_1DC);
-	writel(readl(PDEF_DRAMC0_CHB_REG_008) | u4AutoRefreshBak,
-	PDEF_DRAMC0_CHB_REG_008);
 
 	u4value = readl(PDEF_SPM_PASR_DPD_3);
 	recover7_0 = (u4value & 0x00ff0000);
@@ -577,63 +548,12 @@ void spm_dpd_dram_init(void)
 	PDEF_DRAMC0_CHB_REG_1DC);
 	writel(readl(PDEF_DRAMC0_CHB_REG_1E4) | recover7_0,
 	PDEF_DRAMC0_CHB_REG_1E4);
-	writel(readl(PDEF_DRAMC0_CHB_REG_1E4) | 0x8000000,
-	PDEF_DRAMC0_CHB_REG_1E4);
 	writel(readl(PDEF_DRAMC0_CHB_REG_1E8) & 0xfbffffff,
 	PDEF_DRAMC0_CHB_REG_1E8);
 	writel(0x00000000, PDEF_DRAMC0_CHB_REG_088);
 }
 
 #ifdef CONFIG_MTK_DRAMC_PASR
-static int acquire_dram_ctrl(void)
-{
-	unsigned int cnt;
-
-	/* acquire SPM HW SEMAPHORE to avoid race condition */
-	cnt = 100;
-	do {
-		if ((readl(PDEF_SPM_AP_SEMAPHORE) & 0x1) != 0x1) {
-			writel(0x1, PDEF_SPM_AP_SEMAPHORE);
-			if ((readl(PDEF_SPM_AP_SEMAPHORE) & 0x1) == 0x1)
-				break;
-		} else {
-			pr_err("[DRAMC] another AP has got SPM HW SEMAPHORE!\n");
-			BUG();
-		}
-
-		cnt--;
-		/* pr_err("[DRAMC] wait for SPM HW SEMAPHORE\n"); */
-		udelay(10);
-	} while (cnt > 0);
-
-	if (cnt == 0) {
-		pr_warn("[DRAMC] can NOT get SPM HW SEMAPHORE!\n");
-		return -1;
-	}
-
-	/* pr_err("[DRAMC] get SPM HW SEMAPHORE success!\n"); */
-
-	return 0;
-}
-
-static int release_dram_ctrl(void)
-{
-	/* release SPM HW SEMAPHORE to avoid race condition */
-	if ((readl(PDEF_SPM_AP_SEMAPHORE) & 0x1) == 0x0) {
-		pr_err("[DRAMC] has NOT acquired SPM HW SEMAPHORE\n");
-		BUG();
-	}
-
-	writel(0x1, PDEF_SPM_AP_SEMAPHORE);
-	if ((readl(PDEF_SPM_AP_SEMAPHORE) & 0x1) == 0x1) {
-		pr_err("[DRAMC] release SPM HW SEMAPHORE fail!\n");
-		BUG();
-	}
-	/* pr_err("[DRAMC] release SPM HW SEMAPHORE success!\n"); */
-
-	return 0;
-}
-
 int enter_pasr_dpd_config(unsigned char segment_rank0,
 			   unsigned char segment_rank1)
 {
@@ -643,38 +563,47 @@ int enter_pasr_dpd_config(unsigned char segment_rank0,
 	unsigned int i, cnt = 1000;
 	unsigned int u4value_1E4 = 0;
 	unsigned int u4value_1E8 = 0;
-	unsigned int u4value_E4 = 0;
-	unsigned int u4value_F4 = 0;
+	unsigned int u4value_1DC = 0;
 
-	if (acquire_dram_ctrl() != 0) {
-		pr_warn("[DRAMC0] can NOT get SPM HW SEMAPHORE!\n");
-		return -1;
-	}
+	/* request SPM HW SEMAPHORE to avoid race condition */
+	cnt = 100;
+	do {
+		if (cnt < 100)
+			udelay(10);
+
+		if (cnt-- == 0) {
+			pr_warn("[DRAMC0] can NOT get SPM HW SEMAPHORE!\n");
+			return -1; }
+
+		writel(0x1, PDEF_SPM_AP_SEMAPHORE);
+
+		} while ((readl(PDEF_SPM_AP_SEMAPHORE) & 0x1) == 0x0);
+
 	/* pr_warn("[DRAMC0] get SPM HW SEMAPHORE!\n"); */
-
 	rank_pasr_segment[0] = segment_rank0 & 0xFF;	/* for rank0 */
 	rank_pasr_segment[1] = segment_rank1 & 0xFF;	/* for rank1 */
 	pr_warn("[DRAMC0] PASR r0 = 0x%x  r1 = 0x%x\n",
 	rank_pasr_segment[0], rank_pasr_segment[1]);
 
 	/*Channel-A*/
-	u4value_E4 = readl(PDEF_DRAMC0_CHA_REG_0E4);
-	u4value_F4 = readl(PDEF_DRAMC0_CHA_REG_0F4);
 	u4value_1E8 = readl(PDEF_DRAMC0_CHA_REG_1E8);
 	u4value_1E4 = readl(PDEF_DRAMC0_CHA_REG_1E4);
+	u4value_1DC = readl(PDEF_DRAMC0_CHA_REG_1DC); /* DCM backup */
 
-	writel(readl(PDEF_DRAMC0_CHA_REG_1E8) | 0x04000000,
+	writel(readl(PDEF_DRAMC0_CHA_REG_1E8) | 0x04000000, /* Disable MR4 */
 	PDEF_DRAMC0_CHA_REG_1E8);
-	writel(readl(PDEF_DRAMC0_CHA_REG_1E4) & 0xF7FFFFFF,
+	writel(readl(PDEF_DRAMC0_CHA_REG_1E4) & 0xF7FFFFFF, /* Disable ZQCS */
 	PDEF_DRAMC0_CHA_REG_1E4);
 
 	mb(); /* flush memory */
 	udelay(2);
 
-	writel(readl(PDEF_DRAMC0_CHA_REG_0E4) | 0x00000004,
-	PDEF_DRAMC0_CHA_REG_0E4);
-	writel(readl(PDEF_DRAMC0_CHA_REG_0F4) | 0x00100000,
-	PDEF_DRAMC0_CHA_REG_0F4);
+	writel(readl(PDEF_DRAMC0_CHA_REG_1DC) | 0x04000000, /* DCM off 0x1DC[26] = 1; MIOCKCTRLOFF = 1 */
+	PDEF_DRAMC0_CHA_REG_1DC);
+	writel(readl(PDEF_DRAMC0_CHA_REG_1DC) & 0xFFFFFFFD, /* DCM off 0x1DC[1] = 0; DCMEN2 = 0 */
+	PDEF_DRAMC0_CHA_REG_1DC);
+	writel(readl(PDEF_DRAMC0_CHA_REG_1DC) & 0xBFFFFFFF, /* DCM off 0x1DC[30] = 0; R_DMPHYCLKDYNGEN=0 */
+	PDEF_DRAMC0_CHA_REG_1DC);
 
 	for (i = 0; i < 2; i++) {
 		if ((i == 1) && (rank_pasr_segment[i] == 0xFF))
@@ -690,9 +619,12 @@ int enter_pasr_dpd_config(unsigned char segment_rank0,
 			if (cnt-- == 0) {
 				pr_warn("[DRAMC0] CHA PASR MRW fail!\n");
 
-				if (release_dram_ctrl() != 0)
+				/* release SEMAPHORE to avoid race condition */
+				writel(0x1, PDEF_SPM_AP_SEMAPHORE);
+				if ((readl(PDEF_SPM_AP_SEMAPHORE) & 0x1) == 0x1)
 					pr_warn("[DRAMC0] release SPM HW SEMAPHORE fail!\n");
-				/* pr_warn("[DRAMC0] release SPM HW SEMAPHORE success!\n"); */
+				else
+					pr_warn("[DRAMC0] release SPM HW SEMAPHORE success!\n");
 
 				return -1; }
 			udelay(1);
@@ -703,17 +635,15 @@ int enter_pasr_dpd_config(unsigned char segment_rank0,
 		PDEF_DRAMC0_CHA_REG_1E4);
 	}
 
-	writel(u4value_E4, PDEF_DRAMC0_CHA_REG_0E4);
-	writel(u4value_F4, PDEF_DRAMC0_CHA_REG_0F4);
 	writel(u4value_1E4, PDEF_DRAMC0_CHA_REG_1E4);
 	writel(u4value_1E8, PDEF_DRAMC0_CHA_REG_1E8);
+	writel(u4value_1DC, PDEF_DRAMC0_CHA_REG_1DC); /* DCM restore */
 	writel(0, PDEF_DRAMC0_CHA_REG_088);
 
 	/*Channel-B*/
-	u4value_E4 = readl(PDEF_DRAMC0_CHB_REG_0E4);
-	u4value_F4 = readl(PDEF_DRAMC0_CHB_REG_0F4);
 	u4value_1E8 = readl(PDEF_DRAMC0_CHB_REG_1E8);
 	u4value_1E4 = readl(PDEF_DRAMC0_CHB_REG_1E4);
+	u4value_1DC = readl(PDEF_DRAMC0_CHB_REG_1DC); /* DCM backup */
 	writel(readl(PDEF_DRAMC0_CHB_REG_1E8) | 0x04000000,
 	PDEF_DRAMC0_CHB_REG_1E8);
 	writel(readl(PDEF_DRAMC0_CHB_REG_1E4) & 0xF7FFFFFF,
@@ -722,10 +652,12 @@ int enter_pasr_dpd_config(unsigned char segment_rank0,
 	mb(); /*flush memory */
 	udelay(2);
 
-	writel(readl(PDEF_DRAMC0_CHB_REG_0E4) | 0x00000004,
-	PDEF_DRAMC0_CHB_REG_0E4);
-	writel(readl(PDEF_DRAMC0_CHB_REG_0F4) | 0x00100000,
-	PDEF_DRAMC0_CHB_REG_0F4);
+	writel(readl(PDEF_DRAMC0_CHB_REG_1DC) | 0x04000000, /* DCM off 0x1DC[26] = 1; MIOCKCTRLOFF = 1 */
+	PDEF_DRAMC0_CHB_REG_1DC);
+	writel(readl(PDEF_DRAMC0_CHB_REG_1DC) & 0xFFFFFFFD, /* DCM off 0x1DC[1] = 0; DCMEN2 = 0 */
+	PDEF_DRAMC0_CHB_REG_1DC);
+	writel(readl(PDEF_DRAMC0_CHB_REG_1DC) & 0xBFFFFFFF, /* DCM off 0x1DC[30] = 0; R_DMPHYCLKDYNGEN=0 */
+	PDEF_DRAMC0_CHB_REG_1DC);
 
 	for (i = 0; i < 2; i++) {
 		if ((i == 1) && (rank_pasr_segment[i] == 0xFF))
@@ -740,9 +672,12 @@ int enter_pasr_dpd_config(unsigned char segment_rank0,
 			if (cnt-- == 0) {
 				pr_warn("[DRAMC0] CHB PASR MRW fail!\n");
 
-				if (release_dram_ctrl() != 0)
+				/* release SEMAPHORE to avoid race condition */
+				writel(0x1, PDEF_SPM_AP_SEMAPHORE);
+				if ((readl(PDEF_SPM_AP_SEMAPHORE) & 0x1) == 0x1)
 					pr_warn("[DRAMC0] release SPM HW SEMAPHORE fail!\n");
-				/* pr_warn("[DRAMC0] release SPM HW SEMAPHORE success!\n"); */
+				else
+					pr_warn("[DRAMC0] release SPM HW SEMAPHORE success!\n");
 
 				return -1; }
 			udelay(1);
@@ -752,21 +687,20 @@ int enter_pasr_dpd_config(unsigned char segment_rank0,
 		PDEF_DRAMC0_CHB_REG_1E4);
 	}
 
-	writel(u4value_E4, PDEF_DRAMC0_CHB_REG_0E4);
-	writel(u4value_F4, PDEF_DRAMC0_CHB_REG_0F4);
 	writel(u4value_1E4, PDEF_DRAMC0_CHB_REG_1E4);
 	writel(u4value_1E8, PDEF_DRAMC0_CHB_REG_1E8);
+	writel(u4value_1DC, PDEF_DRAMC0_CHB_REG_1DC); /* DCM restore */
 	writel(0, PDEF_DRAMC0_CHB_REG_088);
 
-	if ((segment_rank1 == 0xFF) && (enter_pdp_cnt == 0)) {
-		enter_pdp_cnt = 1;
+	if (segment_rank1 == 0xFF) {
+		enter_pdp_cnt++;
 		spm_dpd_init();
 	}
 	/* pr_warn("[DRAMC0] enter PASR!\n"); */
-
-	if (release_dram_ctrl() != 0)
+	/* release SPM HW SEMAPHORE to avoid race condition */
+	writel(0x1, PDEF_SPM_AP_SEMAPHORE);
+	if ((readl(PDEF_SPM_AP_SEMAPHORE) & 0x1) == 0x1)
 		pr_warn("[DRAMC0] release SPM HW SEMAPHORE fail!\n");
-	/* pr_warn("[DRAMC0] release SPM HW SEMAPHORE success!\n"); */
 
 	return 0;
 }
@@ -778,25 +712,35 @@ int exit_pasr_dpd_config(void)
 	/*slp_dpd_en(0);*/
 	/*slp_pasr_en(0, 0);*/
 	if (enter_pdp_cnt == 1) {
+		enter_pdp_cnt--;
 
-		if (acquire_dram_ctrl() != 0) {
-			pr_warn("[DRAMC0] can NOT get SPM HW SEMAPHORE!\n");
-			return -1;
-		}
+		rk1 = 100;
+		do {
+			if (rk1 < 100)
+				udelay(10);
+
+			if (rk1-- == 0) {
+				pr_warn("[DRAMC0] can NOT get SPM HW SEMAPHORE!\n");
+				return -1; }
+
+			writel(0x1, PDEF_SPM_AP_SEMAPHORE);
+
+		} while ((readl(PDEF_SPM_AP_SEMAPHORE) & 0x1) == 0x0);
 		/* pr_warn("[DRAMC0] get SPM HW SEMAPHORE!\n"); */
 
 		spm_dpd_dram_init();
 
-		if (release_dram_ctrl() != 0)
+		/* release SEMAPHORE to avoid race condition */
+		writel(0x1, PDEF_SPM_AP_SEMAPHORE);
+		if ((readl(PDEF_SPM_AP_SEMAPHORE) & 0x1) == 0x1)
 			pr_warn("[DRAMC0] release SPM HW SEMAPHORE fail!\n");
-		/* pr_warn("[DRAMC0] release SPM HW SEMAPHORE success!\n"); */
+		else
+			pr_warn("[DRAMC0] release SPM HW SEMAPHORE success!\n");
 
 		rk1 = 0xFF;
 	}
 
 	ret = enter_pasr_dpd_config(0, rk1);
-
-	enter_pdp_cnt = 0;
 
 	return ret;
 }

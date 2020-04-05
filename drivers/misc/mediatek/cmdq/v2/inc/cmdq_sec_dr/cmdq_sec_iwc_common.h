@@ -29,15 +29,10 @@
 
 #define CMDQ_IWC_CLIENT_NAME (16)
 
-#define CMDQ_SEC_MESSAGE_INST_LEN (8)
-#define CMDQ_SEC_DISPATCH_LEN (8)
-
 typedef enum CMDQ_IWC_ADDR_METADATA_TYPE {
 	CMDQ_IWC_H_2_PA = 0, /* sec handle to sec PA */
 	CMDQ_IWC_H_2_MVA = 1, /* sec handle to sec MVA */
 	CMDQ_IWC_NMVA_2_MVA = 2, /* map normal MVA to secure world */
-	CMDQ_IWC_DDP_REG_HDCP = 3, /* DDP register needs to set opposite value when HDCP fail */
-	CMDQ_IWC_NMVA_2_MVA_REVERSE = 4, /* map normal MVA to secure world */
 } CMDQ_IWC_ADDR_METADATA_TYPE;
 
 /*  */
@@ -47,27 +42,11 @@ typedef struct{
 	/* [IN]_d, index of instruction. Update its argB value to real PA/MVA in secure world */
 	uint32_t instrIndex;
 
-	/*
-	 * Note: Buffer and offset
-	 *
-	 *   -------------
-	 *   |     |     |
-	 *   -------------
-	 *   ^     ^  ^  ^
-	 *   A     B  C  D
-	 *
-	 *	A: baseHandle
-	 *	B: baseHandle + blockOffset
-	 *  C: baseHandle + blockOffset + offset
-	 *	A~B or B~D: size
-	 */
-
-	uint32_t type;			/* [IN] addr handle type*/
-	uint32_t baseHandle;	/* [IN]_h, secure address handle */
-	uint32_t blockOffset;	/* [IN]_b, block offset from handle(PA) to current block(plane) */
-	uint32_t offset;		/* [IN]_b, buffser offset to secure handle */
-	uint32_t size;			/* buffer size */
-	uint32_t port;			/* hw port id (i.e. M4U port id)*/
+	uint32_t type; /* [IN] addr handle type*/
+	uint32_t baseHandle; /* [IN]_h, secure address handle */
+	uint32_t offset;     /* [IN]_b, buffser offset to secure handle */
+	uint32_t size;       /* buffer size */
+	uint32_t port;       /* hw port id (i.e. M4U port id)*/
 } iwcCmdqAddrMetadata_t;
 
 typedef struct {
@@ -75,27 +54,10 @@ typedef struct {
 	int32_t enableProfile;
 } iwcCmdqDebugConfig_t;
 
-struct iwcCmdqSecStatus_t {
-	uint32_t step;
-	int32_t status;
-	uint32_t args[4];
-	uint32_t sec_inst[CMDQ_SEC_MESSAGE_INST_LEN];
-	uint32_t inst_index;
-	char dispatch[CMDQ_SEC_DISPATCH_LEN];
-};
-
 typedef struct {
 	uint64_t startTime;	/* start timestamp */
 	uint64_t endTime;	/* end timestamp */
 } iwcCmdqSystraceLog_t;
-
-/* tablet use */
-enum CMDQ_IWC_DISP_MODE {
-	CMDQ_IWC_DISP_NON_SUPPORTED_MODE = 0,
-	CMDQ_IWC_DISP_SINGLE_MODE = 1,
-	CMDQ_IWC_DISP_VIDEO_MODE = 2,
-	CMDQ_IWC_MDP_USER_MODE = 3,
-};
 
 typedef struct {
 	uint32_t addrListLength;
@@ -103,13 +65,6 @@ typedef struct {
 
 	uint64_t enginesNeedDAPC;
 	uint64_t enginesNeedPortSecurity;
-#ifdef CONFIG_MTK_CMDQ_TAB
-	enum CMDQ_IWC_DISP_MODE secMode;
-	/* for MDP to copy HDCP version from srcHandle to dstHandle */
-	/* will remove later */
-	uint32_t srcHandle;
-	uint32_t dstHandle;
-#endif
 } iwcCmdqMetadata_t;
 
 typedef struct {
@@ -186,7 +141,6 @@ typedef struct {
 	};
 
 	iwcCmdqDebugConfig_t debug;
-	struct iwcCmdqSecStatus_t secStatus;
 } iwcCmdqMessage_t, *iwcCmdqMessage_ptr;
 
 /*  */
@@ -198,7 +152,6 @@ typedef struct {
 
 #define CMDQ_ERR_ADDR_CONVERT_HANDLE_2_PA (1000)
 #define CMDQ_ERR_ADDR_CONVERT_ALLOC_MVA   (1100)
-#define CMDQ_ERR_ADDR_CONVERT_ALLOC_MVA_N2S	(1101)
 #define CMDQ_ERR_ADDR_CONVERT_FREE_MVA	  (1200)
 #define CMDQ_ERR_PORT_CONFIG			  (1300)
 

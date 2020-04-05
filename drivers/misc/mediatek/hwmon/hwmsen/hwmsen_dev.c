@@ -1,16 +1,8 @@
 /*
-* Copyright (C) 2016 MediaTek Inc.
-*
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License version 2 as
-* published by the Free Software Foundation.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-* See http://www.gnu.org/licenses/gpl-2.0.html for more details.
+* Copyright(C)2014 MediaTek Inc.
+* Modification based on code covered by the below mentioned copyright
+* and/or permission notice(S).
 */
-
 
 #include <linux/interrupt.h>
 #include <linux/miscdevice.h>
@@ -601,7 +593,8 @@ static int hwmsen_enable(struct hwmdev_object *obj, int sensor, int enable)
 	uint64_t sensor_type;
 
 	sensor_type = 1LL << sensor;
-	if (sensor > MAX_ANDROID_SENSOR_NUM || sensor < 0) {
+
+	if (sensor > MAX_ANDROID_SENSOR_NUM) {
 		HWM_ERR("handle %d!\n", sensor);
 		return -EINVAL;
 	}
@@ -614,7 +607,10 @@ static int hwmsen_enable(struct hwmdev_object *obj, int sensor, int enable)
 		return -ENODEV;
 	}
 
-
+	if (sensor > MAX_ANDROID_SENSOR_NUM) {
+		HWM_ERR("sensor %d!\n", sensor);
+		return -ENODEV;
+	}
 	mutex_lock(&obj->dc->lock);
 	cxt = obj->dc->cxt[sensor];
 
@@ -720,7 +716,8 @@ static int hwmsen_enable_nodata(struct hwmdev_object *obj, int sensor, int enabl
 
 	HWM_FUN(f);
 	sensor_type = 1LL << sensor;
-	if (sensor > MAX_ANDROID_SENSOR_NUM || sensor < 0) {
+
+	if (sensor > MAX_ANDROID_SENSOR_NUM) {
 		HWM_ERR("handle %d!\n", sensor);
 		return -EINVAL;
 	}
@@ -733,6 +730,10 @@ static int hwmsen_enable_nodata(struct hwmdev_object *obj, int sensor, int enabl
 		return -ENODEV;
 	}
 
+	if (sensor > MAX_ANDROID_SENSOR_NUM) {
+		HWM_ERR("sensor %d!\n", sensor);
+		return -EINVAL;
+	}
 	mutex_lock(&obj->dc->lock);
 	cxt = obj->dc->cxt[sensor];
 
@@ -779,10 +780,11 @@ static int hwmsen_set_delay(int delay, int handle)
 	int err = 0;
 	struct hwmsen_context *cxt = NULL;
 
-	if (handle > MAX_ANDROID_SENSOR_NUM || handle < 0) {
+	if (handle > MAX_ANDROID_SENSOR_NUM) {
 		HWM_ERR("handle %d!\n", handle);
 		return -EINVAL;
 	}
+
 	cxt = hwm_obj->dc->cxt[handle];
 	if (NULL == cxt || (cxt->obj.sensor_operate == NULL)) {
 		HWM_ERR("have no this sensor %d or operator point is null!\r\n", handle);
@@ -980,13 +982,8 @@ static ssize_t hwmsen_show_sensordevnum(struct device *dev,
 					struct device_attribute *attr, char *buf)
 {
 	const char *devname = NULL;
-	struct input_handle *handle;
 
-	list_for_each_entry(handle, &hwm_obj->idev->h_list, d_node)
-		if (strncmp(handle->name, "event", 5) == 0) {
-			devname = handle->name;
-			break;
-		}
+	devname = dev_name(&hwm_obj->idev->dev);
 
 	return snprintf(buf, PAGE_SIZE, "%s\n", devname + 5);
 }

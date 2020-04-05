@@ -18,6 +18,7 @@
 #include <linux/major.h>
 #include <linux/mm.h>
 #include <linux/init.h>
+#include <linux/sysctl.h>
 #include <linux/device.h>
 #include <linux/uaccess.h>
 #include <linux/bitops.h>
@@ -358,8 +359,65 @@ static void pty_stop(struct tty_struct *tty)
 
 /* Unix98 devices */
 #ifdef CONFIG_UNIX98_PTYS
+/*
+ * sysctl support for setting limits on the number of Unix98 ptys allocated.
+ * Otherwise one can eat up all kernel memory by opening /dev/ptmx repeatedly.
+ */
+int pty_limit = NR_UNIX98_PTY_DEFAULT;
+static int pty_limit_min;
+static int pty_limit_max = NR_UNIX98_PTY_MAX;
+static int tty_count;
+static int pty_count;
+
+static inline void pty_inc_count(void)
+{
+	pty_count = (++tty_count) / 2;
+}
+
+static inline void pty_dec_count(void)
+{
+	pty_count = (--tty_count) / 2;
+}
+
 
 static struct cdev ptmx_cdev;
+
+static struct ctl_table pty_table[] = {
+	{
+		.procname	= "max",
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.data		= &pty_limit,
+		.proc_handler	= proc_dointvec_minmax,
+		.extra1		= &pty_limit_min,
+		.extra2		= &pty_limit_max,
+	}, {
+		.procname	= "nr",
+		.maxlen		= sizeof(int),
+		.mode		= 0444,
+		.data		= &pty_count,
+		.proc_handler	= proc_dointvec,
+	},
+	{}
+};
+
+static struct ctl_table pty_kern_table[] = {
+	{
+		.procname	= "pty",
+		.mode		= 0555,
+		.child		= pty_table,
+	},
+	{}
+};
+
+static struct ctl_table pty_root_table[] = {
+	{
+		.procname	= "kernel",
+		.mode		= 0555,
+		.child		= pty_kern_table,
+	},
+	{}
+};
 
 #define TCOOFF 0
 #define TCOON 1
@@ -435,6 +493,8 @@ static int pty_common_install(struct tty_driver *driver, struct tty_struct *tty,
 
 	tty_driver_kref_get(driver);
 	tty->count++;
+	pty_inc_count(); /* tty */
+	pty_inc_count(); /* tty->link */
 	return 0;
 err_free_termios:
 	if (legacy)
@@ -626,40 +686,6 @@ static int pty_unix98_ioctl(struct tty_struct *tty,
 	return -ENOIOCTLCMD;
 }
 
-static int pts_unix98_ioctl(struct tty_struct *tty,
-			    unsigned int cmd, unsigned long arg)
-{
-	switch (cmd) {
-	case TIOCSPTLCK: /* Set PT Lock (disallow slave open) */
-		return pty_set_lock(tty, (int __user *)arg);
-	case TIOCGPTLCK: /* Get PT Lock status */
-		return pty_get_lock(tty, (int __user *)arg);
-	case TIOCPKT: /* Set PT packet mode */
-		return pty_set_pktmode(tty, (int __user *)arg);
-	case TIOCGPKT: /* Get PT packet mode */
-		return pty_get_pktmode(tty, (int __user *)arg);
-	case TIOCGPTN: /* Get PT Number */
-		return -ENOTTY;
-	case TIOCSIG:    /* Send signal to other side of pty */
-		return pty_signal(tty, (int) arg);
-	case TCXONC: /* Flow Control */
-		switch (arg) {
-		case TCIOFF:
-			tty->link->peer_stops = 1;
-			break;
-		case TCION:
-			tty->link->peer_stops = 0;
-			if (waitqueue_active(&tty->link->write_wait))
-				wake_up_interruptible(&tty->link->write_wait);
-				break;
-		default:
-		return -EINVAL;
-		}
-	return 0;
-	}
-	return -ENOIOCTLCMD;
-}
-
 /**
  *	ptm_unix98_lookup	-	find a pty master
  *	@driver: ptm driver
@@ -709,19 +735,13 @@ static int pty_unix98_install(struct tty_driver *driver, struct tty_struct *tty)
 
 static void pty_unix98_remove(struct tty_driver *driver, struct tty_struct *tty)
 {
+	pty_dec_count();
 }
 
 /* this is called once with whichever end is closed last */
 static void pty_unix98_shutdown(struct tty_struct *tty)
 {
-	struct inode *ptmx_inode;
-
-	if (tty->driver->subtype == PTY_TYPE_MASTER)
-		ptmx_inode = tty->driver_data;
-	else
-		ptmx_inode = tty->link->driver_data;
-	devpts_kill_index(ptmx_inode, tty->index);
-	devpts_del_ref(ptmx_inode);
+	devpts_kill_index(tty->driver_data, tty->index);
 }
 
 static const struct tty_operations ptm_unix98_ops = {
@@ -754,7 +774,7 @@ static const struct tty_operations pty_unix98_ops = {
 	.chars_in_buffer = pty_chars_in_buffer,
 	.unthrottle = pty_unthrottle,
 	.set_termios = pty_set_termios,
-	.ioctl = pts_unix98_ioctl,
+	.ioctl = pty_unix98_ioctl,
 	.start = pty_start,
 	.stop = pty_stop,
 	.shutdown = pty_unix98_shutdown,
@@ -814,18 +834,6 @@ static int ptmx_open(struct inode *inode, struct file *filp)
 
 	set_bit(TTY_PTY_LOCK, &tty->flags); /* LOCK THE SLAVE */
 	tty->driver_data = inode;
-
-	/*
-	 * In the case where all references to ptmx inode are dropped and we
-	 * still have /dev/tty opened pointing to the master/slave pair (ptmx
-	 * is closed/released before /dev/tty), we must make sure that the inode
-	 * is still valid when we call the final pty_unix98_shutdown, thus we
-	 * hold an additional reference to the ptmx inode. For the same /dev/tty
-	 * last close case, we also need to make sure the super_block isn't
-	 * destroyed (devpts instance unmounted), before /dev/tty is closed and
-	 * on its release devpts_kill_index is called.
-	 */
-	devpts_add_ref(inode);
 
 	tty_add_file(tty, filp);
 
@@ -911,6 +919,8 @@ static void __init unix98_pty_init(void)
 		panic("Couldn't register Unix98 ptm driver");
 	if (tty_register_driver(pts_driver))
 		panic("Couldn't register Unix98 pts driver");
+
+	register_sysctl_table(pty_root_table);
 
 	/* Now create the /dev/ptmx special device */
 	tty_default_fops(&ptmx_fops);

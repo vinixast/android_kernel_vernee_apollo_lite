@@ -1,19 +1,17 @@
 /*
- * Copyright (C) 2015 MediaTek Inc.
+ * Copyright (C) 2007 The Android Open Source Project
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- * You should have received a copy of the GNU General Public License
- * along with this program
- * If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 /*******************************************************************************
  *
@@ -135,7 +133,7 @@ static struct audio_gpio_attr aud_gpios[GPIO_NUM] = {
 };
 #endif
 
-static unsigned int extbuck_fan53526_exist;
+//static unsigned int extbuck_fan53526_exist;
 
 void AudDrv_GPIO_probe(void *dev)
 {
@@ -153,9 +151,9 @@ void AudDrv_GPIO_probe(void *dev)
 	}
 
 	/* update hpdepop gpio by PCB version - extbuck fan53526 use gpio111 which may be used by hpdepop */
-	pr_warn("%s(), extbuck_fan53526_exist = %d\n", __func__, extbuck_fan53526_exist);
-	if (extbuck_fan53526_exist) { /* is e2 */
-		struct audio_gpio_attr gpio_hpdepop_high = {"hpdepop-pullhigh_e2", false, NULL};
+//	pr_warn("%s(), extbuck_fan53526_exist = %d\n", __func__, extbuck_fan53526_exist);
+//	if (extbuck_fan53526_exist) { /* is e2 */
+	/*	struct audio_gpio_attr gpio_hpdepop_high = {"hpdepop-pullhigh_e2", false, NULL};
 		struct audio_gpio_attr gpio_hpdepop_low = {"hpdepop-pulllow_e2", false, NULL};
 
 		aud_gpios[GPIO_HPDEPOP_HIGH] = gpio_hpdepop_high;
@@ -165,7 +163,7 @@ void AudDrv_GPIO_probe(void *dev)
 			__func__,
 			aud_gpios[GPIO_HPDEPOP_HIGH].name,
 			aud_gpios[GPIO_HPDEPOP_LOW].name);
-	}
+	}*/
 
 	for (i = 0; i < ARRAY_SIZE(aud_gpios); i++) {
 		aud_gpios[i].gpioctrl = pinctrl_lookup_state(pinctrlaud, aud_gpios[i].name);
@@ -241,16 +239,12 @@ static int set_aud_dat_mosi(bool _enable)
 		return AudDrv_GPIO_Select(GPIO_AUD_DAT_MOSI_OFF);
 }
 
-static DEFINE_MUTEX(gpio_aud_dat_miso_mutex);
-
 static int set_aud_dat_miso(bool _enable, Soc_Aud_Digital_Block _usage)
 {
-	int ret;
 	static bool adda_enable;
 	static bool vow_enable;
 	static bool anc_enable;
 
-	mutex_lock(&gpio_aud_dat_miso_mutex);
 	switch (_usage) {
 	case Soc_Aud_Digital_Block_ADDA_UL:
 		adda_enable = _enable;
@@ -262,19 +256,15 @@ static int set_aud_dat_miso(bool _enable, Soc_Aud_Digital_Block _usage)
 		anc_enable = _enable;
 		break;
 	default:
-		mutex_unlock(&gpio_aud_dat_miso_mutex);
 		return -EINVAL;
 	}
 
 	if (vow_enable)
-		ret = AudDrv_GPIO_Select(GPIO_VOW_DAT_MISO_ON);
+		return AudDrv_GPIO_Select(GPIO_VOW_DAT_MISO_ON);
 	else if (adda_enable || anc_enable)
-		ret = AudDrv_GPIO_Select(GPIO_AUD_DAT_MISO_ON);
+		return AudDrv_GPIO_Select(GPIO_AUD_DAT_MISO_ON);
 	else
-		ret = AudDrv_GPIO_Select(GPIO_AUD_DAT_MISO_OFF);
-
-	mutex_unlock(&gpio_aud_dat_miso_mutex);
-	return ret;
+		return AudDrv_GPIO_Select(GPIO_AUD_DAT_MISO_OFF);
 }
 
 static int set_vow_clk_miso(bool _enable)
@@ -438,7 +428,6 @@ int AudDrv_GPIO_EXTAMP_Select(int bEnable, int mode)
 #if 1
 	int extamp_mode;
 	int i;
-
 	if (bEnable == 1) {
 		if (mode == 1)
 			extamp_mode = 1;
@@ -553,7 +542,7 @@ int AudDrv_GPIO_HPDEPOP_Select(int bEnable)
 
 	return retval;
 }
-
+/*
 static int __init dt_get_extbuck_info(unsigned long node, const char *uname, int depth, void *data)
 {
 	struct devinfo_extbuck_tag {
@@ -582,4 +571,4 @@ static int __init audio_drv_gpio_init(void)
 	return 0;
 }
 
-arch_initcall(audio_drv_gpio_init);
+arch_initcall(audio_drv_gpio_init);*/

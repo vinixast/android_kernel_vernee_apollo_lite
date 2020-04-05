@@ -1,19 +1,17 @@
 /*
- * Copyright (C) 2015 MediaTek Inc.
+ * Copyright (C) 2007 The Android Open Source Project
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- * You should have received a copy of the GNU General Public License
- * along with this program
- * If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 /*******************************************************************************
  *
@@ -96,7 +94,6 @@ static void Apply_Speaker_Gain(void);
 static bool TurnOnVOWDigitalHW(bool enable);
 static void TurnOffDacPower(void);
 static void TurnOnDacPower(void);
-static void setDlMtkifSrc(bool enable);
 static void SetDcCompenSation(void);
 static void Voice_Amp_Change(bool enable);
 static void Speaker_Amp_Change(bool enable);
@@ -148,8 +145,6 @@ enum hp_depop_flow {
 };
 static unsigned int mUseHpDepopFlow;
 
-static int ANC_enabled;
-
 #ifndef CONFIG_FPGA_EARLY_PORTING
 #ifdef EFUSE_HP_TRIM
 static unsigned int RG_AUDHPLTRIM_VAUDP15, RG_AUDHPRTRIM_VAUDP15, RG_AUDHPLFINETRIM_VAUDP15,
@@ -192,30 +187,47 @@ typedef enum {
 	AUDIO_VOW_MIC_TYPE_Headset_MIC_DCC,
 	AUDIO_VOW_MIC_TYPE_Handset_AMIC_DCCECM,	/* DCC ECM, dual differential */
 	AUDIO_VOW_MIC_TYPE_Headset_MIC_DCCECM,	/* DCC ECM, signal differential */
-	AUDIO_VOW_MIC_TYPE_Handset_DMIC_VENDOR01,	/* DMIC Vendor01 */
-	AUDIO_VOW_MIC_TYPE_NUM
+	AUDIO_VOW_MIC_TYPE_SUM
 } AUDIO_VOW_MIC_TYPE;
 
 #ifdef CONFIG_MTK_VOW_SUPPORT
+/* AUDIO_VOW_MIC_TYPE_Headset_MIC */
+static uint16 Headset_MIC_PeriodicOnOff[7][22] = {
+	/*  PGA,  PreCG,    ADC,  glblp,   dmic, mbias0, mbias1,    pll,  pwrdm,    vow,   dmic, period */
+	{0x0000, 0x0000, 0x81AA, 0x0000, 0x0000, 0x0000, 0x0000, 0x8000, 0xC000, 0x81EC, 0x0000,
+	 0x0000, 0x0000, 0x1917, 0x0000, 0x0000, 0x0000, 0x0000, 0x1917, 0x1917, 0x18F6, 0x0000},/* 90% */
+	{0x0000, 0x0000, 0x82F2, 0x0000, 0x0000, 0x0000, 0x0000, 0x8148, 0xC148, 0x8333, 0x0000,
+	 0x0000, 0x0000, 0x17CF, 0x0000, 0x0000, 0x0000, 0x0000, 0x17CF, 0x17CF, 0x17AE, 0x0000},/* 80% */
+	{0x0000, 0x0000, 0x8439, 0x0000, 0x0000, 0x0000, 0x0000, 0x828F, 0xC28F, 0x847B, 0x0000,
+	 0x0000, 0x0000, 0x1687, 0x0000, 0x0000, 0x0000, 0x0000, 0x1687, 0x1687, 0x1666, 0x0000},/* 70% */
+	{0x0000, 0x0000, 0x8581, 0x0000, 0x0000, 0x0000, 0x0000, 0x83D7, 0xC3D7, 0x85C3, 0x0000,
+	 0x0000, 0x0000, 0x153F, 0x0000, 0x0000, 0x0000, 0x0000, 0x153F, 0x153F, 0x151F, 0x0000},/* 60% */
+	{0x0000, 0x0000, 0x86C9, 0x0000, 0x0000, 0x0000, 0x0000, 0x851F, 0xC51F, 0x870A, 0x0000,
+	 0x0000, 0x0000, 0x13F8, 0x0000, 0x0000, 0x0000, 0x0000, 0x13F8, 0x13F8, 0x13D7, 0x0000},/* 50% */
+	{0x0000, 0x0000, 0x8810, 0x0000, 0x0000, 0x0000, 0x0000, 0x8666, 0xC666, 0x8852, 0x0000,
+	 0x0000, 0x0000, 0x12B0, 0x0000, 0x0000, 0x0000, 0x0000, 0x12B0, 0x12B0, 0x128F, 0x0000},/* 40% */
+	{0x0000, 0x0000, 0x8958, 0x0000, 0x0000, 0x0000, 0x0000, 0x87AE, 0xC7AE, 0x899A, 0x0000,
+	 0x0000, 0x0000, 0x1168, 0x0000, 0x0000, 0x0000, 0x0000, 0x1168, 0x1168, 0x1148, 0x0000},/* 30% */
+};
 
 /* AUDIO_VOW_MIC_TYPE_Handset_DMIC */
 /* AUDIO_VOW_MIC_TYPE_Handset_DMIC_800K */
 static uint16 Handset_DMIC_PeriodicOnOff[7][22] = {
 	/*  PGA,  PreCG,    ADC,  glblp,   dmic, mbias0, mbias1,    pll,  pwrdm,    vow,   dmic, period */
-	{0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x81EC, 0x0000,
-	 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x18F6, 0x0000},/* 90% */
-	{0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x847B, 0x0000,
-	 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x18F6, 0x0000},/* 80% */
-	{0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x870A, 0x0000,
-	 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x18F6, 0x0000},/* 70% */
-	{0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x899A, 0x0000,
-	 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x18F6, 0x0000},/* 60% */
-	{0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x8C29, 0x0000,
-	 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x18F6, 0x0000},/* 50% */
-	{0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x8EB8, 0x0000,
-	 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x18F6, 0x0000},/* 40% */
-	{0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x9148, 0x0000,
-	 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x18F6, 0x0000},/* 30% */
+	{0x0000, 0x0000, 0x0000, 0x0000, 0x8000, 0x0000, 0x0000, 0x8000, 0x0000, 0x81EC, 0x81AA,
+	 0x0000, 0x0000, 0x0000, 0x0000, 0x1917, 0x0000, 0x0000, 0x1917, 0x0000, 0x18F6, 0x1917},/* 90% */
+	{0x0000, 0x0000, 0x0000, 0x0000, 0x8148, 0x80A4, 0x0000, 0x8148, 0xC0A4, 0x8333, 0x82F2,
+	 0x0000, 0x0000, 0x0000, 0x0000, 0x17CF, 0x17CF, 0x0000, 0x17CF, 0x17CF, 0x17AE, 0x17CF},/* 80% */
+	{0x0000, 0x0000, 0x0000, 0x0000, 0x828F, 0x81EC, 0x0000, 0x828F, 0xC1EC, 0x847B, 0x8439,
+	 0x0000, 0x0000, 0x0000, 0x0000, 0x1687, 0x1687, 0x0000, 0x1687, 0x1687, 0x1666, 0x1687},/* 70% */
+	{0x0000, 0x0000, 0x0000, 0x0000, 0x83D7, 0x8333, 0x0000, 0x83D7, 0xC333, 0x85C3, 0x8581,
+	 0x0000, 0x0000, 0x0000, 0x0000, 0x153F, 0x153F, 0x0000, 0x153F, 0x153F, 0x151F, 0x153F},/* 60% */
+	{0x0000, 0x0000, 0x0000, 0x0000, 0x851F, 0x847B, 0x0000, 0x851F, 0xC47B, 0x870A, 0x86C9,
+	 0x0000, 0x0000, 0x0000, 0x0000, 0x13F8, 0x13F8, 0x0000, 0x13F8, 0x13F8, 0x13D7, 0x13F8},/* 50% */
+	{0x0000, 0x0000, 0x0000, 0x0000, 0x8666, 0x85C3, 0x0000, 0x8666, 0xC5C3, 0x8852, 0x8810,
+	 0x0000, 0x0000, 0x0000, 0x0000, 0x12B0, 0x12B0, 0x0000, 0x12B0, 0x12B0, 0x128F, 0x12B0},/* 40% */
+	{0x0000, 0x0000, 0x0000, 0x0000, 0x87AE, 0x870A, 0x0000, 0x87AE, 0xC70A, 0x899A, 0x8958,
+	 0x0000, 0x0000, 0x0000, 0x0000, 0x1168, 0x1168, 0x0000, 0x1168, 0x1168, 0x1148, 0x1168},/* 30% */
 };
 
 /* AUDIO_VOW_MIC_TYPE_Handset_AMIC_DCC */
@@ -258,10 +270,28 @@ static uint16 Headset_MIC_DCC_PeriodicOnOff[7][22] = {
 	 0x1168, 0x87CF, 0x1168, 0x0000, 0x0000, 0x0000, 0x1168, 0x1168, 0x1168, 0x1148, 0x0000} /* 30% */
 };
 
+/* AUDIO_VOW_MIC_TYPE_Handset_AMIC */
+static uint16 Handset_AMIC_PeriodicOnOff[7][22] = {
+	/*  PGA,  PreCG,    ADC,  glblp,   dmic, mbias0, mbias1,    pll,  pwrdm,    vow,   dmic, period */
+	{0x0000, 0x0000, 0x81AA, 0x0000, 0x0000, 0x0000, 0x0000, 0x8000, 0xC000, 0x81EC, 0x0000,
+	 0x0000, 0x0000, 0x1917, 0x0000, 0x0000, 0x0000, 0x0000, 0x1917, 0x1917, 0x18F6, 0x0000},/* 90% */
+	{0x0000, 0x0000, 0x82F2, 0x0000, 0x0000, 0x0000, 0x0000, 0x8148, 0xC148, 0x8333, 0x0000,
+	 0x0000, 0x0000, 0x17CF, 0x0000, 0x0000, 0x0000, 0x0000, 0x17CF, 0x17CF, 0x17AE, 0x0000},/* 80% */
+	{0x0000, 0x0000, 0x8439, 0x0000, 0x0000, 0x0000, 0x0000, 0x828F, 0xC28F, 0x847B, 0x0000,
+	 0x0000, 0x0000, 0x1687, 0x0000, 0x0000, 0x0000, 0x0000, 0x1687, 0x1687, 0x1666, 0x0000},/* 70% */
+	{0x0000, 0x0000, 0x8581, 0x0000, 0x0000, 0x0000, 0x0000, 0x83D7, 0xC3D7, 0x85C3, 0x0000,
+	 0x0000, 0x0000, 0x153F, 0x0000, 0x0000, 0x0000, 0x0000, 0x153F, 0x153F, 0x151F, 0x0000},/* 60% */
+	{0x0000, 0x0000, 0x86C9, 0x0000, 0x0000, 0x0000, 0x0000, 0x851F, 0xC51F, 0x870A, 0x0000,
+	 0x0000, 0x0000, 0x13F8, 0x0000, 0x0000, 0x0000, 0x0000, 0x13F8, 0x13F8, 0x13D7, 0x0000},/* 50% */
+	{0x0000, 0x0000, 0x8810, 0x0000, 0x0000, 0x0000, 0x0000, 0x8666, 0xC666, 0x8852, 0x0000,
+	 0x0000, 0x0000, 0x12B0, 0x0000, 0x0000, 0x0000, 0x0000, 0x12B0, 0x12B0, 0x128F, 0x0000},/* 40% */
+	{0x0000, 0x0000, 0x8958, 0x0000, 0x0000, 0x0000, 0x0000, 0x87AE, 0xC7AE, 0x899A, 0x0000,
+	 0x0000, 0x0000, 0x1168, 0x0000, 0x0000, 0x0000, 0x0000, 0x1168, 0x1168, 0x1148, 0x0000},/* 30% */
+};
 #endif
 
 static int mAudio_VOW_Mic_type = AUDIO_VOW_MIC_TYPE_Handset_AMIC;
-static void Audio_Amp_Change(int channels, bool enable, bool is_anc);
+static void Audio_Amp_Change(int channels, bool enable);
 static void SavePowerState(void)
 {
 	int i = 0;
@@ -303,12 +333,12 @@ void SetAnalogSuspend(bool bEnable)
 		if (mCodec_data->mAudio_Ana_DevicePower[AUDIO_ANALOG_DEVICE_OUT_HEADSETL] == true) {
 			mCodec_data->mAudio_Ana_DevicePower[AUDIO_ANALOG_DEVICE_OUT_HEADSETL] =
 			    false;
-			Audio_Amp_Change(AUDIO_ANALOG_CHANNELS_LEFT1, false, false);
+			Audio_Amp_Change(AUDIO_ANALOG_CHANNELS_LEFT1, false);
 		}
 		if (mCodec_data->mAudio_Ana_DevicePower[AUDIO_ANALOG_DEVICE_OUT_HEADSETR] == true) {
 			mCodec_data->mAudio_Ana_DevicePower[AUDIO_ANALOG_DEVICE_OUT_HEADSETR] =
 			    false;
-			Audio_Amp_Change(AUDIO_ANALOG_CHANNELS_RIGHT1, false, false);
+			Audio_Amp_Change(AUDIO_ANALOG_CHANNELS_RIGHT1, false);
 		}
 		if (mCodec_data->mAudio_Ana_DevicePower[AUDIO_ANALOG_DEVICE_OUT_EARPIECEL] == true) {
 			mCodec_data->mAudio_Ana_DevicePower[AUDIO_ANALOG_DEVICE_OUT_EARPIECEL] =
@@ -326,13 +356,13 @@ void SetAnalogSuspend(bool bEnable)
 		/*Ana_Log_Print();*/
 		if (mCodec_data->mAudio_BackUpAna_DevicePower[AUDIO_ANALOG_DEVICE_OUT_HEADSETL] ==
 		    true) {
-			Audio_Amp_Change(AUDIO_ANALOG_CHANNELS_LEFT1, true, false);
+			Audio_Amp_Change(AUDIO_ANALOG_CHANNELS_LEFT1, true);
 			mCodec_data->mAudio_Ana_DevicePower[AUDIO_ANALOG_DEVICE_OUT_HEADSETL] =
 			    true;
 		}
 		if (mCodec_data->mAudio_BackUpAna_DevicePower[AUDIO_ANALOG_DEVICE_OUT_HEADSETR] ==
 		    true) {
-			Audio_Amp_Change(AUDIO_ANALOG_CHANNELS_RIGHT1, true, false);
+			Audio_Amp_Change(AUDIO_ANALOG_CHANNELS_RIGHT1, true);
 			mCodec_data->mAudio_Ana_DevicePower[AUDIO_ANALOG_DEVICE_OUT_HEADSETR] =
 			    false;
 		}
@@ -904,15 +934,15 @@ void OpenAnalogHeadphone(bool bEnable)
 		SetHplTrimOffset(2048);
 		SetHprTrimOffset(2048);
 		mBlockSampleRate[AUDIO_ANALOG_DEVICE_OUT_DAC] = 44100;
-		Audio_Amp_Change(AUDIO_ANALOG_CHANNELS_LEFT1, true, false);
+		Audio_Amp_Change(AUDIO_ANALOG_CHANNELS_LEFT1, true);
 		mCodec_data->mAudio_Ana_DevicePower[AUDIO_ANALOG_DEVICE_OUT_HEADSETL] = true;
-		Audio_Amp_Change(AUDIO_ANALOG_CHANNELS_RIGHT1, true, false);
+		Audio_Amp_Change(AUDIO_ANALOG_CHANNELS_RIGHT1, true);
 		mCodec_data->mAudio_Ana_DevicePower[AUDIO_ANALOG_DEVICE_OUT_HEADSETR] = true;
 	} else {
 		mCodec_data->mAudio_Ana_DevicePower[AUDIO_ANALOG_DEVICE_OUT_HEADSETL] = false;
-		Audio_Amp_Change(AUDIO_ANALOG_CHANNELS_LEFT1, false, false);
+		Audio_Amp_Change(AUDIO_ANALOG_CHANNELS_LEFT1, false);
 		mCodec_data->mAudio_Ana_DevicePower[AUDIO_ANALOG_DEVICE_OUT_HEADSETR] = false;
-		Audio_Amp_Change(AUDIO_ANALOG_CHANNELS_RIGHT1, false, false);
+		Audio_Amp_Change(AUDIO_ANALOG_CHANNELS_RIGHT1, false);
 	}
 }
 
@@ -935,7 +965,7 @@ static void HP_Switch_to_Release(void)
 bool OpenHeadPhoneImpedanceSetting(bool bEnable)
 {
 	pr_aud("%s benable = %d\n", __func__, bEnable);
-	if (GetDLStatus() == true || ANC_enabled)
+	if (GetDLStatus() == true)
 		return false;
 
 	if (bEnable == true) {
@@ -1238,7 +1268,7 @@ static struct snd_soc_dai_driver mtk_6331_dai_codecs[] = {
 		     .stream_name = MT_SOC_UL1_STREAM_NAME,
 		     .channels_min = 1,
 		     .channels_max = 2,
-		     .rates = SOC_HIGH_USE_RATE,
+		     .rates = SNDRV_PCM_RATE_8000_192000,
 		     .formats = SND_SOC_ADV_MT_FMTS,
 		     },
 	 },
@@ -1307,24 +1337,6 @@ static struct snd_soc_dai_driver mtk_6331_dai_codecs[] = {
 		     .channels_min = 1,
 		     .channels_max = 2,
 		     .rates = SNDRV_PCM_RATE_8000_48000,
-		     .formats = SND_SOC_ADV_MT_FMTS,
-		     },
-	 },
-	{
-	 .name = MT_SOC_CODEC_VOICE_ULTRADAI_NAME,
-	 .ops = &mt6323_aif1_dai_ops,
-	 .playback = {
-		      .stream_name = MT_SOC_VOICE_ULTRA_STREAM_NAME,
-		      .channels_min = 1,
-		      .channels_max = 2,
-		      .rates = SNDRV_PCM_RATE_8000_192000,
-		      .formats = SND_SOC_ADV_MT_FMTS,
-		      },
-	 .capture = {
-		     .stream_name = MT_SOC_VOICE_ULTRA_STREAM_NAME,
-		     .channels_min = 1,
-		     .channels_max = 2,
-		     .rates = SNDRV_PCM_RATE_8000_192000,
 		     .formats = SND_SOC_ADV_MT_FMTS,
 		     },
 	 },
@@ -1435,6 +1447,13 @@ static struct snd_soc_dai_driver mtk_6331_dai_codecs[] = {
 		      .rates = SNDRV_PCM_RATE_8000_192000,
 		      .formats = SND_SOC_ADV_MT_FMTS,
 		      },
+	 .capture = {
+		     .stream_name = MT_SOC_FM_I2S_PLAYBACK_STREAM_NAME,
+		     .channels_min = 1,
+		     .channels_max = 8,
+		     .rates = SNDRV_PCM_RATE_8000_192000,
+		     .formats = SND_SOC_ADV_MT_FMTS,
+		     },
 	 },
 	{
 	 .name = MT_SOC_CODEC_TXDAI2_NAME,
@@ -1550,15 +1569,27 @@ static void TurnOnDacPower(void)
 	Ana_Set_Reg(AFE_UL_DL_CON0, 0x0001, 0x0001);
 	/* afe enable */
 
-	setDlMtkifSrc(true);
+	Ana_Set_Reg(AFE_PMIC_NEWIF_CFG0,
+		    ((GetDLNewIFFrequency(mBlockSampleRate[AUDIO_ANALOG_DEVICE_OUT_DAC]) << 12) |
+		     0x330), 0xffff);
+	Ana_Set_Reg(AFE_DL_SRC2_CON0_H,
+		    ((GetDLNewIFFrequency(mBlockSampleRate[AUDIO_ANALOG_DEVICE_OUT_DAC]) << 12) |
+		     0x300), 0xffff);
+
+	Ana_Set_Reg(AFE_PMIC_NEWIF_CFG2, 0x1 << 15, 0x1 << 15);
+	/* pmic rxif sck inverse */
+
+	Ana_Set_Reg(AFE_DL_SRC2_CON0_L, 0x0001, 0xffff);
+	/* turn on dl */
+	Ana_Set_Reg(PMIC_AFE_TOP_CON0, 0x0000, 0xffff);
+	/* set DL in normal path, not from sine gen table */
 }
 
 static void TurnOffDacPower(void)
 {
 	pr_warn("TurnOffDacPower\n");
 
-	setDlMtkifSrc(false);
-
+	Ana_Set_Reg(AFE_DL_SRC2_CON0_L, 0x0000, 0xffff);	/* bit0, Turn off down-link */
 	if (GetAdcStatus() == false)
 		Ana_Set_Reg(AFE_UL_DL_CON0, 0x0000, 0x0001);	/* turn off afe */
 
@@ -1577,33 +1608,6 @@ static void TurnOffDacPower(void)
 	ClsqEnable(false);
 	Topck_Enable(false);
 	audckbufEnable(false);
-}
-
-static void setDlMtkifSrc(bool enable)
-{
-	pr_warn("%s(), enable = %d, freq = %d\n",
-		__func__,
-		enable,
-		mBlockSampleRate[AUDIO_ANALOG_DEVICE_OUT_DAC]);
-	if (enable) {
-		Ana_Set_Reg(AFE_PMIC_NEWIF_CFG0,
-			    ((GetDLNewIFFrequency(mBlockSampleRate[AUDIO_ANALOG_DEVICE_OUT_DAC]) << 12) |
-			     0x330), 0xffff);
-		Ana_Set_Reg(AFE_DL_SRC2_CON0_H,
-			    ((GetDLNewIFFrequency(mBlockSampleRate[AUDIO_ANALOG_DEVICE_OUT_DAC]) << 12) |
-			     0x300), 0xffff);
-
-		Ana_Set_Reg(AFE_PMIC_NEWIF_CFG2, 0x1 << 15, 0x1 << 15);
-		/* pmic rxif sck inverse */
-
-		Ana_Set_Reg(AFE_DL_SRC2_CON0_L, 0x0001, 0xffff);
-		/* turn on dl */
-		Ana_Set_Reg(PMIC_AFE_TOP_CON0, 0x0000, 0xffff);
-		/* set DL in normal path, not from sine gen table */
-	} else {
-		Ana_Set_Reg(AFE_DL_SRC2_CON0_L, 0x0000, 0xffff);
-		/* bit0, Turn off down-link */
-	}
 }
 
 static bool is_valid_hp_pga_idx(int reg_idx)
@@ -1707,30 +1711,16 @@ static void Hp_Zcd_Enable(bool _enable)
 	}
 }
 
-static void Audio_Amp_Change(int channels, bool enable, bool is_anc)
+static void Audio_Amp_Change(int channels, bool enable)
 {
-	pr_warn("%s(), enable %d, ANC %d, HSL %d, HSR %d, is_anc %d\n",
-		__func__,
-		enable,
-		ANC_enabled,
-		mCodec_data->mAudio_Ana_DevicePower[AUDIO_ANALOG_DEVICE_OUT_HEADSETL],
-		mCodec_data->mAudio_Ana_DevicePower[AUDIO_ANALOG_DEVICE_OUT_HEADSETR],
-		is_anc);
-
 	if (enable) {
-		if (GetDLStatus() == false && !ANC_enabled)
+		if (GetDLStatus() == false)
 			TurnOnDacPower();
 
-		if (GetDLStatus() == false && !is_anc) {
-			/* reset sample rate */
-			setDlMtkifSrc(false);
-			setDlMtkifSrc(true);
-		}
-
 		/* here pmic analog control */
-		if (mCodec_data->mAudio_Ana_DevicePower[AUDIO_ANALOG_DEVICE_OUT_HEADSETL] == false &&
-		    mCodec_data->mAudio_Ana_DevicePower[AUDIO_ANALOG_DEVICE_OUT_HEADSETR] == false &&
-		    !ANC_enabled) {
+		if (mCodec_data->mAudio_Ana_DevicePower[AUDIO_ANALOG_DEVICE_OUT_HEADSETL] == false
+		    && mCodec_data->mAudio_Ana_DevicePower[AUDIO_ANALOG_DEVICE_OUT_HEADSETR] ==
+		    false) {
 			pr_warn("%s\n", __func__);
 
 			/* switch to ground to de pop-noise */
@@ -1800,10 +1790,10 @@ static void Audio_Amp_Change(int channels, bool enable, bool is_anc)
 		}
 
 	} else {
-		if (mCodec_data->mAudio_Ana_DevicePower[AUDIO_ANALOG_DEVICE_OUT_HEADSETL] == false &&
-		    mCodec_data->mAudio_Ana_DevicePower[AUDIO_ANALOG_DEVICE_OUT_HEADSETR] == false &&
-		    !ANC_enabled) {
-			pr_warn("Audio_Amp_Change off amp\n");
+		if (mCodec_data->mAudio_Ana_DevicePower[AUDIO_ANALOG_DEVICE_OUT_HEADSETL] == false
+		    && mCodec_data->mAudio_Ana_DevicePower[AUDIO_ANALOG_DEVICE_OUT_HEADSETR] ==
+		    false) {
+			/* pr_warn("Audio_Amp_Change off amp\n"); */
 
 			/* Disable AUD_ZCD */
 			Hp_Zcd_Enable(false);
@@ -1829,7 +1819,7 @@ static void Audio_Amp_Change(int channels, bool enable, bool is_anc)
 			HP_Switch_to_Release();
 		}
 
-		if (GetDLStatus() == false && !ANC_enabled) {
+		if (GetDLStatus() == false) {
 			Ana_Set_Reg(AUDDEC_ANA_CON0, 0xE000, 0xffff);
 			/* Disable Audio DAC */
 			Ana_Set_Reg(AUDDEC_ANA_CON9, 0xA055, 0x0200);
@@ -1866,7 +1856,7 @@ static int Audio_AmpL_Set(struct snd_kcontrol *kcontrol, struct snd_ctl_elem_val
 	pr_aud("%s() enable = %ld\n ", __func__, ucontrol->value.integer.value[0]);
 	if ((ucontrol->value.integer.value[0] == true)
 	    && (mCodec_data->mAudio_Ana_DevicePower[AUDIO_ANALOG_DEVICE_OUT_HEADSETL] == false)) {
-		Audio_Amp_Change(AUDIO_ANALOG_CHANNELS_LEFT1, true, false);
+		Audio_Amp_Change(AUDIO_ANALOG_CHANNELS_LEFT1, true);
 		mCodec_data->mAudio_Ana_DevicePower[AUDIO_ANALOG_DEVICE_OUT_HEADSETL] =
 		    ucontrol->value.integer.value[0];
 	} else if ((ucontrol->value.integer.value[0] == false)
@@ -1874,7 +1864,7 @@ static int Audio_AmpL_Set(struct snd_kcontrol *kcontrol, struct snd_ctl_elem_val
 		       true)) {
 		mCodec_data->mAudio_Ana_DevicePower[AUDIO_ANALOG_DEVICE_OUT_HEADSETL] =
 		    ucontrol->value.integer.value[0];
-		Audio_Amp_Change(AUDIO_ANALOG_CHANNELS_LEFT1, false, false);
+		Audio_Amp_Change(AUDIO_ANALOG_CHANNELS_LEFT1, false);
 	}
 	mutex_unlock(&Ana_Ctrl_Mutex);
 	return 0;
@@ -1896,7 +1886,7 @@ static int Audio_AmpR_Set(struct snd_kcontrol *kcontrol, struct snd_ctl_elem_val
 	pr_aud("%s()\n", __func__);
 	if ((ucontrol->value.integer.value[0] == true)
 	    && (mCodec_data->mAudio_Ana_DevicePower[AUDIO_ANALOG_DEVICE_OUT_HEADSETR] == false)) {
-		Audio_Amp_Change(AUDIO_ANALOG_CHANNELS_RIGHT1, true, false);
+		Audio_Amp_Change(AUDIO_ANALOG_CHANNELS_RIGHT1, true);
 		mCodec_data->mAudio_Ana_DevicePower[AUDIO_ANALOG_DEVICE_OUT_HEADSETR] =
 		    ucontrol->value.integer.value[0];
 	} else if ((ucontrol->value.integer.value[0] == false)
@@ -1904,7 +1894,7 @@ static int Audio_AmpR_Set(struct snd_kcontrol *kcontrol, struct snd_ctl_elem_val
 		       true)) {
 		mCodec_data->mAudio_Ana_DevicePower[AUDIO_ANALOG_DEVICE_OUT_HEADSETR] =
 		    ucontrol->value.integer.value[0];
-		Audio_Amp_Change(AUDIO_ANALOG_CHANNELS_RIGHT1, false, false);
+		Audio_Amp_Change(AUDIO_ANALOG_CHANNELS_RIGHT1, false);
 	}
 	mutex_unlock(&Ana_Ctrl_Mutex);
 	return 0;
@@ -2924,97 +2914,6 @@ static int Aud_Clk_Buf_Set(struct snd_kcontrol *kcontrol, struct snd_ctl_elem_va
 	return 0;
 }
 
-void enable_anc_loopback3(void)
-{
-	Ana_Set_Reg(PMIC_AFE_TOP_CON0, 0x1 << 12, 0x1 << 12);
-}
-
-void disable_anc_loopback3(void)
-{
-	Ana_Set_Reg(PMIC_AFE_TOP_CON0, 0x0 << 12, 0x1 << 12);
-}
-
-void pmic_select_dl_only(void)
-{
-	Ana_Set_Reg(AFE_HPANC_CFG0, 0x0 << 4,
-			0x1 << 4); /* dac_hp_anc_ch1_sel(0: dl, 1: anc) */
-	Ana_Set_Reg(AFE_HPANC_CFG0, 0x0 << 5,
-			0x1 << 5); /* dac_hp_anc_ch2_7el(0: dl, 1: anc) */
-	Ana_Set_Reg(AFE_HPANC_CFG0, 0x0 << 6,
-			0x1 << 6); /* hp_anc_fpga_de bug_ch1(0: add dl, 1: pure anc) */
-	Ana_Set_Reg(AFE_HPANC_CFG0, 0x0 << 7,
-			0x1 << 7); /* hp_anc_fpga_de bug_ch2(0: add dl, 1: pure anc) */
-}
-
-void pmic_select_dl_and_anc(void)
-{
-	Ana_Set_Reg(AFE_HPANC_CFG0, 0x1 << 4,
-			0x1 << 4); /* dac_hp_anc_ch1_sel(0: dl, 1: anc) */
-	Ana_Set_Reg(AFE_HPANC_CFG0, 0x1 << 5,
-			0x1 << 5); /* dac_hp_anc_ch2_7el(0: dl, 1: anc) */
-	Ana_Set_Reg(AFE_HPANC_CFG0, 0x0 << 6,
-			0x1 << 6); /* hp_anc_fpga_de bug_ch1(0: add dl, 1: pure anc) */
-	Ana_Set_Reg(AFE_HPANC_CFG0, 0x0 << 7,
-			0x1 << 7); /* hp_anc_fpga_de bug_ch2(0: add dl, 1: pure anc) */
-}
-
-void pmic_select_anc_only(void)
-{
-	Ana_Set_Reg(AFE_HPANC_CFG0, 0x1 << 4,
-			0x1 << 4); /* dac_hp_anc_ch1_sel(0: dl, 1: anc) */
-	Ana_Set_Reg(AFE_HPANC_CFG0, 0x1 << 5,
-			0x1 << 5); /* dac_hp_anc_ch2_7el(0: dl, 1: anc) */
-	Ana_Set_Reg(AFE_HPANC_CFG0, 0x1 << 6,
-			0x1 << 6); /* hp_anc_fpga_de bug_ch1(0: add dl, 1: pure anc) */
-	Ana_Set_Reg(AFE_HPANC_CFG0, 0x1 << 7,
-			0x1 << 7); /* hp_anc_fpga_de bug_ch2(0: add dl, 1: pure anc) */
-}
-static int Set_ANC_Enable(bool enable)
-{
-	pr_warn("%s(), value = %d\n", __func__, enable);
-	if (enable == true) {
-		pmic_select_dl_only();
-
-		Audio_Amp_Change(0, true, true);
-		ANC_enabled = true;
-
-		/* mtkif sclk invert */
-		Ana_Set_Reg(AFE_ADDA2_PMIC_NEWIF_CFG2, 0x1 << 15, 0x1 << 15);
-
-		/* reset timing workaround */
-		Ana_Set_Reg(AFE_ADDA2_PMIC_NEWIF_CFG1, 0x0 << 13, 0x1 << 13); /* pmic rx */
-		msleep(20);
-		Ana_Set_Reg(AFE_HPANC_CFG0, 0x1 << 2, 0x1 << 2); /* toggle cic */
-		Ana_Set_Reg(AFE_HPANC_CFG0, 0x0 << 2, 0x1 << 2);
-		Ana_Set_Reg(AFE_ADDA2_PMIC_NEWIF_CFG1, 0x1 << 13, 0x1 << 13); /* pmic rx */
-		msleep(20);
-		pmic_select_dl_and_anc();
-	} else {
-		pmic_select_dl_only();
-		ANC_enabled = false;
-		Audio_Amp_Change(0, false, true);
-	}
-	return 0;
-}
-
-static int Audio_ANC_Get(struct snd_kcontrol *kcontrol,
-				  struct snd_ctl_elem_value *ucontrol)
-{
-	pr_aud("%s(), value = %d\n", __func__);
-	ucontrol->value.integer.value[0] = ANC_enabled;
-	return 0;
-}
-
-static int Audio_ANC_Set(struct snd_kcontrol *kcontrol,
-				  struct snd_ctl_elem_value *ucontrol)
-{
-	pr_aud("%s(), value = %d\n", __func__);
-	if (ucontrol->value.integer.value[0])
-		Set_ANC_Enable(true);
-	else
-		Set_ANC_Enable(false);
-	return 0;
-}
 
 static const struct soc_enum Audio_DL_Enum[] = {
 	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(amp_function), amp_function),
@@ -3073,7 +2972,6 @@ static const struct snd_kcontrol_new mt6331_snd_controls[] = {
 		       Audio_Hp_Impedance_Get,
 		       Audio_Hp_Impedance_Set),
 	SOC_ENUM_EXT("PMIC_REG_CLEAR", Audio_DL_Enum[12], PMIC_REG_CLEAR_Get, PMIC_REG_CLEAR_Set),
-	SOC_ENUM_EXT("Audio_ANC_Switch", Audio_DL_Enum[0], Audio_ANC_Get, Audio_ANC_Set),
 };
 
 static const struct snd_kcontrol_new mt6331_Voice_Switch[] = {
@@ -3792,14 +3690,11 @@ static void TurnOnVOWPeriodicOnOff(int MicType, int On_period, int enable)
 	int i = 0;
 	uint16 (*pBuf)[22];
 
-	if ((MicType == AUDIO_VOW_MIC_TYPE_Headset_MIC)
-	 || (MicType == AUDIO_VOW_MIC_TYPE_Handset_AMIC)
-	 || (MicType == AUDIO_VOW_MIC_TYPE_Handset_DMIC_VENDOR01)
-	 || (MicType >= AUDIO_VOW_MIC_TYPE_NUM)
-	 || (MicType < 0)) {
+	if ((MicType == AUDIO_VOW_MIC_TYPE_Headset_MIC) || (MicType == AUDIO_VOW_MIC_TYPE_Handset_AMIC)) {
 		pr_warn("MicType:%d, No support periodic On/Off\n", MicType);
 		return;
 	}
+
 
 	if (enable == 0) {
 		pr_warn("%s, enable:%d\n", __func__, enable);
@@ -3818,6 +3713,10 @@ static void TurnOnVOWPeriodicOnOff(int MicType, int On_period, int enable)
 
 		VOW32KCK_Enable(true);
 		switch (MicType) {
+		case AUDIO_VOW_MIC_TYPE_Headset_MIC:
+			pBuf = Headset_MIC_PeriodicOnOff;
+			break;
+
 		case AUDIO_VOW_MIC_TYPE_Handset_DMIC:
 		case AUDIO_VOW_MIC_TYPE_Handset_DMIC_800K:
 			pBuf = Handset_DMIC_PeriodicOnOff;
@@ -3833,7 +3732,9 @@ static void TurnOnVOWPeriodicOnOff(int MicType, int On_period, int enable)
 			pBuf = Headset_MIC_DCC_PeriodicOnOff;
 			break;
 
+		case AUDIO_VOW_MIC_TYPE_Handset_AMIC:
 		default:
+			pBuf = Handset_AMIC_PeriodicOnOff;
 			break;
 		}
 		if (On_period > 0) {
@@ -3881,11 +3782,6 @@ static void VOW_GPIO_Enable(bool enable)
 
 static void VOW_Pwr_Enable(int MicType, bool enable)
 {
-	if ((MicType >= AUDIO_VOW_MIC_TYPE_NUM) || (MicType < 0)) {
-		pr_warn("%s(),Not support this Mic Type\n", __func__);
-		return;
-	}
-
 	if (enable == true) {
 		/* 0x0D06 Enable Globe bias VOW LPW mode */
 		Ana_Set_Reg(AUDDEC_ANA_CON10, 0x0400, 0x0400);
@@ -3977,10 +3873,6 @@ static void VOW_DMIC_CLK_Enable(bool enable)
 
 static void VOW_MIC_DCC_Enable(int MicType, bool enable)
 {
-	if ((MicType >= AUDIO_VOW_MIC_TYPE_NUM) || (MicType < 0)) {
-		pr_warn("%s(),Not support this Mic Type\n", __func__);
-		return;
-	}
 	if (enable == true) {
 		/* 0x0D0E ADC CLK from: 10_12.58MHz from 32KHz PLL, Enable Audio ADC FBDAC 0.25FS LPW */
 		Ana_Set_Reg(AUDENC_ANA_CON3, 0x0009, 0x000D);
@@ -4046,10 +3938,6 @@ static void VOW_MIC_DCC_Enable(int MicType, bool enable)
 
 static void VOW_MIC_ACC_Enable(int MicType, bool enable)
 {
-	if ((MicType >= AUDIO_VOW_MIC_TYPE_NUM) || (MicType < 0)) {
-		pr_warn("%s(),Not support this Mic Type\n", __func__);
-		return;
-	}
 	if (enable == true) {
 		/* 0x0D0E ADC CLK from: 10_12.58MHz from 32KHz PLL, Enable Audio ADC FBDAC 0.25FS LPW */
 		Ana_Set_Reg(AUDENC_ANA_CON3, 0x0009, 0x000D);
@@ -4102,8 +3990,8 @@ static bool TurnOnVOWADcPower(int MicType, bool enable)
 	pr_warn("%s MicType = %d enable = %d, mIsVOWOn=%d, mAudio_VOW_Mic_type=%d\n",
 		__func__, MicType, enable, mIsVOWOn, mAudio_VOW_Mic_type);
 
-	if ((MicType >= AUDIO_VOW_MIC_TYPE_NUM) || (MicType < 0)) {
-		pr_warn("%s(),Not support this Mic Type\n", __func__);
+	if (MicType >= AUDIO_VOW_MIC_TYPE_SUM) {
+		pr_warn("Not support this Mic Type\n");
 		return false;
 	}
 
@@ -4147,14 +4035,6 @@ static bool TurnOnVOWADcPower(int MicType, bool enable)
 			Ana_Set_Reg(AUDENC_ANA_CON9,  0x00A1, 0x00F1);
 			Ana_Set_Reg(AUDENC_ANA_CON8,  0x0005, 0x0007); /* 0xD18 Enable DMIC*/
 			break;
-		case AUDIO_VOW_MIC_TYPE_Handset_DMIC_VENDOR01:
-			VOW_DMIC_CLK_Enable(true);
-			/* 0x0D1A MIC Bias 0 LowPower: 1_LPW, MISBIAS0 = 1P9V, Enable MICBIAS0 */
-			Ana_Set_Reg(AUDENC_ANA_CON9,  0x00A1, 0x00F1);
-			Ana_Set_Reg(AUDENC_ANA_CON8,  0x0005, 0x0007); /* 0xD18 Enable DMIC*/
-			/* Set Eint GPIO */
-			VowDrv_SetSmartDevice_GPIO(true);
-			break;
 		default:
 			break;
 		}
@@ -4176,20 +4056,14 @@ static bool TurnOnVOWADcPower(int MicType, bool enable)
 		Ana_Set_Reg(AFE_VOW_CFG4, reg_AFE_VOW_CFG4, 0x000f);   /*gamma K value setting 0x029E*/
 		Ana_Set_Reg(AFE_VOW_CFG5, reg_AFE_VOW_CFG5, 0xffff);   /*N mini value setting 0x0000*/
 
-		if (MicType == AUDIO_VOW_MIC_TYPE_Handset_DMIC_VENDOR01) {
-			/* 16K */
-			Ana_Set_Reg(AFE_VOW_CFG4, 0x024E, 0xfff0); /* 16k */
-			Ana_Set_Reg(AFE_VOW_POSDIV_CFG0, 0x0C0A, 0xffff);
-			/* Ana_Set_Reg(AFE_VOW_CFG4, 0x022E, 0xfff0);*/ /*32K*/
-			/* Ana_Set_Reg(AFE_VOW_POSDIV_CFG0, 0x2C0A, 0xffff);*/ /* 32K*/
-		} else {
-			/* 16K */
-			Ana_Set_Reg(AFE_VOW_CFG4, 0x029E, 0xfff0); /* 16k */
-			if (MicType == AUDIO_VOW_MIC_TYPE_Handset_DMIC_800K)
-				Ana_Set_Reg(AFE_VOW_POSDIV_CFG0, 0x0C08, 0xffff); /* 800k */
-			else
-				Ana_Set_Reg(AFE_VOW_POSDIV_CFG0, 0x0C00, 0xffff); /* 1.6m */
-		}
+		/* 16K */
+		Ana_Set_Reg(AFE_VOW_CFG4, 0x029E, 0xfff0); /* 16k */
+		Ana_Set_Reg(AFE_VOW_POSDIV_CFG0, 0x0C00, 0xffff); /* 16K */
+
+		/* 32K */
+		/*Ana_Set_Reg(AFE_VOW_CFG4, 0x022E, 0xfff0); //32K*/
+		/*Ana_Set_Reg(AFE_VOW_POSDIV_CFG0, 0x2C0A, 0xffff); // 32K*/
+
 		TurnOnVOWPeriodicOnOff(MicType, reg_AFE_VOW_PERIODIC, true);
 
 #ifndef VOW_STANDALONE_CONTROL
@@ -4253,14 +4127,6 @@ static bool TurnOnVOWADcPower(int MicType, bool enable)
 			Ana_Set_Reg(AUDENC_ANA_CON9,  0x0000, 0x00F1); /*0x0D1A*/
 			VOW_DMIC_CLK_Enable(false);
 			break;
-		case AUDIO_VOW_MIC_TYPE_Handset_DMIC_VENDOR01:
-			/* Set Eint GPIO */
-			VowDrv_SetSmartDevice_GPIO(false);
-			Ana_Set_Reg(AFE_VOW_TOP,      0x0000, 0x0080); /* bit7 , clock select */
-			Ana_Set_Reg(AUDENC_ANA_CON9,  0x0000, 0x00F1); /*0x0D1A*/
-			Ana_Set_Reg(AUDENC_ANA_CON2,  0x0000, 0x0002);
-			VOW_DMIC_CLK_Enable(false);
-			break;
 		default:
 			break;
 		}
@@ -4294,8 +4160,8 @@ static const char *const Audio_VOW_Digital_Function[] = { "Off", "On" };
 
 static const char *const Audio_VOW_MIC_Type[] = {
 	"HandsetAMIC", "HeadsetMIC", "HandsetDMIC", "HandsetDMIC_800K",
-	"HandsetAMIC_DCC", "HeadsetMIC_DCC", "HandsetAMIC_DCCECM",
-	"HeadsetMIC_DCCECM", "HandsetDMIC_VENDOR01"
+	"HandsetAMIC_DCC",
+	"HeadsetMIC_DCC", "HandsetAMIC_DCCECM", "HeadsetMIC_DCCECM"
 };
 /* here start uplink power function */
 static const char * const Pmic_Test_function[] = { "Off", "On" };
@@ -4938,12 +4804,6 @@ static int Audio_Vow_MIC_Type_Select_Set(struct snd_kcontrol *kcontrol,
 	}
 	mAudio_VOW_Mic_type = ucontrol->value.integer.value[0];
 	pr_warn("%s() mAudio_VOW_Mic_type = %d\n", __func__, mAudio_VOW_Mic_type);
-#ifdef CONFIG_MTK_VOW_SUPPORT
-	if (mAudio_VOW_Mic_type == AUDIO_VOW_MIC_TYPE_Handset_DMIC_VENDOR01)
-		VowDrv_SetSmartDevice(true);
-	else
-		VowDrv_SetSmartDevice(false);
-#endif
 	return 0;
 }
 
@@ -5477,8 +5337,6 @@ static int mt6331_codec_probe(struct snd_soc_codec *codec)
 
 	if (mInitCodec == true)
 		return 0;
-
-	ANC_enabled = 0;
 
 #ifdef MT6755_AW8736_REWORK
 	int data[4];

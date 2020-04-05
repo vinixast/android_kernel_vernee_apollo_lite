@@ -1,19 +1,17 @@
 /*
- * Copyright (C) 2015 MediaTek Inc.
+ * Copyright (C) 2007 The Android Open Source Project
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- * You should have received a copy of the GNU General Public License
- * along with this program
- * If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 /*******************************************************************************
  *
@@ -61,6 +59,8 @@ typedef enum {
 	Soc_Aud_Digital_Block_MEM_DL1_DATA2,
 	Soc_Aud_Digital_Block_MEM_VUL_DATA2,
 	Soc_Aud_Digital_Block_MEM_HDMI,
+	Soc_Aud_Digital_Block_MEM_BTCVSD_RX,
+	Soc_Aud_Digital_Block_MEM_BTCVSD_TX,
 	Soc_Aud_Digital_Block_MEM_I2S,		/* this is not actually a mem if... */
 	/* ADDA */
 	Soc_Aud_Digital_Block_ADDA_DL,
@@ -89,7 +89,7 @@ typedef enum {
 	Soc_Aud_Digital_Block_MRG_I2S_IN,
 	Soc_Aud_Digital_Block_DAI_BT,
 	Soc_Aud_Digital_Block_NUM_OF_DIGITAL_BLOCK,
-	Soc_Aud_Digital_Block_NUM_OF_MEM_INTERFACE = Soc_Aud_Digital_Block_MEM_HDMI + 1
+	Soc_Aud_Digital_Block_NUM_OF_MEM_INTERFACE = Soc_Aud_Digital_Block_MEM_BTCVSD_TX + 1
 } Soc_Aud_Digital_Block;
 
 typedef enum {
@@ -926,7 +926,7 @@ typedef struct {
 	unsigned int mSramLength;
 	unsigned int mBlockSize;
 	unsigned int mBlocknum;
-	Aud_Sram_Block *mAud_Sram_Block;
+	Aud_Sram_Block mAud_Sram_Block[Soc_Aud_Digital_Block_NUM_OF_MEM_INTERFACE];
 } Aud_Sram_Manager;
 
 /*
@@ -949,34 +949,6 @@ struct irq_manager {
 	unsigned int count;
 	struct list_head users;
 	const struct irq_user *selected_user;
-};
-
-/*
- * Ultrasound
- */
-
-struct voice_ultra_info {
-	/* voice dl with ultra --> playback */
-	unsigned int dl_size;
-	unsigned int dl_rate;
-	unsigned char *dl_dma_area;
-	dma_addr_t dl_dma_addr;
-	/* voice dl --> memif ul to dsp */
-	unsigned int voice_dl_size;
-	unsigned int voice_dl_rate;
-	unsigned char *voice_dl_dma_area;
-	dma_addr_t voice_dl_dma_addr;
-	/* ultra record --> memif ul to dsp */
-	unsigned int ultra_ul_size;
-	unsigned int ultra_ul_rate;
-	unsigned char *ultra_ul_dma_area;
-	dma_addr_t ultra_ul_dma_addr;
-
-	unsigned int memif_period_count;
-	unsigned int memif_byte;
-
-	bool playback_info_ready;
-	bool capture_info_ready;
 };
 
 #endif

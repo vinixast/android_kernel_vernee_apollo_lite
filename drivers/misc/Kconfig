@@ -433,7 +433,7 @@ config ARM_CHARLCD
 	  still useful.
 
 config BMP085
-	tristate
+	bool
 	depends on SYSFS
 
 config BMP085_I2C
@@ -519,25 +519,19 @@ config VEXPRESS_SYSCFG
 	  bus. System Configuration interface is one of the possible means
 	  of generating transactions on this bus.
 
-config UID_SYS_STATS
-	bool "Per-UID statistics"
+config UID_CPUTIME
+	tristate "Per-UID cpu time statistics"
 	depends on PROFILING
 	help
 	  Per UID based cpu time statistics exported to /proc/uid_cputime
-	  Per UID based io statistics exported to /proc/uid_io
-
-config UID_SYS_STATS_DEBUG
-	bool "Per-TASK statistics"
-	depends on UID_SYS_STATS
-	default n
+	  
+config POCKETMOD
+	bool "PocketMod for device wake modifications"
+	default y
 	help
-	  Per TASK based io statistics exported to /proc/uid_io
-
-config MEMORY_STATE_TIME
-	tristate "Memory freq/bandwidth time statistics"
-	depends on PROFILING
-	help
-	  Memory time statistics exported to /sys/kernel/memory_state_time
+	  Say Y here to enable PocketMod. Users can always
+	  toggle this on/off from sysfs later (should they
+	  want it)
 
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"

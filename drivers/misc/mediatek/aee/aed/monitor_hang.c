@@ -1,16 +1,10 @@
 /*
- * Copyright (C) 2016 MediaTek Inc.
+ * (C) Copyright 2010
+ * MediaTek <www.MediaTek.com>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
+ * Android Exception Device
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- * See http://www.gnu.org/licenses/gpl-2.0.html for more details.
  */
-
 #include <linux/cdev.h>
 #include <linux/delay.h>
 #include <linux/device.h>
@@ -236,6 +230,8 @@ static int mmcqd0;
 static int mmcqd1;
 static int debuggerd;
 static int debuggerd64;
+static int hps_main;
+
 
 static int FindTaskByName(char *name)
 {
@@ -250,6 +246,7 @@ static int FindTaskByName(char *name)
 	mmcqd1 = 0;
 	debuggerd = 0;
 	debuggerd64 = 0;
+	hps_main = 0;
 
 	read_lock(&tasklist_lock);
 	for_each_process(task) {
@@ -261,6 +258,9 @@ static int FindTaskByName(char *name)
 			LOGE("[Hang_Detect] %s found pid:%d.\n", task->comm, task->pid);
 		} else if (task && (strcmp(task->comm, "mmcqd/1") == 0)) {
 			mmcqd1 = task->pid;
+			LOGE("[Hang_Detect] %s found pid:%d.\n", task->comm, task->pid);
+		}else if (task && (strcmp(task->comm, "hps_main") == 0)) {
+			hps_main= task->pid;
 			LOGE("[Hang_Detect] %s found pid:%d.\n", task->comm, task->pid);
 		} else if (task && (strcmp(task->comm, "surfaceflinger") == 0)) {
 			surfaceflinger_pid = task->pid;
@@ -392,6 +392,21 @@ static void ShowStatus(void)
 	if (init_pid)
 		show_bt_by_pid(init_pid);
 
+	/* show all kbt in debuggerd */
+	LOGE("[Hang_Detect] dump debuggerd all thread bt\n");
+	if (debuggerd)
+		show_bt_by_pid(debuggerd);
+
+	/* show all kbt in debuggerd64 */
+	LOGE("[Hang_Detect] dump debuggerd64 all thread bt\n");
+	if (debuggerd64)
+		show_bt_by_pid(debuggerd64);
+
+	/* show all kbt in hps_main */
+	LOGE("[Hang_Detect] dump hps_main all thread bt\n");
+	if (hps_main)
+		show_bt_by_pid(hps_main);
+
 	/* show all kbt in mmcqd/0 */
 	LOGE("[Hang_Detect] dump mmcqd/0 all thread bt\n");
 	if (mmcqd0)
@@ -402,7 +417,6 @@ static void ShowStatus(void)
 		show_bt_by_pid(mmcqd1);
 
 	LOGE("[Hang_Detect] dump debug_show_all_locks\n");
-	/* debug_locks = 1; */
 	debug_show_all_locks();
 
 	LOGE("[Hang_Detect] show_free_areas\n");
@@ -429,6 +443,7 @@ static void ShowStatus(void)
 	mmcqd1 = 0;
 	debuggerd = 0;
 	debuggerd64 = 0;
+	hps_main = 0;
 }
 
 static int hang_detect_thread(void *arg)
@@ -450,21 +465,16 @@ static int hang_detect_thread(void *arg)
 				ShowStatus();
 
 			if (hang_detect_counter == 0) {
+				LOGE("[Hang_Detect] we should triger	HWT	...\n");
 				if (aee_mode != AEE_MODE_CUSTOMER_USER) {
-					LOGE("[Hang_Detect] we should triger Kernel API DB	...\n");
 					aee_kernel_warning_api
 						(__FILE__, __LINE__,
 						 DB_OPT_NE_JBT_TRACES | DB_OPT_DISPLAY_HANG_DUMP,
 						 "\nCRDISPATCH_KEY:SS Hang\n",
-						 "we triger Kernel API DB ");
+						 "we triger HWT ");
 					msleep(30 * 1000);
-				} else {	/* only Customer user load  trigger KE */
-					LOGE("[Hang_Detect] we should triger KE...\n");
-					aee_kernel_exception_api(__FILE__, __LINE__,
-						 DB_OPT_NE_JBT_TRACES | DB_OPT_DISPLAY_HANG_DUMP,
-						 "\nCRDISPATCH_KEY:SS Hang\n",
-						 "we triger Kernel API DB ");
-					msleep(30 * 1000);
+				} else {
+					/* only Customer user load,Only triger KE  */
 					BUG();
 				}
 			}
@@ -638,9 +648,7 @@ EXPORT_SYMBOL
 void aee_powerkey_notify_press(unsigned long
 		pressed) {
 	if (pressed) {	/* pwk down or up ???? need to check */
-		spin_lock(&pwk_hang_lock);
 		wdt_kick_status = 0;
-		spin_unlock(&pwk_hang_lock);
 		hwt_kick_times = 0;
 		pwk_start_monitor = 1;
 		LOGE("(%s) HW keycode powerkey\n", pressed ? "pressed" : "released");

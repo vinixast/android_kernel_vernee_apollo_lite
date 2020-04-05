@@ -106,8 +106,8 @@ static int hmdyhub_get_humidity(char *buf, int bufsize)
 	time_stamp_gpt = data.time_stamp_gpt;
 	humidity = data.relative_humidity_t.relative_humidity;
 
-	HMDYHUB_LOG("recv ipi: timestamp: %lld, timestamp_gpt: %lld, humidity: %d!\n", time_stamp, time_stamp_gpt,
-			humidity);
+	/* HMDYHUB_LOG("recv ipi: timestamp: %lld, timestamp_gpt: %lld, humidity: %d!\n",
+		time_stamp, time_stamp_gpt, humidity); */
 
 	sprintf(buf, "%08x", humidity);
 	if (atomic_read(&obj->trace) & HMDY_TRC_IOCTL)
@@ -455,7 +455,7 @@ static int hmdyhub_probe(struct platform_device *pdev)
 	ctl.enable_nodata = hmdyhub_enable_nodata;
 	ctl.set_delay = hmdyhub_set_delay;
 	ctl.is_report_input_direct = false;
-	ctl.is_support_batch = true;
+	ctl.is_support_batch = false;
 
 	err = hmdy_register_control_path(&ctl);
 	if (err) {

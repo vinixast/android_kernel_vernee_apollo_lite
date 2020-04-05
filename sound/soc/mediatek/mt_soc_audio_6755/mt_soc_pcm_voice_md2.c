@@ -1,19 +1,17 @@
 /*
- * Copyright (C) 2015 MediaTek Inc.
+ * Copyright (C) 2007 The Android Open Source Project
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- * You should have received a copy of the GNU General Public License
- * along with this program
- * If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 /*******************************************************************************
  *
@@ -141,6 +139,7 @@ static struct snd_pcm_hardware mtk_pcm_hardware = {
 static int mtk_voice_md2_pcm_open(struct snd_pcm_substream *substream)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
+	int err = 0;
 	int ret = 0;
 
 	AudDrv_Clk_On();
@@ -168,14 +167,14 @@ static int mtk_voice_md2_pcm_open(struct snd_pcm_substream *substream)
 		/* pr_warn("SNDRV_PCM_STREAM_PLAYBACK mtkalsa_voice_md2_constraints\n"); */
 		runtime->rate = 16000;
 	} else {
-		pr_warn("SNDRV_PCM_STREAM_CAPTURE mtkalsa_voice_md2_constraints\n");
+		/* pr_warn("SNDRV_PCM_STREAM_CAPTURE mtkalsa_voice_md2_constraints\n"); */
 		runtime->rate = 16000;
 	}
 
-	if (ret < 0) {
+	if (err < 0) {
 		pr_err("mtk_voice_md2_close\n");
 		mtk_voice_md2_close(substream);
-		return ret;
+		return err;
 	}
 	/* pr_warn("mtk_voice_md2_pcm_open return\n"); */
 	return 0;
@@ -213,7 +212,6 @@ static int mtk_voice_md2_close(struct snd_pcm_substream *substream)
 	SetConnection(Soc_Aud_InterCon_DisConnect, Soc_Aud_InterConnectionInput_I09, Soc_Aud_InterConnectionOutput_O03);
 	SetConnection(Soc_Aud_InterCon_DisConnect, Soc_Aud_InterConnectionInput_I09, Soc_Aud_InterConnectionOutput_O04);
 
-	SetI2SADDAEnable(false);
 	SetI2SAdcEnable(false);
 	SetI2SDacEnable(false);
 	SetModemPcmEnable(MODEM_EXTERNAL, false);
@@ -291,10 +289,8 @@ static int mtk_voice1_ext_prepare(struct snd_pcm_substream *substream)
 	SetI2SDacEnable(true);
 
 	SetMemoryPathEnable(Soc_Aud_Digital_Block_I2S_IN_ADC, true);
-	EnableAfe(true);
 	SetI2SAdcEnable(true);
-	SetI2SADDAEnable(true);
-
+	EnableAfe(true);
 	Voice2IntPcm.mPcmModeWidebandSel =
 		(runtimeStream->rate == 8000) ? Soc_Aud_PCM_MODE_PCM_MODE_8K : Soc_Aud_PCM_MODE_PCM_MODE_16K;
 	/* Voice2IntPcm.mAsyncFifoSel = Soc_Aud_BYPASS_SRC_SLAVE_USE_ASYNC_FIFO; */

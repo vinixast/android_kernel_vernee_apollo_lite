@@ -1,15 +1,16 @@
-/*
- * Copyright (C) 2015 MediaTek Inc.
+/******************************************************************************
+* mtk_nand.c - MTK NAND Flash Device Driver
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
+* Copyright 2009-2012 MediaTek Co.,Ltd.
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- */
+* DESCRIPTION:
+*	This file provid the other drivers nand relative functions
+ *
+* modification history
+* ----------------------------------------
+* v3.0, 11 Feb 2010, mtk
+* ----------------------------------------
+******************************************************************************/
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
@@ -56,13 +57,13 @@
 /* #include <mach/mt_clkmgr.h> */
 /* #include <mach/mtk_nand.h> */
 /* #include <mach/bmt.h> */
-#include "mtk_nand.h"
-#include "bmt.h"
+#include <mtk_nand.h>
+#include <bmt.h>
 /* #include <mach/mt_irq.h> */
 /* #include "partition.h" */
 /* #include <asm/system.h> */
 /* #include <mach/partition_define.h> */
-#include "partition_define.h"
+#include <partition_define.h>
 /* #include <mach/mt_boot.h> */
 #include <mt-plat/mt_boot.h>
 /* #include "../../../../../../source/kernel/drivers/aee/ipanic/ipanic.h" */
@@ -73,7 +74,7 @@
 #include <mach/power_loss_test.h>
 #endif
 /* #include <mach/nand_device_define.h> */
-#include "nand_device_define.h"
+#include <nand_device_define.h>
 
 #ifndef CONFIG_MTK_LEGACY
 #include <linux/clk.h>
@@ -5510,7 +5511,7 @@ int mtk_nand_block_markbad_hw(struct mtd_info *mtd, loff_t offset)
 	return ret;
 }
 
-static int mtk_nand_block_markbad(struct mtd_info *mtd, loff_t offset, const uint8_t *buf)
+static int mtk_nand_block_markbad(struct mtd_info *mtd, loff_t offset)
 {
 	struct nand_chip *chip = mtd->priv;
 	u32 block = (u32) (offset >> chip->phys_erase_shift);

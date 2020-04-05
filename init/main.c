@@ -52,7 +52,6 @@
 #include <linux/key.h>
 #include <linux/buffer_head.h>
 #include <linux/page_cgroup.h>
-#include <linux/page_ext.h>
 #include <linux/debug_locks.h>
 #include <linux/debugobjects.h>
 #include <linux/lockdep.h>
@@ -86,6 +85,9 @@
 #include <asm/setup.h>
 #include <asm/sections.h>
 #include <asm/cacheflush.h>
+#ifdef CONFIG_MTPROF
+#include "bootprof.h"
+#endif
 
 #ifdef CONFIG_X86_LOCAL_APIC
 #include <asm/smp.h>
@@ -96,6 +98,9 @@ static int kernel_init(void *);
 extern void init_IRQ(void);
 extern void fork_init(unsigned long);
 extern void radix_tree_init(void);
+#ifndef CONFIG_DEBUG_RODATA
+static inline void mark_rodata_ro(void) { }
+#endif
 
 /*
  * Debug helper: via this flag we know that we are in 'early bootup code'
@@ -491,7 +496,6 @@ static void __init mm_init(void)
 	 * bigger than MAX_ORDER unless SPARSEMEM.
 	 */
 	page_cgroup_init_flatmem();
-	page_ext_init_flatmem();
 	mem_init();
 	kmem_cache_init();
 	percpu_init_late();
@@ -531,7 +535,6 @@ asmlinkage __visible void __init start_kernel(void)
 	page_address_init();
 	pr_notice("%s", linux_banner);
 	setup_arch(&command_line);
-	add_device_randomness(command_line, strlen(command_line));
 	mm_init_cpumask(&init_mm);
 	setup_command_line(command_line);
 	setup_nr_cpu_ids();
@@ -580,10 +583,6 @@ asmlinkage __visible void __init start_kernel(void)
 		local_irq_disable();
 	idr_init_cache();
 	rcu_init();
-
-	/* trace_printk() and trace points may be used after this */
-	trace_init();
-
 	context_tracking_init();
 	radix_tree_init();
 	/* init some links before init_ISA_irqs() */
@@ -635,7 +634,6 @@ asmlinkage __visible void __init start_kernel(void)
 	}
 #endif
 	page_cgroup_init();
-	page_ext_init();
 	debug_objects_mem_init();
 	kmemleak_init();
 	setup_per_cpu_pageset();
@@ -785,35 +783,25 @@ static int __init_or_module do_one_initcall_debug(initcall_t fn)
 	return ret;
 }
 
-#ifdef CONFIG_MTPROF
-#include "bootprof.h"
-#else
-#define TIME_LOG_START()
-#define TIME_LOG_END()
-#define bootprof_initcall(fn, ts)
-#endif
-
 int __init_or_module do_one_initcall(initcall_t fn)
 {
+	unsigned long long ts = 0;
 	int count = preempt_count();
 	int ret;
 	char msgbuf[64];
-#ifdef CONFIG_MTPROF
-	unsigned long long ts = 0;
-#endif
 
 	if (initcall_blacklisted(fn))
 		return -EPERM;
-	TIME_LOG_START();
 #if defined(CONFIG_MT_ENG_BUILD)
 	ret = do_one_initcall_debug(fn);
 #else
+	ts = sched_clock();
 	if (initcall_debug)
 		ret = do_one_initcall_debug(fn);
 	else
 		ret = fn();
+	ts = sched_clock() - ts;
 #endif
-	TIME_LOG_END();
 	msgbuf[0] = 0;
 
 	if (preempt_count() != count) {
@@ -825,7 +813,13 @@ int __init_or_module do_one_initcall(initcall_t fn)
 		local_irq_enable();
 	}
 	WARN(msgbuf[0], "initcall %pF returned with %s\n", fn, msgbuf);
-	bootprof_initcall(fn, ts);
+	if (ts > 15000000) {
+		/* log more than 15ms initcalls */
+		snprintf(msgbuf, 64, "%pf %10llu ns", fn, ts);
+#ifdef CONFIG_MTPROF
+		log_boot(msgbuf);
+#endif
+	}
 
 	return ret;
 }
@@ -952,28 +946,6 @@ static int try_to_run_init_process(const char *init_filename)
 
 static noinline void __init kernel_init_freeable(void);
 
-#ifdef CONFIG_DEBUG_RODATA
-static bool rodata_enabled = true;
-static int __init set_debug_rodata(char *str)
-{
-	return strtobool(str, &rodata_enabled);
-}
-__setup("rodata=", set_debug_rodata);
-
-static void mark_readonly(void)
-{
-	if (rodata_enabled)
-		mark_rodata_ro();
-	else
-		pr_info("Kernel memory protection disabled.\n");
-}
-#else
-static inline void mark_readonly(void)
-{
-	pr_warn("This architecture does not have kernel memory protection.\n");
-}
-#endif
-
 static int __ref kernel_init(void *unused)
 {
 	int ret;
@@ -982,7 +954,7 @@ static int __ref kernel_init(void *unused)
 	/* need to finish all async __init code before freeing the memory */
 	async_synchronize_full();
 	free_initmem();
-	mark_readonly();
+	mark_rodata_ro();
 	system_state = SYSTEM_RUNNING;
 	numa_default_policy();
 

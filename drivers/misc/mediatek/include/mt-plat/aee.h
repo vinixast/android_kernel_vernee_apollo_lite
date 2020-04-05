@@ -42,7 +42,6 @@ typedef enum {
 	AE_ANR,			/* Error or Warning or Defect */
 	AE_RESMON,
 	AE_MODEM_WARNING,
-	AE_WTF,
 	AE_WRN_ERR_END,
 	AE_MANUAL,		/* Manual Raise */
 	AE_EXP_CLASS_END,
@@ -50,7 +49,6 @@ typedef enum {
 	AE_KERNEL_PROBLEM_REPORT = 1000,
 	AE_SYSTEM_JAVA_DEFECT,
 	AE_SYSTEM_NATIVE_DEFECT,
-	AE_MANUAL_MRDUMP_KEY,
 } AE_EXP_CLASS;			/* General Program Exception Class */
 
 typedef enum {

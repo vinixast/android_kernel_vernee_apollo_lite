@@ -1,18 +1,4 @@
 /*
-* Copyright (C) 2016 MediaTek Inc.
-*
-* This program is free software: you can redistribute it and/or modify it under the terms of the
-* GNU General Public License version 2 as published by the Free Software Foundation.
-*
-* This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
-* without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-* See the GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License along with this program.
-* If not, see <http://www.gnu.org/licenses/>.
-*/
-
-/*
 ** Id: @(#) gl_rst.c@@
 */
 
@@ -21,6 +7,38 @@
 
     This file contains the support routines of Linux driver for MediaTek Inc. 802.11
     Wireless LAN Adapters.
+*/
+
+/*
+** Log: gl_rst.c
+**
+** 09 17 2012 cm.chang
+** [BORA00002149] [MT6630 Wi-Fi] Initial software development
+** Duplicate source from MT6620 v2.3 driver branch
+** (Davinci label: MT6620_WIFI_Driver_V2_3_120913_1942_As_MT6630_Base)
+ *
+ * 11 10 2011 cp.wu
+ * [WCXRP00001098] [MT6620 Wi-Fi][Driver] Replace printk by DBG LOG macros in linux porting layer
+ * 1. eliminaite direct calls to printk in porting layer.
+ * 2. replaced by DBGLOG, which would be XLOG on ALPS platforms.
+ *
+ * 04 22 2011 cp.wu
+ * [WCXRP00000598] [MT6620 Wi-Fi][Driver] Implementation of interface for communicating with user space process for
+ * RESET_START and RESET_END events
+ * skip power-off handshaking when RESET indication is received.
+ *
+ * 04 14 2011 cp.wu
+ * [WCXRP00000598] [MT6620 Wi-Fi][Driver] Implementation of interface for communicating with user space process for
+ * RESET_START and RESET_END events
+ * 1. add code to put whole-chip resetting trigger when abnormal firmware assertion is detected
+ * 2. add dummy function for both Win32 and Linux part.
+ *
+ * 03 30 2011 cp.wu
+ * [WCXRP00000598] [MT6620 Wi-Fi][Driver] Implementation of interface for communicating with user space process for
+ * RESET_START and RESET_END events
+ * use netlink unicast instead of broadcast
+ *
+**
 */
 
 /*******************************************************************************
@@ -266,26 +284,4 @@ BOOLEAN glResetTrigger(P_ADAPTER_T prAdapter)
 	return fgResult;
 }
 
-ENUM_CHIP_RESET_REASON_TYPE_T eResetReason;
-UINT_64 u8ResetTime;
-VOID glGetRstReason(ENUM_CHIP_RESET_REASON_TYPE_T eReason)
-{
-	u8ResetTime = sched_clock();
-	eResetReason = eReason;
-}
-
-UINT32 wlanPollingCpupcr(UINT32 u4Times, UINT32 u4Sleep)
-{
-#if defined(MT6797)
-	UINT32 u4Count;
-
-	for (u4Count = 0; u4Count < u4Times; u4Count++) {
-		DBGLOG(INIT, ERROR, "i:%d,cpupcr:%08x\n", u4Count, wmt_plat_read_cpupcr());
-		kalMsleep(u4Sleep);
-	}
-#else
-	DBGLOG(INIT, ERROR, "This chip don't support polling cpupcr\n");
-#endif
-	return 0;
-}
 #endif /* CFG_CHIP_RESET_SUPPORT */

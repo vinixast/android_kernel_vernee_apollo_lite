@@ -18,6 +18,7 @@
 #include <linux/wait.h>
 #include <linux/kthread.h>
 #include <linux/mutex.h>
+#include <linux/rtpm_prio.h>
 #include <linux/types.h>
 #include <linux/of.h>
 #include <linux/of_irq.h>
@@ -129,7 +130,6 @@ const char *disp_helper_option_string[DISP_OPT_NUM] = {
 	"DISP_OPT_RDMA_UNDERFLOW_AEE",
 	"DISP_OPT_HRT",
 	"DISP_OPT_PARTIAL_UPDATE",
-	"DISP_OPT_CV_BYSUSPEND",
 	"DISP_OPT_DELAYED_TRIGGER",
 };
 
@@ -366,7 +366,6 @@ void disp_helper_option_init(void)
 #ifdef CONFIG_MTK_CONSUMER_PARTIAL_UPDATE_SUPPORT
 	disp_helper_set_option(DISP_OPT_PARTIAL_UPDATE, 1);
 #endif
-	disp_helper_set_option(DISP_OPT_CV_BYSUSPEND, 0);
 	disp_helper_set_option(DISP_OPT_DELAYED_TRIGGER, 1);
 }
 

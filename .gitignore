@@ -30,7 +30,6 @@
 *.xz
 *.lz4
 *.lzo
-*.patch
 *.gcno
 modules.builtin
 Module.symvers
@@ -46,7 +45,7 @@ Module.symvers
 /vmlinuz
 /System.map
 /Module.markers
-
+out/
 #
 # Debian directory (make deb-pkg)
 #
@@ -96,6 +95,3 @@ x509.genkey
 
 # Kconfig presets
 all.config
-
-# Out directory
-/out

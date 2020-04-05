@@ -57,7 +57,6 @@
 /* #define DEBUG_AUD_UL1 */
 /* #define DEBUG_AUD_DL1 */
 /* #define DEBUG_AUD_DAI */
-#define AUDIO_DL2_ISR_COPY_SUPPORT
 
 #ifdef DEBUG_AUDDRV
 #define PRINTK_AUDDRV(format, args...) pr_debug(format, ##args)
@@ -241,7 +240,6 @@
 #define MT_SOC_BTCVSD_TX_DAI_NAME "mt-soc-btcvsd-tx-dai-driver"
 #define MT_SOC_MOD_DAI_NAME "mt-soc-moddai-driver"
 #define MT_SOC_ANC_NAME "mt-soc-anc-driver"
-#define MT_SOC_ANC_RECORD_DAI_NAME "mt-soc-anc-record-dai-driver"
 
 /* platform name */
 #define MT_SOC_DL1_PCM   "mt-soc-dl1-pcm"
@@ -264,7 +262,6 @@
 #define MT_SOC_VOICE_MD2  "mt-soc-voicemd2"
 #define MT_SOC_VOICE_MD1_BT "mt-soc-voicemd1-bt"
 #define MT_SOC_VOICE_MD2_BT "mt-soc-voicemd2-bt"
-#define MT_SOC_VOICE_ULTRA  "mt-soc-voice-ultra"
 #define MT_SOC_VOIP_BT_OUT "mt-soc-voip-bt-out"
 #define MT_SOC_VOIP_BT_IN "mt-soc-voip-bt-in"
 #define MT_SOC_IFMI2S2  "mt-soc-fm-i2s2"
@@ -289,13 +286,13 @@
 #define MT_SOC_CODEC_RXDAI_NAME "mt-soc-codec-rx-dai"
 #define MT_SOC_CODEC_RXDAI2_NAME "mt-soc-codec-rx-dai2"
 #define MT_SOC_CODEC_I2S0AWB_NAME "mt-soc-codec-i2s0awb-dai"
+#define MT_SOC_CODEC_I2S2_ADC2_NAME "mt-soc-codec-i2s2adc2-dai"
 #define MT_SOC_CODEC_I2S0TXDAI_NAME "mt-soc-codec-I2s0tx-dai"
 #define MT_SOC_CODEC_DL1AWBDAI_NAME "mt-soc-codec-dl1awb-dai"
 #define MT_SOC_CODEC_VOICE_MD1DAI_NAME "mt-soc-codec-voicemd1-dai"
 #define MT_SOC_CODEC_VOICE_MD2DAI_NAME "mt-soc-codec-voicemd2-dai"
 #define MT_SOC_CODEC_VOICE_MD1_BTDAI_NAME "mt-soc-codec-voicemd1-bt-dai"
 #define MT_SOC_CODEC_VOICE_MD2_BTDAI_NAME "mt-soc-codec-voicemd2-bt-dai"
-#define MT_SOC_CODEC_VOICE_ULTRADAI_NAME "mt-soc-codec-voiceultra-dai"
 #define MT_SOC_CODEC_VOIPCALLBTOUTDAI_NAME "mt-soc-codec-voipcall-btout-dai"
 #define MT_SOC_CODEC_VOIPCALLBTINDAI_NAME "mt-soc-codec-voipcall-btin-dai"
 #define MT_SOC_CODEC_TDMRX_DAI_NAME "mt-soc-tdmrx-dai-codec"
@@ -334,7 +331,6 @@
 #define MT_SOC_VOICE_MD2_STREAM_NAME "Voice_MD2_PLayback"
 #define MT_SOC_VOICE_MD1_BT_STREAM_NAME "Voice_MD1_BT_Playback"
 #define MT_SOC_VOICE_MD2_BT_STREAM_NAME "Voice_MD2_BT_Playback"
-#define MT_SOC_VOICE_ULTRA_STREAM_NAME "Voice_ULTRA_PLayback"
 #define MT_SOC_VOIP_BT_OUT_STREAM_NAME "VOIP_Call_BT_Playback"
 #define MT_SOC_VOIP_BT_IN_STREAM_NAME "VOIP_Call_BT_Capture"
 #define MT_SOC_HDMI_STREAM_NAME "HMDI_PLayback"
@@ -366,6 +362,5 @@
 #define MT_SOC_BTCVSD_PLAYBACK_STREAM_NAME "BTCVSD_Playback"
 #define MT_SOC_OFFLOAD_STREAM_NAME "Offload_Playback"
 #define MT_SOC_ANC_STREAM_NAME "ANC_Playback"
-#define MT_SOC_ANC_RECORD_STREAM_NAME "ANC_Record"
 
 #endif

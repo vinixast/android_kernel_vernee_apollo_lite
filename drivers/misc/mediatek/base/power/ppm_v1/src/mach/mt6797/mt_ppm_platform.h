@@ -46,7 +46,7 @@ extern unsigned int hps_get_hvytsk(unsigned int cluster_id);
 #define DYNAMIC_TABLE2REAL_PERCENTAGE	(58)
 #endif
 
-/* #define PPM_POWER_TABLE_CALIBRATION	(1) */
+#define PPM_POWER_TABLE_CALIBRATION	(1)
 #ifdef PPM_POWER_TABLE_CALIBRATION
 #include "mt_static_power.h"
 #define BIG_LKG_EFUSE_TT		(169)
@@ -64,11 +64,6 @@ extern unsigned int hps_get_hvytsk(unsigned int cluster_id);
 
 #ifndef PPM_DISABLE_CLUSTER_MIGRATION
 #define PPM_CLUSTER_MIGRATION_BOOST	(1)
-#endif
-
-#define PPM_DEFAULT_LIMIT_B_FREQ	(1)
-#ifdef PPM_DEFAULT_LIMIT_B_FREQ
-#define PPM_HICA_BIG_LIMIT_FREQ	(1500000)
 #endif
 
 #define PPM_DISABLE_BIG_FOR_LP_MODE	(1)

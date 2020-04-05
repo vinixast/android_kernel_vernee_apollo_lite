@@ -16,12 +16,7 @@
 #include <linux/proc_fs.h>
 #include <linux/statfs.h>
 #include <asm/uaccess.h>	/*set_fs get_fs mm_segment_t */
-#if defined(CONFIG_MTK_TLC_NAND_SUPPORT)
-#include "partition_define_tlc.h"
-#else
-#include "partition_define_mlc.h"
-#endif
-
+#include <partition_define.h>
 #include <env.h>
 
 #ifndef CONFIG_MTK_EMMC_SUPPORT

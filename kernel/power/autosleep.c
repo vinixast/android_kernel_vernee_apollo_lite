@@ -9,6 +9,7 @@
 #include <linux/device.h>
 #include <linux/mutex.h>
 #include <linux/pm_wakeup.h>
+#include <mtk_hibernate_core.h>
 
 #include "power.h"
 

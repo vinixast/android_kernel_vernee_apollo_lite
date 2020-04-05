@@ -357,15 +357,10 @@ static ssize_t rotationvector_show_sensordevnum(struct device *dev,
 						struct device_attribute *attr, char *buf)
 {
 	struct rotationvector_context *cxt = NULL;
-	const char *devname = NULL;
-	struct input_handle *handle;
+	char *devname = NULL;
 
 	cxt = rotationvector_context_obj;
-	list_for_each_entry(handle, &cxt->idev->h_list, d_node)
-		if (strncmp(handle->name, "event", 5) == 0) {
-			devname = handle->name;
-			break;
-		}
+	devname = (char *)dev_name(&cxt->idev->dev);
 	return snprintf(buf, PAGE_SIZE, "%s\n", devname + 5);
 }
 

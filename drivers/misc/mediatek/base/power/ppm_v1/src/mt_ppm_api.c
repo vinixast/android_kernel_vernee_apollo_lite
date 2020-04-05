@@ -71,17 +71,6 @@ void mt_ppm_register_client(enum ppm_client client, void (*limit)(struct ppm_cli
 	ppm_lock(&ppm_main_info.lock);
 
 	/* init client */
-	switch (client) {
-	case PPM_CLIENT_DVFS:
-		ppm_main_info.client_info[client].name = "DVFS";
-		break;
-	case PPM_CLIENT_HOTPLUG:
-		ppm_main_info.client_info[client].name = "HOTPLUG";
-		break;
-	default:
-		ppm_main_info.client_info[client].name = "UNKNOWN";
-		break;
-	}
 	ppm_main_info.client_info[client].client = client;
 	ppm_main_info.client_info[client].limit_cb = limit;
 
@@ -97,23 +86,4 @@ void mt_set_ppm_state_registerCB(met_set_ppm_state_funcMET pCB)
 	g_pSet_PPM_State = pCB;
 }
 EXPORT_SYMBOL(mt_set_ppm_state_registerCB);
-
-void mt_ppm_set_5A_limit_throttle(bool enable)
-{
-	FUNC_ENTER(FUNC_LV_API);
-#ifdef PPM_VPROC_5A_LIMIT_CHECK
-	ppm_lock(&ppm_main_info.lock);
-	if (!ppm_main_info.is_5A_limit_enable) {
-		ppm_unlock(&ppm_main_info.lock);
-		goto end;
-	}
-	ppm_main_info.is_5A_limit_on = enable;
-	ppm_info("is_5A_limit_on = %d\n", ppm_main_info.is_5A_limit_on);
-	ppm_unlock(&ppm_main_info.lock);
-
-	ppm_task_wakeup();
-end:
-#endif
-	FUNC_EXIT(FUNC_LV_API);
-}
 

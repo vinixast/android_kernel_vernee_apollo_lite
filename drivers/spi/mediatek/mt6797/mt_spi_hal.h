@@ -1,15 +1,3 @@
-/*
-* Copyright (C) 2016 MediaTek Inc.
-*
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License version 2 as
-* published by the Free Software Foundation.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-* See http://www.gnu.org/licenses/gpl-2.0.html for more details.
-*/
 #ifndef __MT_SPI_HAL_H__
 #define __MT_SPI_HAL_H__
 
@@ -17,7 +5,7 @@
 #include <linux/clk.h>
 #endif				/* !defined(CONFIG_MTK_CLKMGR) */
 #include <linux/wakelock.h>
-#include "mt_spi.h"
+#include <mt_spi.h>
 /*******************************************************************************
 * define macro for spi register
 ********************************************************************************/
@@ -132,6 +120,8 @@ extern void mt_spi_enable_clk(struct mt_spi_t *ms);
 extern void mt_spi_disable_clk(struct mt_spi_t *ms);
 extern void spi_set_pinctrl(int spi_id);
 extern void spi_clr_pinctrl(int spi_id);
-extern void mt_spi_enable_master_clk(struct spi_device *ms);
-extern void mt_spi_disable_master_clk(struct spi_device *ms);
+extern dma_addr_t SpiDmaBufTx_pa;
+extern dma_addr_t SpiDmaBufRx_pa;
+extern int finger_is_connect;
+
 #endif

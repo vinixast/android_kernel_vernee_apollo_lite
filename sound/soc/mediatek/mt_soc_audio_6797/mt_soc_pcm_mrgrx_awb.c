@@ -1,19 +1,17 @@
 /*
- * Copyright (C) 2015 MediaTek Inc.
+ * Copyright (C) 2007 The Android Open Source Project
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- * You should have received a copy of the GNU General Public License
- * along with this program
- * If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 /*******************************************************************************
  *
@@ -158,9 +156,12 @@ static int mtk_mrgrx_awb_alsa_stop(struct snd_pcm_substream *substream)
 	return 0;
 }
 
+static kal_int32 Previous_Hw_cur;
 static snd_pcm_uframes_t mtk_awb_pcm_pointer(struct snd_pcm_substream
 					     *substream)
 {
+	kal_int32 HW_memory_index = 0;
+	kal_int32 HW_Cur_ReadIdx = 0;
 	kal_uint32 Frameidx = 0;
 	AFE_BLOCK_T *Awb_Block = &(Mrgrx_AWB_Control_context->rBlock);
 	/* PR_ERR_AUD_AWB("mtk_awb_pcm_pointer Awb_Block->u4WriteIdx;= 0x%x\n", Awb_Block->u4WriteIdx); */
@@ -168,8 +169,18 @@ static snd_pcm_uframes_t mtk_awb_pcm_pointer(struct snd_pcm_substream
 		/* get total bytes to copysinewavetohdmi */
 		Frameidx = audio_bytes_to_frame(substream , Awb_Block->u4WriteIdx);
 		return Frameidx;
-	}
 
+		HW_Cur_ReadIdx = Align64ByteSize(Afe_Get_Reg(AFE_AWB_CUR));
+		if (HW_Cur_ReadIdx == 0) {
+			pr_warn("[Auddrv] mtk_awb_pcm_pointer  HW_Cur_ReadIdx ==0\n");
+			HW_Cur_ReadIdx = Awb_Block->pucPhysBufAddr;
+		}
+		HW_memory_index = (HW_Cur_ReadIdx - Awb_Block->pucPhysBufAddr);
+		Previous_Hw_cur = HW_memory_index;
+		PRINTK_AUD_AWB("[Auddrv] mtk_awb_pcm_pointer =0x%x HW_memory_index = 0x%x\n",
+			       HW_Cur_ReadIdx, HW_memory_index);
+		return audio_bytes_to_frame(substream, Previous_Hw_cur);
+	}
 	return 0;
 }
 
@@ -556,12 +567,11 @@ static int mtk_afe_mrgrx_awb_probe(struct snd_soc_platform *platform)
 	Awb_Capture_dma_buf =  Get_Mem_Buffer(Soc_Aud_Digital_Block_MEM_AWB);
 	if (Mrgrx_Awb_Capture_dma_buf == NULL) {
 		Mrgrx_Awb_Capture_dma_buf = kzalloc(sizeof(struct snd_dma_buffer), GFP_KERNEL);
-		if (Mrgrx_Awb_Capture_dma_buf != NULL) {
+		if (Mrgrx_Awb_Capture_dma_buf != NULL)
 			Mrgrx_Awb_Capture_dma_buf->area = dma_alloc_coherent(platform->dev,
 				     MRGRX_MAX_BUFFER_SIZE, &Mrgrx_Awb_Capture_dma_buf->addr, GFP_KERNEL);
-			if (Mrgrx_Awb_Capture_dma_buf->area)
-				Mrgrx_Awb_Capture_dma_buf->bytes = MRGRX_MAX_BUFFER_SIZE;
-		}
+		if (Mrgrx_Awb_Capture_dma_buf->area)
+			Mrgrx_Awb_Capture_dma_buf->bytes = MRGRX_MAX_BUFFER_SIZE;
 	}
 
 	return 0;

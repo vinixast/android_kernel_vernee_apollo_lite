@@ -20,17 +20,6 @@
 #include "m4u_debug.h"
 #include "m4u_priv.h"
 
-#ifdef CONFIG_MTK_IN_HOUSE_TEE_SUPPORT
-#include "tz_cross/trustzone.h"
-#include "tz_cross/ta_mem.h"
-#include "trustzone/kree/system.h"
-#include "trustzone/kree/mem.h"
-#endif
-
-#if defined(CONFIG_TRUSTONIC_TEE_SUPPORT) && defined(CONFIG_MTK_SEC_VIDEO_PATH_SUPPORT)
-#include "secmem.h"
-#endif
-
 
 /* global variables */
 int gM4U_log_to_uart = 2;
@@ -255,8 +244,6 @@ m4u_callback_ret_t test_fault_callback(int port, unsigned int mva, void *data)
 	return M4U_CALLBACK_HANDLED;
 }
 
-static char *data = "ABC";
-
 int m4u_test_tf(unsigned int prot)
 {
 	unsigned int *pSrc, *pDst;
@@ -264,9 +251,10 @@ int m4u_test_tf(unsigned int prot)
 	unsigned int size = 64 * 64 * 3;
 	M4U_PORT_STRUCT port;
 	m4u_client_t *client = m4u_create_client();
+	int data = 88;
 
-	m4u_register_fault_callback(M4U_PORT_DISP_OVL0, test_fault_callback, (void *)data);
-	m4u_register_fault_callback(M4U_PORT_DISP_WDMA0, test_fault_callback, (void *)data);
+	m4u_register_fault_callback(M4U_PORT_DISP_OVL0, test_fault_callback, &data);
+	m4u_register_fault_callback(M4U_PORT_DISP_WDMA0, test_fault_callback, &data);
 
 	pSrc = vmalloc(size);
 	pDst = vmalloc(size);
@@ -703,26 +691,8 @@ static int m4u_debug_set(void *data, u64 val)
 
 #ifdef M4U_TEE_SERVICE_ENABLE
 	case 50:
-	{
-#if defined(CONFIG_TRUSTONIC_TEE_SUPPORT) && defined(CONFIG_MTK_SEC_VIDEO_PATH_SUPPORT)
-		u32 sec_handle = 0;
-		u32 refcount;
-
-		secmem_api_alloc(0, 0x1000, &refcount, &sec_handle, "m4u_ut", 0);
-#elif defined(CONFIG_MTK_IN_HOUSE_TEE_SUPPORT)
-		u32 sec_handle = 0;
-		u32 refcount = 0;
-		int ret = 0;
-
-		ret = KREE_AllocSecurechunkmemWithTag(0, &sec_handle, 0, 0x1000, "m4u_ut");
-		if (ret != TZ_RESULT_SUCCESS) {
-			IONMSG("KREE_AllocSecurechunkmemWithTag failed, ret is 0x%x\n", ret);
-			return ret;
-		}
-#endif
 		m4u_sec_init();
 	break;
-	}
 	case 51:
 	{
 		M4U_PORT_STRUCT port;
@@ -1374,7 +1344,7 @@ const struct file_operations m4u_debug_port_fops = {
 	.open = m4u_debug_port_open,
 	.read = seq_read,
 	.llseek = seq_lseek,
-	.release = single_release,
+	.release = seq_release,
 };
 
 int m4u_debug_mva_show(struct seq_file *s, void *unused)
@@ -1392,7 +1362,7 @@ const struct file_operations m4u_debug_mva_fops = {
 	.open = m4u_debug_mva_open,
 	.read = seq_read,
 	.llseek = seq_lseek,
-	.release = single_release,
+	.release = seq_release,
 };
 
 int m4u_debug_buf_show(struct seq_file *s, void *unused)
@@ -1410,7 +1380,7 @@ const struct file_operations m4u_debug_buf_fops = {
 	.open = m4u_debug_buf_open,
 	.read = seq_read,
 	.llseek = seq_lseek,
-	.release = single_release,
+	.release = seq_release,
 };
 
 int m4u_debug_monitor_show(struct seq_file *s, void *unused)
@@ -1428,7 +1398,7 @@ const struct file_operations m4u_debug_monitor_fops = {
 	.open = m4u_debug_monitor_open,
 	.read = seq_read,
 	.llseek = seq_lseek,
-	.release = single_release,
+	.release = seq_release,
 };
 
 int m4u_debug_register_show(struct seq_file *s, void *unused)
@@ -1446,7 +1416,7 @@ const struct file_operations m4u_debug_register_fops = {
 	.open = m4u_debug_register_open,
 	.read = seq_read,
 	.llseek = seq_lseek,
-	.release = single_release,
+	.release = seq_release,
 };
 
 int m4u_debug_init(struct m4u_device *m4u_dev)

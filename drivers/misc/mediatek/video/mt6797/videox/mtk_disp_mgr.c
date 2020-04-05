@@ -79,6 +79,13 @@
 
 #define DDP_OUTPUT_LAYID 4
 
+#ifdef CONFIG_MTK_VIDEOX_CYNGN_LIVEDISPLAY
+static struct mtk_rgb_work_queue {
+        struct work_struct work;
+	struct mutex lock;
+} mtk_rgb_work_queue;
+#endif
+
 /* #define NO_PQ_IOCTL */
 
 static unsigned int session_config[MAX_SESSION_COUNT];
@@ -629,7 +636,7 @@ static int set_memory_buffer(disp_session_input_config *input)
 	int i = 0;
 	int layer_id = 0;
 	unsigned int dst_size = 0;
-	unsigned long dst_mva = 0;
+	unsigned int dst_mva = 0;
 	unsigned int session_id = 0;
 	disp_session_sync_info *session_info;
 
@@ -660,7 +667,7 @@ static int set_memory_buffer(disp_session_input_config *input)
 			} else {
 				disp_sync_query_buf_info(session_id, layer_id,
 							 (unsigned int)(input->config[i].next_buff_idx),
-							 &dst_mva, &dst_size);
+							 (unsigned long *)&dst_mva, &dst_size);
 				input->config[i].src_phy_addr = (void *)(phys_addr_t)dst_mva;
 			}
 
@@ -669,7 +676,7 @@ static int set_memory_buffer(disp_session_input_config *input)
 
 
 			DISPPR_FENCE
-			    ("S+/ML%d/e%d/id%d/%dx%d(%d,%d)(%d,%d)/%s/%d/0x%p/mva0x%lu/t%d/sec%d\n",
+			    ("S+/ML%d/e%d/id%d/%dx%d(%d,%d)(%d,%d)/%s/%d/0x%p/mva0x%x/t%d/sec%d\n",
 			     input->config[i].layer_id, input->config[i].layer_enable,
 			     input->config[i].next_buff_idx, input->config[i].src_width,
 			     input->config[i].src_height, input->config[i].src_offset_x,
@@ -713,7 +720,7 @@ static int set_external_buffer(disp_session_input_config *input)
 	int ret = 0;
 	int layer_id = 0;
 	unsigned int dst_size = 0;
-	unsigned long dst_mva = 0;
+	unsigned int dst_mva = 0;
 	unsigned int session_id = 0;
 	unsigned int mva_offset = 0;
 	disp_session_sync_info *session_info;
@@ -744,7 +751,7 @@ static int set_external_buffer(disp_session_input_config *input)
 			} else {
 				disp_sync_query_buf_info(session_id, layer_id,
 							(unsigned int)input->config[i].next_buff_idx,
-							&dst_mva, &dst_size);
+							(unsigned long *)&dst_mva, &dst_size);
 				input->config[i].src_phy_addr = (void *)((phys_addr_t)dst_mva);
 			}
 
@@ -753,7 +760,7 @@ static int set_external_buffer(disp_session_input_config *input)
 
 
 			DISPPR_FENCE
-			    ("S+/EL%d/e%d/id%d/%dx%d(%d,%d)(%d,%d)/%s/%d/0x%p/mva0x%08lu\n",
+			    ("S+/EL%d/e%d/id%d/%dx%d(%d,%d)(%d,%d)/%s/%d/0x%p/mva0x%08x\n",
 			     input->config[i].layer_id, input->config[i].layer_enable,
 			     input->config[i].next_buff_idx, input->config[i].src_width,
 			     input->config[i].src_height, input->config[i].src_offset_x,
@@ -807,7 +814,7 @@ static int input_config_preprocess(struct disp_frame_cfg_t *cfg)
 	int i = 0;
 	int layer_id = 0;
 	unsigned int dst_size = 0;
-	unsigned long dst_mva = 0;
+	unsigned int dst_mva = 0;
 	unsigned int session_id = 0;
 	unsigned int mva_offset = 0;
 	disp_session_sync_info *session_info;
@@ -849,11 +856,11 @@ static int input_config_preprocess(struct disp_frame_cfg_t *cfg)
 				cfg->input_cfg[i].security = DISP_NORMAL_BUFFER;
 			}
 			if (cfg->input_cfg[i].src_phy_addr) {
-				dst_mva = (phys_addr_t)(cfg->input_cfg[i].src_phy_addr);
+				dst_mva = (unsigned long)(cfg->input_cfg[i].src_phy_addr);
 			} else {
 				disp_sync_query_buf_info(session_id, layer_id,
 						(unsigned int)cfg->input_cfg[i].next_buff_idx,
-						&dst_mva, &dst_size);
+						(unsigned long *)&dst_mva, &dst_size);
 			}
 
 			cfg->input_cfg[i].src_phy_addr = (void *)(phys_addr_t)dst_mva;
@@ -861,7 +868,7 @@ static int input_config_preprocess(struct disp_frame_cfg_t *cfg)
 			if (dst_mva == 0) {
 				DISPPR_ERROR("disable layer %d because of no valid mva\n",
 					     cfg->input_cfg[i].layer_id);
-				DISPERR("S+/PL%d/e%d/id%d/%dx%d(%d,%d)(%d,%d)/%s/%d/0x%p/mva0x%08lu/sec%d/s%d\n",
+				DISPERR("S+/PL%d/e%d/id%d/%dx%d(%d,%d)(%d,%d)/%s/%d/0x%p/mva0x%08x/sec%d/s%d\n",
 				     cfg->input_cfg[i].layer_id, cfg->input_cfg[i].layer_enable,
 				     cfg->input_cfg[i].next_buff_idx, cfg->input_cfg[i].src_width,
 				     cfg->input_cfg[i].src_height, cfg->input_cfg[i].src_offset_x,
@@ -884,7 +891,7 @@ static int input_config_preprocess(struct disp_frame_cfg_t *cfg)
 					      cfg->input_cfg[i].next_buff_idx, mva_offset,
 					      cfg->input_cfg[i].frm_sequence);
 
-			DISPPR_FENCE("S+/PL%d/e%d/id%d/%dx%d(%d,%d)(%d,%d)/%s/%d/0x%p/mva0x%08lu/sec%d\n",
+			DISPPR_FENCE("S+/PL%d/e%d/id%d/%dx%d(%d,%d)(%d,%d)/%s/%d/0x%p/mva0x%08x/sec%d\n",
 			     cfg->input_cfg[i].layer_id, cfg->input_cfg[i].layer_enable,
 			     cfg->input_cfg[i].next_buff_idx, cfg->input_cfg[i].src_width,
 			     cfg->input_cfg[i].src_height, cfg->input_cfg[i].src_offset_x,
@@ -1400,28 +1407,6 @@ int _ioctl_query_valid_layer(unsigned long arg)
 	return ret;
 }
 
-int _ioctl_set_scenario(unsigned long arg)
-{
-	int ret = -1;
-	struct disp_scenario_config_t scenario_cfg;
-	void __user *argp = (void __user *)arg;
-
-	if (copy_from_user(&scenario_cfg, argp, sizeof(scenario_cfg))) {
-		DISPERR("[FB]: copy_to_user failed! line:%d\n", __LINE__);
-		return -EFAULT;
-	}
-
-	if (DISP_SESSION_TYPE(scenario_cfg.session_id) == DISP_SESSION_PRIMARY)
-		ret = primary_display_set_scenario(scenario_cfg.scenario);
-
-	if (ret) {
-		DISPERR("session(0x%x) set scenario (%d) fail, ret=%d\n",
-			scenario_cfg.session_id, scenario_cfg.scenario, ret);
-	}
-
-	return ret;
-}
-
 int set_session_mode(disp_session_config *config_info, int force)
 {
 	int ret = 0;
@@ -1594,10 +1579,6 @@ long mtk_disp_mgr_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		{
 			return _ioctl_query_valid_layer(arg);
 		}
-	case DISP_IOCTL_SET_SCENARIO:
-	{
-		return _ioctl_set_scenario(arg);
-	}
 	case DISP_IOCTL_AAL_EVENTCTL:
 	case DISP_IOCTL_AAL_GET_HIST:
 	case DISP_IOCTL_AAL_INIT_REG:
@@ -1699,8 +1680,6 @@ const char *_session_compat_ioctl_spy(unsigned int cmd)
 static long mtk_disp_mgr_compat_ioctl(struct file *file, unsigned int cmd,  unsigned long arg)
 {
 	long ret = -ENOIOCTLCMD;
-	void __user *data32 = compat_ptr(arg);
-
 	/*DISPMSG("mtk_disp_mgr_compat_ioctl, cmd=%s, arg=0x%08lx\n", _session_compat_ioctl_spy(cmd), arg);*/
 	switch (cmd) {
 	case COMPAT_DISP_IOCTL_CREATE_SESSION:
@@ -1759,12 +1738,6 @@ static long mtk_disp_mgr_compat_ioctl(struct file *file, unsigned int cmd,  unsi
 		{
 		    return _compat_ioctl_set_output_buffer(file, arg);
 		}
-	case DISP_IOCTL_SET_SCENARIO:
-	{
-		/* arg of this ioctl is all unsigned int, don't need special compat ioctl */
-		return file->f_op->unlocked_ioctl(file, cmd, (unsigned long)data32);
-	}
-
 	case DISP_IOCTL_AAL_GET_HIST:
 	case DISP_IOCTL_AAL_EVENTCTL:
 	case DISP_IOCTL_AAL_INIT_REG:
@@ -1852,11 +1825,7 @@ static int mtk_disp_mgr_probe(struct platform_device *pdev)
 	mtk_disp_mgr_cdev->owner = THIS_MODULE;
 	mtk_disp_mgr_cdev->ops = &mtk_disp_mgr_fops;
 
-	if (cdev_add(mtk_disp_mgr_cdev, mtk_disp_mgr_devno, 1)) {
-		cdev_del(mtk_disp_mgr_cdev);
-		unregister_chrdev_region(mtk_disp_mgr_devno, 1);
-		return -EFAULT;
-	}
+	cdev_add(mtk_disp_mgr_cdev, mtk_disp_mgr_devno, 1);
 
 	mtk_disp_mgr_class = class_create(THIS_MODULE, DISP_SESSION_DEVICE);
 	class_dev =
@@ -1918,8 +1887,83 @@ static struct platform_device mtk_disp_mgr_device = {
 	.num_resources = 0,
 };
 
+#ifdef CONFIG_MTK_VIDEOX_CYNGN_LIVEDISPLAY
+#define MAX_LUT_SCALE 2000
+#define PROGRESSION_SCALE 1000
+static u32 mtk_disp_ld_r = MAX_LUT_SCALE;
+static u32 mtk_disp_ld_g = MAX_LUT_SCALE;
+static u32 mtk_disp_ld_b = MAX_LUT_SCALE;
+
+static ssize_t mtk_disp_ld_get_rgb(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%d %d %d\n", mtk_disp_ld_r, mtk_disp_ld_g, mtk_disp_ld_b);
+}
+
+/**
+ * The default gamma array is an arithmetic progression with alpha=2 and n0=0 and
+ * n = 512.
+ *
+ * We scale it linearly with the color passed to this RGB interface. The display
+ * subsystem has a color precision of 10 bits which means that values from [0-1024[
+ * are acceptable.
+ *
+ * In order to avoid floating point computations in kernel space we scale the alpha
+ * value by 1000 and then scale back the result using integer division.
+ */
+static ssize_t mtk_disp_ld_set_rgb(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	int r = MAX_LUT_SCALE, g = MAX_LUT_SCALE, b = MAX_LUT_SCALE;
+
+	if (count > 19)
+		return -EINVAL;
+
+	sscanf(buf, "%d %d %d", &r, &g, &b);
+
+	if (r < 0 || r > MAX_LUT_SCALE) return -EINVAL;
+	if (g < 0 || g > MAX_LUT_SCALE) return -EINVAL;
+	if (b < 0 || b > MAX_LUT_SCALE) return -EINVAL;
+
+	cancel_work_sync(&mtk_rgb_work_queue.work);
+	mtk_disp_ld_r = r;
+	mtk_disp_ld_g = g;
+	mtk_disp_ld_b = b;
+	schedule_work(&mtk_rgb_work_queue.work);
+
+	return count;
+}
+
+static DEVICE_ATTR(rgb, S_IRUGO | S_IWUSR | S_IWGRP, mtk_disp_ld_get_rgb, mtk_disp_ld_set_rgb);
+
+static void mtk_disp_rgb_work(struct work_struct *work) {
+        struct mtk_rgb_work_queue *rgb_wq = container_of(work, struct mtk_rgb_work_queue, work);
+	int r = mtk_disp_ld_r, g = mtk_disp_ld_g, b = mtk_disp_ld_b;
+	int i, gammutR, gammutG, gammutB, ret;
+	DISP_GAMMA_LUT_T *gamma;
+
+	mutex_lock(&rgb_wq->lock);
+
+	gamma = kzalloc(sizeof(DISP_GAMMA_LUT_T), GFP_KERNEL);
+	gamma->hw_id = 0;
+	for (i = 0; i < 512; i++) {
+		gammutR = i * r / PROGRESSION_SCALE;
+		gammutG = i * g / PROGRESSION_SCALE;
+		gammutB = i * b / PROGRESSION_SCALE;
+
+		gamma->lut[i] = GAMMA_ENTRY(gammutR, gammutG, gammutB);
+	}
+
+	ret = primary_display_user_cmd(DISP_IOCTL_SET_GAMMALUT, (unsigned long)gamma);
+
+	kfree(gamma);
+	mutex_unlock(&rgb_wq->lock);
+}
+#endif
+
 static int __init mtk_disp_mgr_init(void)
 {
+	int rc = 0;
 	pr_debug("mtk_disp_mgr_init\n");
 	if (platform_device_register(&mtk_disp_mgr_device))
 		return -ENODEV;
@@ -1929,13 +1973,22 @@ static int __init mtk_disp_mgr_init(void)
 		platform_device_unregister(&mtk_disp_mgr_device);
 		return -ENODEV;
 	}
+#ifdef CONFIG_MTK_VIDEOX_CYNGN_LIVEDISPLAY
+	rc = sysfs_create_file(&(mtk_disp_mgr_device.dev.kobj), &dev_attr_rgb.attr);
+	mutex_init(&mtk_rgb_work_queue.lock);
+	INIT_WORK(&mtk_rgb_work_queue.work, mtk_disp_rgb_work);
+#endif
 
-
-	return 0;
+	return rc;
 }
 
 static void __exit mtk_disp_mgr_exit(void)
 {
+#ifdef CONFIG_MTK_VIDEOX_CYNGN_LIVEDISPLAY
+	mutex_destroy(&mtk_rgb_work_queue.lock);
+	sysfs_remove_file(&(mtk_disp_mgr_device.dev.kobj), &dev_attr_rgb.attr);
+#endif
+
 	cdev_del(mtk_disp_mgr_cdev);
 	unregister_chrdev_region(mtk_disp_mgr_devno, 1);
 

@@ -250,8 +250,6 @@ struct battery_meter_custom_data {
 	/* SW Fuel gauge */
 	int apsleep_battery_voltage_compensate;
 
-	int bat_task_period;
-
 };
 
 #endif
@@ -324,7 +322,6 @@ typedef enum {
 	FG_DAEMON_CMD_SET_SWSOC,
 	FG_DAEMON_CMD_SET_HWSOC,
 	FG_DAEMON_CMD_SET_VBATSOC,
-	FG_DAEMON_CMD_SET_CAR_TUNE_VALUE,
 
 	FG_DAEMON_CMD_FROM_USER_NUMBER
 } FG_DAEMON_CTRL_CMD_FROM_USER;
@@ -412,7 +409,6 @@ extern void fgauge_algo_run_get_init_data(void);
 extern void battery_meter_set_init_flag(kal_bool flag);
 extern void battery_meter_reset_sleep_time(void);
 extern int battery_meter_get_low_battery_interrupt_status(void);
-extern signed int battery_meter_meta_tool_cali_car_tune(int);
 extern void mt_battery_set_init_vol(int);
 
 #if defined(CONFIG_MTK_HAFG_20)

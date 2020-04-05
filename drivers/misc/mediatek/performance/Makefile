@@ -13,4 +13,3 @@
 
 obj-y += fliper/
 obj-y += perfmgr/
-obj-y += smart/

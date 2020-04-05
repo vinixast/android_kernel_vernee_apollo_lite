@@ -11,5 +11,7 @@
 # GNU General Public License for more details.
 #
 
+# include $(srctree)/drivers/misc/mediatek/Makefile.custom
+
 obj-y += sim_switch.o
 

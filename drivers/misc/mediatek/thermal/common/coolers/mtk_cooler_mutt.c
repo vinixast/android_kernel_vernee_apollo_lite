@@ -17,7 +17,7 @@
 #include <linux/types.h>
 #include <linux/kobject.h>
 #include <linux/proc_fs.h>
-#include <linux/uaccess.h>
+#include <asm/uaccess.h>
 #include <linux/err.h>
 #include <linux/syscalls.h>
 #include "mt-plat/mtk_thermal_monitor.h"
@@ -39,7 +39,7 @@ static struct task_struct *ptmd_task = &tmd_task;
 
 #if FEATURE_MUTT_V2
 /* signal */
-#define MAX_LEN	128
+#define MAX_LEN	256
 static unsigned int tm_pid;
 static unsigned int tm_input_pid;
 static struct task_struct g_task;
@@ -193,14 +193,12 @@ static int clmutt_send_tmd_signal(int level)
 	return ret;
 }
 
-static ssize_t clmutt_tmd_pid_write(struct file *filp, const char __user *buf, size_t count,
+static ssize_t clmutt_tmd_pid_write(struct file *filp, const char __user *buf, size_t len,
 				    loff_t *data)
 {
 	int ret = 0;
 	char tmp[MAX_LEN] = { 0 };
-	int len = 0;
 
-	len = (count < (MAX_LEN - 1)) ? count : (MAX_LEN - 1);
 	/* write data to the buffer */
 	if (copy_from_user(tmp, buf, len))
 		return -EFAULT;
@@ -293,13 +291,11 @@ static int clmutt_send_tm_signal(int level)
 	return ret;
 }
 
-static ssize_t clmutt_tm_pid_write(struct file *filp, const char __user *buf, size_t count, loff_t *data)
+static ssize_t clmutt_tm_pid_write(struct file *filp, const char __user *buf, size_t len, loff_t *data)
 {
 	int ret = 0;
 	char tmp[MAX_LEN] = {0};
-	int len = 0;
 
-	len = (count < (MAX_LEN - 1)) ? count : (MAX_LEN - 1);
 	/* write data to the buffer */
 	if (copy_from_user(tmp, buf, len))
 		return -EFAULT;
@@ -852,11 +848,6 @@ static int _mtk_cl_mutt_proc_read(struct seq_file *m, void *v)
 			seq_printf(m, "mtk-cl-mutt%02d %u %u %x, state %lu\n", i, active, suspend,
 				   cl_mutt_param[i], curr_state);
 		}
-
-#if FEATURE_ADAPTIVE_MUTT
-		seq_printf(m, "amutt_target_temp %d\n", MD_target_t);
-#endif
-
 	}
 
 	return 0;
@@ -867,8 +858,7 @@ static ssize_t _mtk_cl_mutt_proc_write(struct file *filp, const char __user *buf
 {
 	int len = 0;
 	char desc[128];
-	int klog_on, mutt0_a, mutt0_s, mutt1_a, mutt1_s, mutt2_a, mutt2_s, mutt3_a, mutt3_s, amutt_target_temp;
-	int scan_count = 0;
+	int klog_on, mutt0_a, mutt0_s, mutt1_a, mutt1_s, mutt2_a, mutt2_s, mutt3_a, mutt3_s;
 
 	len = (count < (sizeof(desc) - 1)) ? count : (sizeof(desc) - 1);
 	if (copy_from_user(desc, buffer, len))
@@ -892,11 +882,9 @@ static ssize_t _mtk_cl_mutt_proc_write(struct file *filp, const char __user *buf
 	/* cl_mutt_param[1] = 0; */
 	/* cl_mutt_param[2] = 0; */
 
-	scan_count = sscanf(desc, "%d %d %d %d %d %d %d %d %d %d",
+	if (1 <= sscanf(desc, "%d %d %d %d %d %d %d %d %d",
 			&klog_on, &mutt0_a, &mutt0_s, &mutt1_a, &mutt1_s, &mutt2_a, &mutt2_s,
-			&mutt3_a, &mutt3_s, &amutt_target_temp);
-
-	if (1 <= scan_count) {
+			&mutt3_a, &mutt3_s)) {
 		if (klog_on == 0 || klog_on == 1)
 			cl_mutt_klog_on = klog_on;
 
@@ -920,10 +908,6 @@ static ssize_t _mtk_cl_mutt_proc_write(struct file *filp, const char __user *buf
 		else if (mutt3_a >= 100 && mutt3_a <= 25500 && mutt3_s >= 100 && mutt3_s <= 25500)
 			cl_mutt_param[3] = ((mutt3_s / 100) << 16) | ((mutt3_a / 100) << 8) | 1;
 
-#if FEATURE_ADAPTIVE_MUTT
-		if (scan_count > 1+MAX_NUM_INSTANCE_MTK_COOLER_MUTT*2)
-			MD_target_t = amutt_target_temp;
-#endif
 		return count;
 	}
 #else

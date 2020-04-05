@@ -74,8 +74,6 @@ typedef enum ipi_id {
 	IPI_DUMP_REG,
 	IPI_SCP_STATE,
 	IPI_DVFS_SET_FREQ,
-	IPI_CHRE,
-	IPI_CHREX,
 	SCP_NR_IPI,
 } ipi_id;
 
@@ -92,7 +90,7 @@ struct scp_ipi_desc {
 	const char *name;
 };
 
-#define SHARE_BUF_SIZE 288
+#define SHARE_BUF_SIZE 64
 struct share_obj {
 	enum ipi_id id;
 	unsigned int len;

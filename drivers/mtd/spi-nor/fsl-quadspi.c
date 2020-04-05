@@ -214,6 +214,7 @@ static struct fsl_qspi_devtype_data imx6sx_data = {
 
 #define FSL_QSPI_MAX_CHIP	4
 struct fsl_qspi {
+	struct mtd_info mtd[FSL_QSPI_MAX_CHIP];
 	struct spi_nor nor[FSL_QSPI_MAX_CHIP];
 	void __iomem *iobase;
 	void __iomem *ahb_base; /* Used when read from AHB bus */
@@ -226,7 +227,6 @@ struct fsl_qspi {
 	u32 nor_num;
 	u32 clk_rate;
 	unsigned int chip_base_addr; /* We may support two chips. */
-	bool has_second_chip;
 };
 
 static inline int is_vybrid_qspi(struct fsl_qspi *q)
@@ -677,7 +677,8 @@ static int fsl_qspi_read_reg(struct spi_nor *nor, u8 opcode, u8 *buf, int len)
 	return 0;
 }
 
-static int fsl_qspi_write_reg(struct spi_nor *nor, u8 opcode, u8 *buf, int len)
+static int fsl_qspi_write_reg(struct spi_nor *nor, u8 opcode, u8 *buf, int len,
+			int write_enable)
 {
 	struct fsl_qspi *q = nor->priv;
 	int ret;
@@ -741,10 +742,15 @@ static int fsl_qspi_erase(struct spi_nor *nor, loff_t offs)
 	int ret;
 
 	dev_dbg(nor->dev, "%dKiB at 0x%08x:0x%08x\n",
-		nor->mtd.erasesize / 1024, q->chip_base_addr, (u32)offs);
+		nor->mtd->erasesize / 1024, q->chip_base_addr, (u32)offs);
 
 	/* Wait until finished previous write command. */
 	ret = nor->wait_till_ready(nor);
+	if (ret)
+		return ret;
+
+	/* Send write enable, then erase commands. */
+	ret = nor->write_reg(nor, SPINOR_OP_WREN, NULL, 0, 0);
 	if (ret)
 		return ret;
 
@@ -793,6 +799,7 @@ static int fsl_qspi_probe(struct platform_device *pdev)
 	struct spi_nor *nor;
 	struct mtd_info *mtd;
 	int ret, i = 0;
+	bool has_second_chip = false;
 	const struct of_device_id *of_id =
 			of_match_device(fsl_qspi_dt_ids, &pdev->dev);
 
@@ -870,22 +877,23 @@ static int fsl_qspi_probe(struct platform_device *pdev)
 		goto irq_failed;
 
 	if (of_get_property(np, "fsl,qspi-has-second-chip", NULL))
-		q->has_second_chip = true;
+		has_second_chip = true;
 
 	/* iterate the subnodes. */
 	for_each_available_child_of_node(dev->of_node, np) {
 		char modalias[40];
 
 		/* skip the holes */
-		if (!q->has_second_chip)
+		if (!has_second_chip)
 			i *= 2;
 
 		nor = &q->nor[i];
-		mtd = &nor->mtd;
+		mtd = &q->mtd[i];
 
+		nor->mtd = mtd;
 		nor->dev = dev;
-		spi_nor_set_flash_node(nor, np);
 		nor->priv = q;
+		mtd->priv = nor;
 
 		/* fill the hooks */
 		nor->read_reg = fsl_qspi_read_reg;
@@ -951,12 +959,9 @@ static int fsl_qspi_probe(struct platform_device *pdev)
 	return 0;
 
 last_init_failed:
-	for (i = 0; i < q->nor_num; i++) {
-		/* skip the holes */
-		if (!q->has_second_chip)
-			i *= 2;
-		mtd_device_unregister(&q->nor[i].mtd);
-	}
+	for (i = 0; i < q->nor_num; i++)
+		mtd_device_unregister(&q->mtd[i]);
+
 irq_failed:
 	clk_disable_unprepare(q->clk);
 	clk_disable_unprepare(q->clk_en);
@@ -970,12 +975,8 @@ static int fsl_qspi_remove(struct platform_device *pdev)
 	struct fsl_qspi *q = platform_get_drvdata(pdev);
 	int i;
 
-	for (i = 0; i < q->nor_num; i++) {
-		/* skip the holes */
-		if (!q->has_second_chip)
-			i *= 2;
-		mtd_device_unregister(&q->nor[i].mtd);
-	}
+	for (i = 0; i < q->nor_num; i++)
+		mtd_device_unregister(&q->mtd[i]);
 
 	/* disable the hardware */
 	writel(QUADSPI_MCR_MDIS_MASK, q->iobase + QUADSPI_MCR);

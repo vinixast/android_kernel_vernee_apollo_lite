@@ -29,24 +29,32 @@ ifeq ($(CONFIG_ARCH_MT6735),y)
 ccflags-y += -I$(srctree)/drivers/clk/mediatek
 ccflags-y += -DSMI_D1
 obj-y += mmdvfs_mgr.o
-else ifeq ($(CONFIG_ARCH_MT6735M),y)
+endif
+
+ifeq ($(CONFIG_ARCH_MT6735M),y)
 ccflags-y += -DSMI_D2
 obj-y += mmdvfs_mgr.o
-else ifeq ($(CONFIG_ARCH_MT6753),y)
+endif
+
+ifeq ($(CONFIG_ARCH_MT6753),y)
 ccflags-y += -DSMI_D3
 obj-y += mmdvfs_mgr.o
-else ifeq ($(CONFIG_ARCH_MT6580),y)
+endif
+
+ifeq ($(CONFIG_ARCH_MT6580),y)
 ccflags-y += -DSMI_R
-else ifeq ($(CONFIG_ARCH_MT6755),y)
+endif
+
+ifeq ($(CONFIG_ARCH_MT6755),y)
 ccflags-y += -DSMI_J
 ccflags-y += -I$(srctree)/drivers/clk/mediatek
 obj-y += mmdvfs_mgr_v2.o
-else ifeq ($(CONFIG_ARCH_MT6797),y)
+endif
+
+ifeq ($(CONFIG_ARCH_MT6797),y)
 ccflags-y += -DSMI_EV
 ccflags-y += -I$(srctree)/drivers/clk/mediatek
 obj-y += mmdvfs_mgr_v2.o
-else 
-ccflags-y += -DSMI_BRINGUP
 endif
 
 else

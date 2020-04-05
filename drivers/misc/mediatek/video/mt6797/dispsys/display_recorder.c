@@ -198,14 +198,12 @@ static unsigned int analysize_length;
 
 char dprec_error_log_buffer[DPREC_ERROR_LOG_BUFFER_LENGTH];
 static dprec_logger_event dprec_vsync_irq_event;
-#ifdef CONFIG_TRACING
 static met_log_map dprec_met_info[DISP_SESSION_MEMORY + 2] = {
 	{"UNKWON", 0, 0},
 	{"OVL0-DSI", 0, 0},
 	{"OVL1-MHL", 0, 0},
 	{"OVL1-SMS", 0, 0},
 };
-#endif
 
 int dprec_init(void)
 {
@@ -1041,10 +1039,10 @@ void dprec_logger_vdump(const char *fmt, ...)
 	va_list vargs;
 	int tmp;
 
+	va_start(vargs, fmt);
+
 	if (analysize_length >= dprec_dump_max_length - 10)
 		return;
-
-	va_start(vargs, fmt);
 
 	tmp = vscnprintf(dprec_string_buffer_analysize + analysize_length,
 		      dprec_dump_max_length - analysize_length, fmt, vargs);
@@ -1244,21 +1242,13 @@ void init_log_buffer(void)
 	is_buffer_init = true;
 	pr_warn("[DISP]%s success\n", __func__);
 	return;
-
 err:
-	kfree(status_buffer);
-	kfree(dump_buffer);
-	kfree(dbg_buffer);
-	kfree(fence_buffer);
-	kfree(err_buffer);
-	kfree(debug_buffer);
-
-	status_buffer = 0;
-	dump_buffer = 0;
-	dbg_buffer = 0;
-	fence_buffer = 0;
 	err_buffer = 0;
+	fence_buffer = 0;
+	dbg_buffer = 0;
+	dump_buffer = 0;
 	debug_buffer = 0;
+	status_buffer = 0;
 	pr_err("[DISP]%s: log buffer allocation fail\n", __func__);
 }
 

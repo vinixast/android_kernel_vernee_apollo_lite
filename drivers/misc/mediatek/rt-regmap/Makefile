@@ -1,1 +1,1 @@
-obj-$(CONFIG_RT_REGMAP) += rt-regmap.o
+obj-$(CONFIG_RT_REGMAP)	+= rt-regmap.o

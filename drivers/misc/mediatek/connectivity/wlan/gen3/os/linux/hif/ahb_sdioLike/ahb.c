@@ -1,17 +1,3 @@
-/*
-* Copyright (C) 2016 MediaTek Inc.
-*
-* This program is free software: you can redistribute it and/or modify it under the terms of the
-* GNU General Public License version 2 as published by the Free Software Foundation.
-*
-* This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
-* without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-* See the GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License along with this program.
-* If not, see <http://www.gnu.org/licenses/>.
-*/
-
 /******************************************************************************
 *[File]             ahb.c
 *[Version]          v1.0
@@ -22,6 +8,128 @@
 *[Copyright]
 *    Copyright (C) 2013 MediaTek Incorporation. All Rights Reserved.
 ******************************************************************************/
+
+/*
+** Log: ahb.c
+ *
+ * 01 16 2013 vend_samp.lin
+ * Port sdio.c to ahb.c on MT6572/MT6582
+ * 1) Initial version
+ *
+ * 04 12 2012 terry.wu
+ * NULL
+ * Add AEE message support
+ * 1) Show AEE warning(red screen) if SDIO access error occurs
+ *
+ * 02 14 2012 cp.wu
+ * [WCXRP00000851] [MT6628 Wi-Fi][Driver] Add HIFSYS related definition to driver source tree
+ * include correct header file upon setting.
+ *
+ * 11 10 2011 cp.wu
+ * [WCXRP00001098] [MT6620 Wi-Fi][Driver] Replace printk by DBG LOG macros in linux porting layer
+ * 1. eliminaite direct calls to printk in porting layer.
+ * 2. replaced by DBGLOG, which would be XLOG on ALPS platforms.
+ *
+ * 09 20 2011 cp.wu
+ * [WCXRP00000994] [MT6620 Wi-Fi][Driver] dump message for bus error and reset bus error flag while re-initialized
+ * 1. always show error message for SDIO bus errors.
+ * 2. reset bus error flag when re-initialization
+ *
+ * 08 17 2011 cp.wu
+ * [WCXRP00000851] [MT6628 Wi-Fi][Driver] Add HIFSYS related definition to driver source tree
+ * add MT6628 related definitions for Linux/Android driver.
+ *
+ * 05 18 2011 cp.wu
+ * [WCXRP00000702] [MT5931][Driver] Modify initialization sequence for E1 ASIC
+ * add device ID for MT5931.
+ *
+ * 04 08 2011 pat.lu
+ * [WCXRP00000623] [MT6620 Wi-Fi][Driver] use ARCH define to distinguish PC Linux driver
+ * Use CONFIG_X86 instead of PC_LINUX_DRIVER_USE option to have proper compile settting for PC Linux driver
+ *
+ * 03 22 2011 pat.lu
+ * [WCXRP00000592] [MT6620 Wi-Fi][Driver] Support PC Linux Environment Driver Build
+ * Add a compiler option "PC_LINUX_DRIVER_USE" for building driver in PC Linux environment.
+ *
+ * 03 18 2011 cp.wu
+ * [WCXRP00000559] [MT6620 Wi-Fi][Driver] Combine TX/RX DMA buffers into a single one to reduce physically continuous
+ * memory consumption
+ * deprecate CFG_HANDLE_IST_IN_SDIO_CALLBACK.
+ *
+ * 03 15 2011 cp.wu
+ * [WCXRP00000559] [MT6620 Wi-Fi][Driver] Combine TX/RX DMA buffers into a single one to reduce physically continuous
+ * memory consumption
+ * 1. deprecate CFG_HANDLE_IST_IN_SDIO_CALLBACK
+ * 2. Use common coalescing buffer for both TX/RX directions
+ *
+ *
+ * 03 07 2011 terry.wu
+ * [WCXRP00000521] [MT6620 Wi-Fi][Driver] Remove non-standard debug message
+ * Toggle non-standard debug messages to comments.
+ *
+ * 11 15 2010 jeffrey.chang
+ * [WCXRP00000181] [MT6620 Wi-Fi][Driver] fix the driver message "GLUE_FLAG_HALT skip INT" during unloading
+ * Fix GLUE_FALG_HALT message which cause driver to hang
+ *
+ * 11 08 2010 cp.wu
+ * [WCXRP00000166] [MT6620 Wi-Fi][Driver] use SDIO CMD52 for enabling/disabling interrupt to reduce transaction period
+ * correct typo
+ *
+ * 11 08 2010 cp.wu
+ * [WCXRP00000166] [MT6620 Wi-Fi][Driver] use SDIO CMD52 for enabling/disabling interrupt to reduce transaction period
+ * change to use CMD52 for enabling/disabling interrupt to reduce SDIO transaction time
+ *
+ * 11 01 2010 yarco.yang
+ * [WCXRP00000149] [MT6620 WI-Fi][Driver]Fine tune performance on MT6516 platform
+ * Add code to run WlanIST in SDIO callback.
+ *
+ * 10 19 2010 cp.wu
+ * [WCXRP00000122] [MT6620 Wi-Fi][Driver] Preparation for YuSu source tree integration
+ * remove HIF_SDIO_ONE flags because the settings could be merged for runtime detection instead of compile-time.
+ *
+ * 10 19 2010 jeffrey.chang
+ * [WCXRP00000120] [MT6620 Wi-Fi][Driver] Refine linux kernel module to the license of MTK propietary and enable MTK
+ * HIF by default
+ * Refine linux kernel module to the license of MTK and enable MTK HIF
+ *
+ * 08 21 2010 jeffrey.chang
+ * NULL
+ * 1) add sdio two setting
+ * 2) bug fix of sdio glue
+ *
+ * 08 18 2010 jeffrey.chang
+ * NULL
+ * support multi-function sdio
+ *
+ * 08 18 2010 cp.wu
+ * NULL
+ * #if defined(__X86__) is not working, change to use #ifdef CONFIG_X86.
+ *
+ * 08 17 2010 cp.wu
+ * NULL
+ * add ENE SDIO host workaround for x86 linux platform.
+ *
+ * 07 08 2010 cp.wu
+ *
+ * [WPD00003833] [MT6620 and MT5931] Driver migration - move to new repository.
+ *
+ * 06 06 2010 kevin.huang
+ * [WPD00003832][MT6620 5931] Create driver base
+ * [MT6620 5931] Create driver base
+ *
+ * 05 07 2010 jeffrey.chang
+ * [WPD00003826]Initial import for Linux port
+ * Fix hotplug bug
+ *
+ * 03 28 2010 jeffrey.chang
+ * [WPD00003826]Initial import for Linux port
+ * clear sdio interrupt
+ *
+ * 03 24 2010 jeffrey.chang
+ * [WPD00003826]Initial import for Linux port
+ * initial import for Linux port
+**
+*/
 
 /*******************************************************************************
 *                         C O M P I L E R   F L A G S
@@ -217,9 +325,13 @@ struct platform_driver MtkPltmAhbDriver = {
 	.remove = __exit_p(HifAhbPltmRemove),
 };
 
-UINT_32 IsrCnt = 0, IsrPassCnt = 0, TaskIsrCnt = 0; /* MT6797 */ 
+UINT_32 IsrCnt = 0, IsrPassCnt = 0, TaskIsrCnt = 0; /* MT6797 */
 static struct platform_device *HifAhbPDev;
 
+#if HIF_SEM_LOCK
+struct semaphore gPortRwSema;
+struct task_struct *gPortRwTask;
+#endif
 #endif /* CONF_HIF_DEV_MISC */
 
 /*******************************************************************************
@@ -341,6 +453,11 @@ VOID glSetHifInfo(GLUE_INFO_T *GlueInfo, ULONG ulCookie)
 	HifInfo->confRegBaseAddr = ioremap(DYNAMIC_REMAP_CONF_BASE, DYNAMIC_REMAP_CONF_LENGTH);
 #endif
 	g_pHifRegBaseAddr = &(HifInfo->HifRegBaseAddr);
+
+#if HIF_SEM_LOCK
+	sema_init(&gPortRwSema, 1);
+	gPortRwTask = NULL;
+#endif
 
 	DBGLOG(INIT, INFO, "[WiFi/HIF]HifInfo->HifRegBaseAddr=0x%p, HifInfo->McuRegBaseAddr=0x%p\n",
 	       HifInfo->HifRegBaseAddr, HifInfo->McuRegBaseAddr);
@@ -840,7 +957,7 @@ kalDevPortRead(IN P_GLUE_INFO_T GlueInfo, IN UINT_16 Port, IN UINT_32 Size, OUT 
 	info.field.addr = Port;
 
 
-	DBGLOG(HAL, TRACE, "use_dma(%d), count(%d->%d), blk size(%d), CMD_SETUP(0x%x)\n",
+	DBGLOG(RX, TRACE, "use_dma(%d), count(%d->%d), blk size(%d), CMD_SETUP(0x%x)\n",
 		 func->use_dma, Size, count, func->cur_blksize, info.word);
 
 #if (CONF_MTK_AHB_DMA == 1)
@@ -852,13 +969,17 @@ kalDevPortRead(IN P_GLUE_INFO_T GlueInfo, IN UINT_16 Port, IN UINT_32 Size, OUT 
 	}
 #endif
 
+#if HIF_SEM_LOCK
+	my_sdio_disable(gPortRwSema, gPortRwTask);
+#else
 	my_sdio_disable(HifLock);
+#endif
 	__disable_irq();
 
 	writel(info.word, (volatile UINT_32 *)(*g_pHifRegBaseAddr + SDIO_GEN3_CMD_SETUP));
 	wmb();
-	DBGLOG(HAL, TRACE, "basic writel CmdInfo addr = %x, info = %x, HifBase = %p\n",
-		Port, info.word, HifInfo->HifRegBaseAddr);
+	DBGLOG(RX, TRACE, "basic writel CmdInfo addr = %x, info = %x, HifBase = %p\n", Port, info.word, HifInfo->HifRegBaseAddr);
+
 	}
 
 
@@ -1000,7 +1121,12 @@ kalDevPortRead(IN P_GLUE_INFO_T GlueInfo, IN UINT_16 Port, IN UINT_32 Size, OUT 
 #endif /* MTK_DMA_BUF_MEMCPY_SUP */
 
 		__enable_irq();
+#if HIF_SEM_LOCK
+		my_sdio_enable(gPortRwSema);
+#else
 		my_sdio_enable(HifLock);
+#endif
+
 
 		if (pfWlanDmaOps != NULL)
 			pfWlanDmaOps->DmaClockCtrl(FALSE);
@@ -1015,14 +1141,16 @@ kalDevPortRead(IN P_GLUE_INFO_T GlueInfo, IN UINT_16 Port, IN UINT_32 Size, OUT 
 
 		for (IdLoop = 0; IdLoop < MaxLoop; IdLoop++) {
 			*LoopBuf = readl((volatile UINT_32 *)(*g_pHifRegBaseAddr + SDIO_GEN3_CMD53_DATA));
-			DBGLOG(HAL, TRACE, "basic readl idx = %x, addr = %x, rVal = %x, HifBase = %p\n",
-				IdLoop, Port, *LoopBuf, HifInfo->HifRegBaseAddr);
+			DBGLOG(RX, TRACE, "basic readl idx = %x, addr = %x, rVal = %x, HifBase = %p\n", IdLoop, Port, *LoopBuf, HifInfo->HifRegBaseAddr);
 			LoopBuf++;
 		}
 
 		__enable_irq();
+#if HIF_SEM_LOCK
+		my_sdio_enable(gPortRwSema);
+#else
 		my_sdio_enable(HifLock);
-
+#endif
 	}
 
 	return TRUE;
@@ -1130,12 +1258,16 @@ kalDevPortWrite(IN P_GLUE_INFO_T GlueInfo, IN UINT_16 Port, IN UINT_32 Size, IN 
 	}
 #endif
 
+#if HIF_SEM_LOCK
+	my_sdio_disable(gPortRwSema, gPortRwTask);
+#else
 	my_sdio_disable(HifLock);
+#endif
 	__disable_irq();
 
 	writel(info.word, (volatile UINT_32 *)(*g_pHifRegBaseAddr + SDIO_GEN3_CMD_SETUP));
 	wmb();
-	DBGLOG(TX, TRACE, "basic writel CmdInfo addr = %x, info = %x, HifBase = %p\n", Port, info.word, HifInfo->HifRegBaseAddr);	
+	DBGLOG(TX, TRACE, "basic writel CmdInfo addr = %x, info = %x, HifBase = %p\n", Port, info.word, HifInfo->HifRegBaseAddr);
 	}
 
 
@@ -1261,7 +1393,11 @@ kalDevPortWrite(IN P_GLUE_INFO_T GlueInfo, IN UINT_16 Port, IN UINT_32 Size, IN 
 #endif /* MTK_DMA_BUF_MEMCPY_SUP */
 
 		__enable_irq();
+#if HIF_SEM_LOCK
+		my_sdio_enable(gPortRwSema);
+#else
 		my_sdio_enable(HifLock);
+#endif
 
 		if (pfWlanDmaOps != NULL)
 			pfWlanDmaOps->DmaClockCtrl(FALSE);
@@ -1288,7 +1424,11 @@ kalDevPortWrite(IN P_GLUE_INFO_T GlueInfo, IN UINT_16 Port, IN UINT_32 Size, IN 
 		}
 
 		__enable_irq();
+#if HIF_SEM_LOCK
+		my_sdio_enable(gPortRwSema);
+#else
 		my_sdio_enable(HifLock);
+#endif
 
 		HIF_DBG_TX(("\n\n"));
 	}
@@ -1326,7 +1466,6 @@ static irqreturn_t HifAhbISR(IN int Irq, IN void *Arg)
 	if (!GlueInfo)
 		return IRQ_HANDLED;
 
-	GlueInfo->u8HifIntTime = sched_clock();
 	HifInfo = &GlueInfo->rHifInfo;
 	GlueInfo->IsrCnt++;
 	if (GlueInfo->ulFlag & GLUE_FLAG_HALT) {
@@ -1336,9 +1475,6 @@ static irqreturn_t HifAhbISR(IN int Irq, IN void *Arg)
 
 	__disable_irq();
 
-	/* lock 100ms to avoid suspend */
-    /* MT6797 TODO */
-	/* kalHifAhbKalWakeLockTimeout(GlueInfo); */
 
 	/* Wake up main thread */
 	set_bit(GLUE_FLAG_INT_BIT, &GlueInfo->ulFlag);

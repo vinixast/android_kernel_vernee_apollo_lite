@@ -156,7 +156,6 @@ const char *reason_name[NR_REASONS] = {
 	"by_iso",
 #endif
 	"by_dvfsp",
-	"by_conn",
 };
 
 static char cg_group_name[NR_GRPS][10] = {
@@ -417,12 +416,10 @@ bool is_disp_pwm_rosc(void)
 
 bool is_auxadc_released(void)
 {
-#if 0
 	if (~idle_readl(INFRA_SW_CG_0_STA) & AUXADC_CG_STA) {
 		idle_dbg("AUXADC CG does not be released\n");
 		return false;
 	}
-#endif
 	return true;
 }
 

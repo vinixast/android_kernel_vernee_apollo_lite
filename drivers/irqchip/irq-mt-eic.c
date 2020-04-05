@@ -30,7 +30,6 @@
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
 #include <linux/slab.h>
-#include <linux/gpio.h>
 #include <mt-plat/sync_write.h>
 #include <mt-plat/mt_io.h>
 #include <mt-plat/mt_gpio.h>
@@ -85,7 +84,6 @@ struct eint_func {
 	unsigned int *deb_time;
 	struct timer_list *eint_sw_deb_timer;
 	unsigned int *count;
-	unsigned int *gpio;
 };
 
 #ifdef CONFIG_MTK_EIC_HISTORY_DUMP
@@ -150,9 +148,6 @@ static struct eint_func EINT_FUNC;
 static unsigned int MAX_HW_DEBOUNCE_CNT;
 static unsigned int EINT_MAX_CHANNEL;
 static unsigned int MAX_DEINT_CNT;
-static unsigned int EINT_BI_HW_DB_CNT;
-static unsigned int EINT_BI_HW_DB_START;
-static unsigned int EINT_BI_HW_DB_OFFSET;
 
 static void __iomem *EINT_BASE;
 
@@ -183,18 +178,6 @@ static unsigned long cur_debug_eint;
 #ifdef CONFIG_MTK_SEC_DEINT_SUPPORT
 static unsigned long cur_debug_deint;
 #endif
-
-static int is_bulitin_eint_hw_deb(u32 eint_num)
-{
-
-	if (eint_num >= EINT_BI_HW_DB_START &&
-	    eint_num <
-	    EINT_BI_HW_DB_START + EINT_BI_HW_DB_CNT)
-		return 1;
-
-	return 0;
-}
-
 
 static void mt_eint_clr_deint_selection(u32 deint_mapped)
 {
@@ -915,7 +898,7 @@ static unsigned int mt_can_en_debounce(unsigned int eint_num)
  */
 void mt_eint_set_hw_debounce(unsigned int gpio_pin, unsigned int us)
 {
-	unsigned int bit, clr_bit, rst, unmask = 0, eint_num, offset;
+	unsigned int bit, clr_bit, rst, unmask = 0, eint_num;
 	unsigned long base, clr_base;
 	unsigned int i;
 
@@ -932,15 +915,8 @@ void mt_eint_set_hw_debounce(unsigned int gpio_pin, unsigned int us)
 		return;
 	}
 
-	if (is_bulitin_eint_hw_deb(eint_num))
-		offset = ((eint_num - EINT_BI_HW_DB_START) / 4)
-			* 4 + EINT_BI_HW_DB_OFFSET;
-	else
-		offset = (eint_num / 4) * 4;
-
-	base     = EINT_DBNC_SET_BASE + offset;
-	clr_base = EINT_DBNC_CLR_BASE + offset;
-
+	base = (eint_num / 4) * 4 + EINT_DBNC_SET_BASE;
+	clr_base = (eint_num / 4) * 4 + EINT_DBNC_CLR_BASE;
 	EINT_FUNC.deb_time[eint_num] = us;
 
 	/*
@@ -954,6 +930,12 @@ void mt_eint_set_hw_debounce(unsigned int gpio_pin, unsigned int us)
 		return;
 	}
 
+	for (i = 0; i < eint_debtime_setting.deb_entry; i++) {
+		dbnc = eint_debtime_setting.setting[i].setting;
+		if (us <= eint_debtime_setting.setting[i].deb_time)
+			break;
+		}
+
 	/* setp 1: mask the EINT */
 	if (!mt_eint_get_mask(eint_num)) {
 		mt_eint_mask(eint_num);
@@ -963,47 +945,22 @@ void mt_eint_set_hw_debounce(unsigned int gpio_pin, unsigned int us)
 	 * step 2: Check hw debouce number to decide
 	 * which type should be used
 	 */
-	if (eint_num >= MAX_HW_DEBOUNCE_CNT &&
-	    !is_bulitin_eint_hw_deb(eint_num)) {
+	if (eint_num >= MAX_HW_DEBOUNCE_CNT) {
 		pr_debug("eint %d not support hw deboucen\n", eint_num);
 		pr_debug("Use sw debounce\n");
 		mt_eint_en_sw_debounce(eint_num);
 	} else {
-		u32 shift_bit;
-
-		if (is_bulitin_eint_hw_deb(eint_num))
-			shift_bit =
-				((eint_num - EINT_BI_HW_DB_START) % 4) * 8;
-		else
-			shift_bit = (eint_num % 4) * 8;
-
-		for (i = 0; i < eint_debtime_setting.deb_entry; i++) {
-			dbnc = eint_debtime_setting.setting[i].setting;
-			if (us <= eint_debtime_setting.setting[i].deb_time)
-				break;
-		}
-
-		/* correct saved debounce time info */
-		if (i == eint_debtime_setting.deb_entry)
-			i--;
-
-		EINT_FUNC.deb_time[eint_num] =
-			eint_debtime_setting.setting[i].deb_time;
-
-		pr_debug("EINT_FUNC.deb_time[eint_num] = %d\n",
-			 EINT_FUNC.deb_time[eint_num]);
-
 		/* step 2.1: set hw debounce flag */
 		EINT_FUNC.is_deb_en[eint_num] = 1;
 
 		/* step 2.2: disable hw debounce */
-		clr_bit = 0xFF << shift_bit;
+		clr_bit = 0xFF << ((eint_num % 4) * 8);
 		mt_reg_sync_writel(clr_bit, clr_base);
 
 		/* step 2.3: set new debounce value */
 		bit = ((dbnc << EINT_DBNC_SET_DBNC_BITS) |
 		       (EINT_DBNC_SET_EN << EINT_DBNC_SET_EN_BITS))
-			<< shift_bit;
+			<< ((eint_num % 4) * 8);
 		mt_reg_sync_writel(bit, base);
 
 		/* step 2.4: Delay a while (more than 2T) to wait for
@@ -1013,7 +970,7 @@ void mt_eint_set_hw_debounce(unsigned int gpio_pin, unsigned int us)
 		/* step 2.5: Reset hw debounce counter to avoid
 		   unexpected interrupt */
 		rst = (EINT_DBNC_RST_BIT << EINT_DBNC_SET_RST_BITS)
-			<< shift_bit;
+			<< ((eint_num % 4) * 8);
 		mt_reg_sync_writel(rst, base);
 
 		/* step 2.6: Delay a while (more than 2T) to wait for
@@ -1752,87 +1709,31 @@ static void pin_init(void)
 	}
 }
 
-unsigned int mt_gpio_to_eint(unsigned int gpio)
+unsigned int mt_gpio_to_irq(unsigned int gpio)
 {
 	struct pin_node *p;
+	int i = 0;
+
+	if (builtin_entry > 0) {
+		for (i = 0; i < builtin_entry; ++i) {
+			if (gpio == builtin_mapping[i].gpio) {
+				if (mt_get_gpio_mode(gpio) ==
+					builtin_mapping[i].func_mode)
+					return builtin_mapping[i].builtin_eint +
+						EINT_IRQ_BASE;
+			}
+		}
+	}
 
 	if (mapping_table_entry > 0) {
 		p = pin_search(gpio);
 		if (p == NULL)
 			return -EINVAL;
 		else
-			return p->eint_pin;
+			return p->eint_pin + EINT_IRQ_BASE;
 	} else {
-		return gpio;
+		return gpio + EINT_IRQ_BASE;
 	}
-}
-EXPORT_SYMBOL(mt_gpio_to_eint);
-
-static int gpio_to_eint(unsigned int gpio)
-{
-	struct pin_node *p;
-	int i = 0;
-	int eint = -1;
-
-	/*
-	 * check if this gpio configured as builtin eint
-	 */
-	if (builtin_entry > 0) {
-		for (i = 0; i < builtin_entry; ++i) {
-			if (gpio == builtin_mapping[i].gpio) {
-				if (mt_get_gpio_mode(gpio) ==
-					builtin_mapping[i].func_mode) {
-					eint = builtin_mapping[i].builtin_eint;
-					goto done;
-				}
-			}
-		}
-	}
-
-	/*
-	 * if not builtin eint, just find the mapping from normal mapping table,
-	 * or just linear map with gpio if no mapping table
-	 */
-	if (mapping_table_entry > 0) {
-		p = pin_search(gpio);
-		if (p) {
-			eint = p->eint_pin;
-			goto done;
-		} else {
-			WARN_ON(1);
-			return -EINVAL;
-		}
-	} else
-		eint = gpio;
-
-done:
-	return eint;
-}
-
-unsigned int mt_gpio_to_irq(unsigned int gpio)
-{
-	unsigned int virq = 0;
-	int eint = gpio_to_eint(gpio);
-
-	if (eint < 0) {
-		pr_warn("[EIC] no mapped eint for gpio %u\n", gpio);
-		WARN_ON(1);
-		return -1;
-	}
-
-	/*
-	 * since we linearly map eint irq from the first empty irq after the gic,
-	 * we just add eint number to the first virq used by eint to get a new one.
-	 */
-	virq = eint + EINT_IRQ_BASE;
-
-	/*
-	 * some drivers might get their virq by gpio_to_irq(),
-	 * so we init the mapping here too.
-	 */
-	EINT_FUNC.gpio[eint] = gpio;
-
-	return virq;
 }
 EXPORT_SYMBOL(mt_gpio_to_irq);
 
@@ -1851,13 +1752,44 @@ static void mt_eint_irq_ack(struct irq_data *data)
 	mt_eint_ack(data->hwirq);
 }
 
+static unsigned int mt_eint_get_raw_status(unsigned int eint_num)
+{
+	unsigned long base, raw_base;
+	unsigned int bit_pos;
+
+	bit_pos = eint_num % 32;
+	base = eint_num / 32;
+	raw_base = EINT_RAW_STA_BASE + base * 4;
+
+	return ((readl(IOMEM(raw_base)) & (1<<bit_pos))>>bit_pos);
+}
+
 static int mt_eint_get_level(unsigned int eint_num)
 {
-#ifdef CONFIG_GPIOLIB
-	return __gpio_get_value(EINT_FUNC.gpio[eint_num]);
-#else
-	return 0;
-#endif
+	unsigned int prev_mask = mt_eint_get_mask(eint_num);
+	unsigned int prev_pol = mt_eint_get_polarity(eint_num);
+	unsigned int prev_sens = mt_eint_get_sens(eint_num);
+	unsigned int level = 0;
+
+	if (!prev_mask)
+		mt_eint_mask(eint_num);
+
+	mt_eint_set_polarity(eint_num, MT_EINT_POL_POS);
+	mt_eint_set_sens(eint_num, MT_LEVEL_SENSITIVE);
+	mt_eint_ack(eint_num);
+
+	/* if high level can keep pending on raw status
+	 * it means current level is high */
+	level = mt_eint_get_raw_status(eint_num);
+
+	mt_eint_set_polarity(eint_num, prev_pol);
+	mt_eint_set_sens(eint_num, prev_sens);
+	mt_eint_ack(eint_num);
+
+	if (!prev_mask)
+		mt_eint_unmask(eint_num);
+
+	return level;
 }
 
 static unsigned int mt_eint_flip_edge(struct eint_chip *chip,
@@ -1915,7 +1847,6 @@ static struct irq_chip mt_irq_eint = {
 	.irq_unmask = mt_eint_irq_unmask,
 	.irq_ack = mt_eint_irq_ack,
 	.irq_set_type = mt_eint_irq_set_type,
-	.flags = IRQCHIP_SKIP_SET_WAKE,
 };
 
 int mt_eint_domain_xlate_onetwocell(struct irq_domain *d,
@@ -1928,8 +1859,6 @@ int mt_eint_domain_xlate_onetwocell(struct irq_domain *d,
 		return -EINVAL;
 	*out_hwirq = mt_gpio_to_irq(intspec[0]) - EINT_IRQ_BASE;
 	*out_type = (intsize > 1) ? intspec[1] : IRQ_TYPE_NONE;
-	EINT_FUNC.gpio[*out_hwirq] = intspec[0];
-
 	return 0;
 }
 
@@ -1981,7 +1910,6 @@ static int __init mt_eint_init(void)
 {
 	unsigned int i, irq;
 	int irq_base;
-	u32 builtin_eint_dw_deb_array[3];
 	struct irq_domain *domain;
 	struct device_node *node;
 	const __be32 *spec;
@@ -2029,8 +1957,6 @@ static int __init mt_eint_init(void)
 	EINT_FUNC.eint_sw_deb_timer =
 	    kmalloc(sizeof(struct timer_list) * EINT_MAX_CHANNEL, GFP_KERNEL);
 	EINT_FUNC.count = kmalloc(sizeof(unsigned int) * EINT_MAX_CHANNEL,
-					GFP_KERNEL);
-	EINT_FUNC.gpio = kmalloc(sizeof(unsigned int) * EINT_MAX_CHANNEL,
 					GFP_KERNEL);
 	mt_eint_chip = kmalloc(sizeof(struct eint_chip), GFP_KERNEL);
 	mt_eint_chip->max_channel = EINT_MAX_CHANNEL;
@@ -2081,23 +2007,6 @@ static int __init mt_eint_init(void)
 
 		if (of_property_read_u32_array(node, "mediatek,deint_possible_irq", deint_possible_irq, MAX_DEINT_CNT))
 			pr_warn("[EINT] deint function would fail...\n");
-	}
-
-	/* deint hw deboucen*/
-	if (of_property_read_u32_array(
-		    node,
-		    "mediatek,builtin_eint_hw_deb",
-		    &builtin_eint_dw_deb_array[0],
-		    ARRAY_SIZE(builtin_eint_dw_deb_array)))
-		pr_warn("[EIC] no built in eint hw deb property\n");
-	else {
-		EINT_BI_HW_DB_START  = builtin_eint_dw_deb_array[0];
-		EINT_BI_HW_DB_CNT    = builtin_eint_dw_deb_array[1];
-		EINT_BI_HW_DB_OFFSET = builtin_eint_dw_deb_array[2];
-		pr_warn("built in eint hw debounce: start=%d, count=%d, offset=0x%x\n",
-			 EINT_BI_HW_DB_START,
-			 EINT_BI_HW_DB_CNT,
-			 EINT_BI_HW_DB_OFFSET);
 	}
 
 	if (of_property_read_u32(node, "mediatek,builtin_entry",
@@ -2259,52 +2168,34 @@ static int __init mt_eint_init(void)
 	return 0;
 }
 
-static unsigned int mt_eint_get_debounce_cnt(unsigned int eint_num)
+static unsigned int mt_eint_get_debounce_cnt(unsigned int cur_eint_num)
 {
 	unsigned long base;
 	unsigned int i;
 	unsigned int dbnc = 0;
 	unsigned int deb = 0;
 	unsigned int dben = 0;
-	unsigned int shift_bit;
-	unsigned int offset;
 
-	if (is_bulitin_eint_hw_deb(eint_num)) {
-		offset = ((eint_num - EINT_BI_HW_DB_START) / 4)
-			* 4 + EINT_BI_HW_DB_OFFSET;
-		shift_bit = ((eint_num - EINT_BI_HW_DB_START) % 4) * 8;
-	} else {
-		offset = (eint_num / 4) * 4;
-		shift_bit = (eint_num % 4) * 8;
-	}
+	base = (cur_eint_num / 4) * 4 + EINT_DBNC_BASE;
 
-	base = EINT_DBNC_BASE + offset;
-
-	if (eint_num >= EINT_MAX_CHANNEL)
+	if (cur_eint_num >= EINT_MAX_CHANNEL)
 		return 0;
 
-	else if (eint_num < MAX_HW_DEBOUNCE_CNT ||
-		 is_bulitin_eint_hw_deb(eint_num)) {
-
+	if (cur_eint_num >= MAX_HW_DEBOUNCE_CNT)
+		deb = EINT_FUNC.deb_time[cur_eint_num];
+	else {
 		dbnc = readl(IOMEM(base));
-		dben = (dbnc >> shift_bit) & EINT_DBNC_EN_BIT;
-
-		pr_info("[EIC] HW debounce\n");
-
-		if (dben == 0) {
-			pr_warn("[EIC] debounce disable, return directly");
-			return 0;
-		}
-
-		dbnc = ((dbnc >> EINT_DBNC_SET_DBNC_BITS) >> shift_bit) & EINT_DBNC;
-
+		dben = (dbnc >> ((cur_eint_num % 4) * 8) & EINT_DBNC_EN_BIT);
+		dbnc = ((dbnc >> EINT_DBNC_SET_DBNC_BITS) >> ((cur_eint_num % 4) * 8) & EINT_DBNC);
 		for (i = 0; i < eint_debtime_setting.deb_entry; i++) {
+			if (dben == 0) {
+				deb = 0;
+				pr_warn("[EIC] debounce disable, return directly");
+				break;
+			}
 			if (dbnc == eint_debtime_setting.setting[i].setting)
 				deb = eint_debtime_setting.setting[i].deb_time;
-		}
-	} else {
-		pr_info("[EIC] SW debounce\n");
-		deb = EINT_FUNC.deb_time[eint_num];
+			}
 	}
 	return deb;
 }
@@ -2356,6 +2247,8 @@ void mt_eint_print_status(void)
 	}
 	pr_notice("\n");
 }
+
+
 
 EXPORT_SYMBOL(mt_eint_print_status);
 

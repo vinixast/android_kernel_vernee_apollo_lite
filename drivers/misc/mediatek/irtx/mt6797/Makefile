@@ -11,9 +11,4 @@
 # GNU General Public License for more details.
 #
 
-ifeq ($(CONFIG_MTK_IRTX_SUPPORT), y)
-obj-y := mt_irtx.o
-else
-obj- := dummy.o
-endif
-
+obj-$(CONFIG_MTK_IRTX_SUPPORT) := mt_irtx.o

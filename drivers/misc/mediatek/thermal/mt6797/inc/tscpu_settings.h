@@ -30,23 +30,6 @@
 #define _BIT_(_bit_)		(unsigned)(1 << (_bit_))
 #define _BITMASK_(_bits_)	(((unsigned) -1 >> (31 - ((1) ? _bits_))) & ~((1U << ((0) ? _bits_)) - 1))
 
-#define THERMAL_TPROFILE_INIT() long long thermal_pTime_us, thermal_cTime_us, thermal_diff_us
-
-#define THERMAL_GET_PTIME() {thermal_pTime_us = thermal_get_current_time_us()}
-
-#define THERMAL_GET_CTIME() {thermal_cTime_us = thermal_get_current_time_us()}
-
-#define THERMAL_TIME_TH 3000
-
-#define THERMAL_IS_TOO_LONG()   \
-	do {                                    \
-		thermal_diff_us = thermal_cTime_us - thermal_pTime_us;	\
-		if (thermal_diff_us > THERMAL_TIME_TH) {                \
-			pr_warn(TSCPU_LOG_TAG "%s: %llu us\n", __func__, thermal_diff_us); \
-		} else if (thermal_diff_us < 0) {	\
-			pr_warn(TSCPU_LOG_TAG "Warning: tProfiling uses incorrect %s %d\n", __func__, __LINE__); \
-		}	\
-	} while (0)
 /*=============================================================
  * CONFIG (SW related)
  *=============================================================*/
@@ -103,12 +86,10 @@ they means one reading is a avg of X samples*/
 	run ATM in RT 98 kthread. This is for Everest only.
  */
 #define FAST_RESPONSE_ATM					(1)
-#define THERMAL_INIT_VALUE (0xDA1)
 /*=============================================================
  * Chip related
  *=============================================================*/
 /**/
-#define THERMAL_INFORM_OTP	(0)
 #define OTP_HIGH_OFFSET_TEMP	80000
 #define OTP_LOW_OFFSET_TEMP	70000
 #define OTP_TEMP_TOLERANCE	3000
@@ -173,8 +154,10 @@ they means one reading is a avg of X samples*/
  *REG ACCESS
  *=============================================================*/
 
-#define thermal_setl(addr, val)     mt_reg_sync_writel(readl(addr) | (val), ((void *)addr))
-#define thermal_clrl(addr, val)     mt_reg_sync_writel(readl(addr) & ~(val), ((void *)addr))
+#define thermal_readl(addr)         DRV_Reg32(addr)
+#define thermal_writel(addr, val)   mt_reg_sync_writel((val), ((void *)addr))
+#define thermal_setl(addr, val)     mt_reg_sync_writel(thermal_readl(addr) | (val), ((void *)addr))
+#define thermal_clrl(addr, val)     mt_reg_sync_writel(thermal_readl(addr) & ~(val), ((void *)addr))
 
 #define MTKTSCPU_TEMP_CRIT 120000 /* 120.000 degree Celsius */
 
@@ -263,7 +246,6 @@ extern int temp_dUART;
 extern int tscpu_debug_log;
 extern const struct of_device_id mt_thermal_of_match[2];
 extern int tscpu_bank_ts[THERMAL_BANK_NUM][ENUM_MAX];
-extern int tscpu_bank_ts_r[THERMAL_BANK_NUM][ENUM_MAX]; /* raw data */
 extern bank_t tscpu_g_bank[THERMAL_BANK_NUM];
 extern int tscpu_polling_trip_temp1;
 extern int tscpu_polling_trip_temp2;
@@ -281,7 +263,6 @@ extern int tscpu_next_fp_factor;
 #endif
 
 /*In common/thermal_zones/mtk_ts_cpu.c*/
-extern long long thermal_get_current_time_us(void);
 extern void tscpu_workqueue_cancel_timer(void);
 extern void tscpu_workqueue_start_timer(void);
 
@@ -368,7 +349,7 @@ extern void tscpu_thermal_initial_all_bank(void);
 extern int tscpu_switch_bank(thermal_bank_name bank);
 extern void tscpu_thermal_read_bank_temp(thermal_bank_name bank, ts_e type, int order);
 extern void tscpu_thermal_cal_prepare(void);
-extern void tscpu_thermal_cal_prepare_2(__u32 ret);
+extern void tscpu_thermal_cal_prepare_2(U32 ret);
 extern irqreturn_t tscpu_thermal_all_bank_interrupt_handler(int irq, void *dev_id);
 extern int tscpu_thermal_clock_on(void);
 extern int tscpu_thermal_clock_off(void);

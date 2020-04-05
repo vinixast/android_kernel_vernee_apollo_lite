@@ -765,7 +765,7 @@ struct SMI_SETTING_VALUE smi_profile_setting_larb1_vr[SMI_LARB1_PORT_NUM] = {
 };
 
 struct SMI_SETTING_VALUE smi_profile_setting_larb2_vr[SMI_LARB2_PORT_NUM] = {
-	{0x200, 0x12}, {0x204, 6}, {0x208, 4}, {0x20c, 2}, {0x210, 4}, {0x214, 1}, {0x218, 4}, {0x21c,
+	{0x200, 1}, {0x204, 4}, {0x208, 2}, {0x20c, 2}, {0x210, 2}, {0x214, 1}, {0x218, 2}, {0x21c,
 											     2},
 	{0x220, 2}, {0x224, 1}, {0x228, 1}, {0x22c, 2}, {0x230, 1}, {0x234, 2}, {0x238, 1}, {0x23c,
 											     1},
@@ -1938,23 +1938,6 @@ struct SMI_SETTING mm_gpu_setting_config = {
 	 smi_profile_setting_larb6_init}
 };
 
-struct SMI_SETTING ui_idle_setting_config = { 0, NULL, {0}, {0} };
-struct SMI_SETTING hdmi_setting_config = { 0, NULL, {0}, {0} };
-struct SMI_SETTING hdmi4k_setting_config = { 0, NULL, {0}, {0} };
-
-#elif defined(SMI_BRINGUP)
-struct SMI_SETTING init_setting_config = { 0, NULL, {0}, {0} };
-struct SMI_SETTING vr_setting_config = { 0, NULL, {0}, {0} };
-struct SMI_SETTING swdec_vp_setting_config = { 0, NULL, {0}, {0} };
-struct SMI_SETTING vp_setting_config = { 0, NULL, {0}, {0} };
-struct SMI_SETTING vr_slow_setting_config = { 0, NULL, {0}, {0} };
-struct SMI_SETTING mm_gpu_setting_config = { 0, NULL, {0}, {0} };
-struct SMI_SETTING vpwfd_setting_config = { 0, NULL, {0}, {0} };
-struct SMI_SETTING venc_setting_config = { 0, NULL, {0}, {0} };
-struct SMI_SETTING icfp_setting_config = { 0, NULL, {0}, {0} };
-struct SMI_SETTING vss_setting_config = { 0, NULL, {0}, {0} };
-struct SMI_SETTING vpmjc_setting_config = { 0, NULL, {0}, {0} };
-struct SMI_SETTING n3d_setting_config = { 0, NULL, {0}, {0} };
 struct SMI_SETTING ui_idle_setting_config = { 0, NULL, {0}, {0} };
 struct SMI_SETTING hdmi_setting_config = { 0, NULL, {0}, {0} };
 struct SMI_SETTING hdmi4k_setting_config = { 0, NULL, {0}, {0} };

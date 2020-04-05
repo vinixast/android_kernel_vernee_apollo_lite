@@ -44,7 +44,6 @@ typedef unsigned int    UINT32;
 extern unsigned int FB_LAYER;	/* default LCD layer */
 #define DISP_DEFAULT_UI_LAYER_ID (DDP_OVL_LAYER_MUN-1)
 #define DISP_CHANGED_UI_LAYER_ID (DDP_OVL_LAYER_MUN-2)
-#define DISP_GPIO_DTS
 
 typedef struct {
 	unsigned int id;
@@ -199,7 +198,6 @@ unsigned long primary_display_get_frame_buffer_va_address(void);
 int primary_display_suspend(void);
 int primary_display_resume(void);
 int primary_display_ipoh_restore(void);
-int primary_display_ipoh_recover(void);
 int primary_display_get_width(void);
 int primary_display_get_height(void);
 int primary_display_get_virtual_width(void);
@@ -294,8 +292,6 @@ UINT32 DISP_GetScreenWidth(void);
 UINT32 DISP_GetScreenHeight(void);
 UINT32 DISP_GetActiveHeight(void);
 UINT32 DISP_GetActiveWidth(void);
-UINT32 DISP_GetActiveHeightUm(void);
-UINT32 DISP_GetActiveWidthUm(void);
 unsigned long get_dim_layer_mva_addr(void);
 int disp_hal_allocate_framebuffer(phys_addr_t pa_start, phys_addr_t pa_end, unsigned long *va,
 				  unsigned long *mva);
@@ -319,6 +315,6 @@ int display_exit_tui(void);
 int primary_display_partial_support(void);
 int primary_display_config_full_roi(disp_ddp_path_config *pconfig, disp_path_handle disp_handle,
 		cmdqRecHandle cmdq_handle);
-int primary_display_set_scenario(int scenario);
+
 
 #endif

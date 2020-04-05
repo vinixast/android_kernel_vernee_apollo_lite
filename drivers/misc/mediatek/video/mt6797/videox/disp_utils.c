@@ -12,6 +12,7 @@
  */
 
 #include <linux/kthread.h>
+#include <linux/rtpm_prio.h>
 #include <linux/vmalloc.h>
 #include <linux/semaphore.h>
 #include <linux/time.h>

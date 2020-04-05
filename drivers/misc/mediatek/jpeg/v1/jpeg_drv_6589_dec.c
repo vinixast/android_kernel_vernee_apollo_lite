@@ -11,6 +11,8 @@
  * GNU General Public License for more details.
  */
 
+/*#include <mach/mt_typedefs.h>*/
+/*#include <mach/sync_write.h>*/
 #include <linux/kernel.h>
 
 #ifdef JPEG_DEC_DRIVER
@@ -28,19 +30,25 @@
 		JPEG_WRN("WriteREG: Try to write %d to REG(%lx) without %d align!!\n ", value, addr, align); \
 }
 
+
 #define TEST_JPEG_DEBUG_EN
 
 /* unsigned int _jpeg_dec_int_status = 0; */
 unsigned int _jpeg_dec_dump_reg_en = 0;
+
 kal_uint32 _jpeg_dec_int_status = 0;
+
 kal_uint32 _jpeg_dec_mode = 0;
+
+
+
 int jpeg_isr_dec_lisr(void)
 {
 	unsigned int tmp = 0, tmp1 = 0;
 
 	tmp1 = REG_JPGDEC_INTERRUPT_STATUS;
 	tmp = tmp1 & BIT_INQST_MASK_ALLIRQ;
-	JPEG_MSG("jpeg_isr_dec_lisr 0x%x!\n", tmp);
+
 	if (tmp) {
 		_jpeg_dec_int_status = tmp;
 
@@ -65,7 +73,6 @@ void jpeg_drv_dec_start(void)
 {
 	/* REG_JPEG_DEC_TRIG = 1; */
 	/* mt65xx_reg_sync_writel(0x1, REG_ADDR_JPGDEC_TRIG); */
-	IMG_REG_WRITE(0x37, REG_ADDR_JPGDEC_IRQ_EN);
 	IMG_REG_WRITE(0, REG_ADDR_JPGDEC_TRIG);	/* REG_JPGDEC_TRIG = 0; */
 }
 
@@ -79,10 +86,9 @@ void jpeg_drv_dec_start(void)
 void jpeg_drv_dec_soft_reset(void)
 {
 	IMG_REG_WRITE(0x00, REG_ADDR_JPGDEC_RESET);	/* REG_JPGDEC_RESET = 0x00; */
-	IMG_REG_WRITE(0x00, REG_ADDR_JPGDEC_RESET);	/* REG_JPGDEC_RESET = 0x00; */
-	IMG_REG_WRITE(0x01, REG_ADDR_JPGDEC_RESET);	/* REG_JPGDEC_RESET = 0x01; */
 	IMG_REG_WRITE(0x01, REG_ADDR_JPGDEC_RESET);	/* REG_JPGDEC_RESET = 0x01; */
 	/* REG_JPGDEC_RESET = 0x00; */
+
 	_jpeg_dec_int_status = 0;
 	_jpeg_dec_mode = 0;
 
@@ -98,24 +104,9 @@ void jpeg_drv_dec_reset(void)
 
 void jpeg_drv_dec_hard_reset(void)
 {
-	unsigned int temp = 0;
-	unsigned int value = 0;
-
 	IMG_REG_WRITE(0x00, REG_ADDR_JPGDEC_RESET);	/* REG_JPGDEC_RESET = 0x00; */
-	IMG_REG_WRITE(0x00, REG_ADDR_JPGDEC_RESET);	/* REG_JPGDEC_RESET = 0x00; */
-	IMG_REG_WRITE(0x10, REG_ADDR_JPGDEC_RESET);	/* REG_JPGDEC_RESET = 0x10; */
 	IMG_REG_WRITE(0x10, REG_ADDR_JPGDEC_RESET);	/* REG_JPGDEC_RESET = 0x10; */
 	/* REG_JPGDEC_RESET = 0x00; */
-	IMG_REG_READ(temp, REG_ADDR_JPGDEC_ULTRA_THRES);
-	IMG_REG_READ(value, REG_ADDR_JPGDEC_FILE_ADDR);
-
-	/* issue happen, need to do 1 read at cg gating state */
-	if (value == 0xFFFFFFFF) {
-		/*printk("JPGDEC APB R/W issue found, start to do recovery!\n");*/
-		jpeg_drv_dec_power_off();
-		IMG_REG_READ(value, REG_ADDR_JPGDEC_ULTRA_THRES);
-		jpeg_drv_dec_power_on();
-	}
 
 	_jpeg_dec_int_status = 0;
 	_jpeg_dec_mode = 0;
@@ -198,6 +189,10 @@ int jpeg_drv_dec_set_memStride(unsigned int CompMemStride_Y, unsigned int CompMe
 }
 
 
+
+
+
+
 int jpeg_drv_dec_set_imgStride(unsigned int CompStride_Y, unsigned int CompStride_UV)
 {
 /* unsigned int u4Reg; */
@@ -208,6 +203,10 @@ int jpeg_drv_dec_set_imgStride(unsigned int CompStride_Y, unsigned int CompStrid
 	return (int)E_HWJPG_OK;
 }
 
+
+
+
+
 void jpeg_drv_dec_set_pause_mcu_idx(unsigned int McuIdx)
 {
 
@@ -216,8 +215,10 @@ void jpeg_drv_dec_set_pause_mcu_idx(unsigned int McuIdx)
 }
 
 
+
 void jpeg_drv_dec_set_dec_mode(int i4DecMode)
 {
+
 	unsigned int u4Value = i4DecMode;
 
 	/* 0: full frame, 1: direct couple mode, 2: pause/resume mode, 3: Reserved */
@@ -233,6 +234,7 @@ void jpeg_drv_dec_set_debug_mode(void)
 	unsigned int u4Value;
 
 	u4Value = REG_JPGDEC_DEBUG_MODE;
+
 	u4Value |= 0x80000000;
 	IMG_REG_WRITE((u4Value), REG_ADDR_JPGDEC_DEBUG_MODE);	/* REG_JPGDEC_DEBUG_MODE = u4Value ; */
 
@@ -259,6 +261,8 @@ void jpeg_drv_dec_set_bs_info(unsigned int bsBase, unsigned int bsSize)
 	IMG_REG_WRITE((bsBase), REG_ADDR_JPGDEC_FILE_ADDR);	/* REG_JPGDEC_FILE_ADDR        = bsBase  ; */
 
 	IMG_REG_WRITE((bsSize), REG_ADDR_JPGDEC_FILE_TOTAL_SIZE);	/* REG_JPGDEC_FILE_TOTAL_SIZE  =  bsSize; */
+
+
 }
 
 /* void jpeg_drv_dec_set_total_bs_size_align128(unsigned int bsSize) */
@@ -416,6 +420,8 @@ void jpeg_drv_dec_set_sampling_factor(unsigned int compNum, unsigned int u4Y_H, 
 
 int jpeg_drv_dec_set_config_data(JPEG_DEC_DRV_IN *config)
 {
+
+
 	jpeg_drv_dec_set_sampling_factor(config->componentNum,
 					 config->hSamplingFactor[0], config->vSamplingFactor[0],
 					 config->hSamplingFactor[1], config->vSamplingFactor[1],
@@ -487,6 +493,7 @@ int jpeg_drv_dec_set_config_data(JPEG_DEC_DRV_IN *config)
 	jpeg_drv_dec_set_debug_mode();
 #endif
 
+
 	return (int)E_HWJPG_OK;
 }
 
@@ -548,6 +555,9 @@ int jpeg_drv_dec_wait_one_row(JPEG_DEC_DRV_IN *config)
 
 		jpeg_drv_dec_set_pause_mcu_idx(MCU_cnt - 1);
 
+
+
+
 		IMG_REG_WRITE((irq_status), REG_ADDR_JPGDEC_INTERRUPT_STATUS);
 
 		/* Debug: jpeg_drv_dec_dump_reg(); */
@@ -558,6 +568,8 @@ int jpeg_drv_dec_wait_one_row(JPEG_DEC_DRV_IN *config)
 		}
 
 		JPEG_ERR("JPEG Decode Success, st %x!!\n", irq_status);
+
+
 	}
 	return 1;
 }
@@ -697,10 +709,6 @@ void jpeg_drv_dec_dump_key_reg(void)
 		JPEG_WRN("@0x%x(%d) 0x%08x\n", index, index / 4, reg_value);
 		wait_pr();
 	}
-
-	index = 0x300;
-	IMG_REG_READ(reg_value, JPEG_DEC_BASE + index);	/* reg_value = ioread32(JPEG_DEC_BASE + index); */
-	JPEG_WRN("@0x%x(%d) 0x%08x\n", index, index / 4, reg_value);
 }
 
 void jpeg_drv_dec_dump_reg(void)

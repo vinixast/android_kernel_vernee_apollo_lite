@@ -80,7 +80,7 @@ typedef enum {
 /* Image string and header */
 /* image name/path */
 #define MOEDM_IMAGE_NAME			"modem.img"
-#define DSP_IMAGE_NAME				"DSP_ROM"
+#define DSP_IMAGE_NAME					"DSP_ROM"
 #define CONFIG_MODEM_FIRMWARE_PATH		"/etc/firmware/"
 #define CONFIG_MODEM_FIRMWARE_CIP_PATH	"/custom/etc/firmware/"
 #define IMG_ERR_STR_LEN				 64
@@ -315,6 +315,8 @@ enum {
 	MPU_REGION_INFO_ID_TOTAL_NUM,
 };
 
+
+
 /* ====================== */
 /* domain info                                 */
 /* ---------------------------- */
@@ -336,6 +338,8 @@ enum{
 	MPU_DOMAIN_INFO_ID_LAST = MPU_DOMAIN_INFO_ID_MDHW,
 	MPU_DOMAIN_INFO_ID_TOTAL_NUM,
 };
+
+
 
 /* ================================================================================= */
 /* IOCTL defination */
@@ -630,6 +634,35 @@ typedef enum {
 	CCCI_INVALID_CH_ID = 0xffffffff,
 } CCCI_CH;
 
+enum c2k_channel {
+	CTRL_CH_C2K = 0,
+	AUDIO_CH_C2K = 1,
+	DATA_PPP_CH_C2K = 2,
+	MDLOG_CTRL_CH_C2K = 3,
+	FS_CH_C2K = 4,
+	AT_CH_C2K = 5,
+	AGPS_CH_C2K = 6,
+	AT2_CH_C2K = 7,
+	AT3_CH_C2K = 8,
+	MDLOG_CH_C2K = 9,
+	AT4_CH_C2K = 10,
+	STATUS_CH_C2K = 11,
+	NET1_CH_C2K = 12,
+	NET2_CH_C2K = 13,	/*need sync with c2k */
+	NET3_CH_C2K = 14,	/*need sync with c2k */
+	NET4_CH_C2K = 15,
+	NET5_CH_C2K = 16,
+	NET6_CH_C2K = 17,	/*need sync with c2k */
+	NET7_CH_C2K = 18,
+	NET8_CH_C2K = 19,
+
+	C2K_MAX_CH_NUM,
+
+	LOOPBACK_C2K = 255,
+	MD2AP_LOOPBACK_C2K = 256,
+};
+
+
 /* AP->md_init messages on monitor channel */
 typedef enum {
 	CCCI_MD_MSG_BOOT_READY		= 0xFAF50001,
@@ -651,15 +684,16 @@ typedef enum {
 	CCCI_MD_MSG_CFG_UPDATE			= 0xFAF50011,
 } CCCI_MD_MSG;
 
+
 /* export to other kernel modules, better not let other module include ECCCI header directly (except IPC...) */
-typedef enum {
+enum {
 	MD_STATE_INVALID = 0,
 	MD_STATE_BOOTING = 1,
 	MD_STATE_READY = 2,
 	MD_STATE_EXCEPTION = 3
-} MD_STATE_FOR_USER;
+}; /* align to MD_BOOT_STAGE */
 
-typedef enum {
+enum {
 	ID_GET_MD_WAKEUP_SRC = 0,   /* for SPM */
 	ID_CCCI_DORMANCY = 1,	   /* abandoned */
 	ID_LOCK_MD_SLEEP = 2,	   /* abandoned */
@@ -678,16 +712,10 @@ typedef enum {
 	ID_DUMP_MD_REG = 15,
 	ID_DUMP_MD_SLEEP_MODE = 16, /* for dump MD debug info from SMEM when AP sleep */
 	ID_PMIC_INTR = 17, /* for PMIC to notify MD buck over current, called from kernel thread context */
-	ID_STOP_MD = 18,
-	ID_START_MD = 19,
-	ID_UPDATE_MD_BOOT_MODE = 20,
-	ID_MD_MPU_ASSERT = 21,
-	ID_ENTER_FLIGHT_MODE = 22,
-	ID_LEAVE_FLIGHT_MODE = 23,
 
 	ID_UPDATE_TX_POWER = 100,   /* for SWTP */
 
-} KERN_FUNC_ID;
+};
 
 enum {
 	/*bit0-bit15: for modem capability related with ccci or ccci&ccmni driver*/
@@ -784,6 +812,7 @@ typedef enum {
 	BOOT_FAIL, /* broadcast by port_kernel, illegal for md->md_state */
 } MD_STATE; /* for CCCI internal */
 
+
 /* ================================================================================= */
 /* Image type and header defination part */
 /* ================================================================================= */
@@ -815,6 +844,7 @@ struct IMG_CHECK_INFO {
 	PRODUCT_VER_TYPE version;
 	unsigned int header_verno;  /* header structure version number */
 };
+
 
 struct IMG_REGION_INFO {
 	unsigned int  region_num;        /* total region number */
@@ -982,7 +1012,6 @@ int ccci_sysfs_add_modem(int md_id, void *kobj, void *ktype,
 int get_modem_support_cap(int md_id); /* Export by ccci util */
 int set_modem_support_cap(int md_id, int new_val); /* Export by ccci util */
 char *ccci_get_md_info_str(int md_id); /* Export by ccci util */
-void update_ccci_port_ver(unsigned int new_ver); /* Export by ccci util */
 /* Export by ccci util */
 int ccci_load_firmware(int md_id, void *img_inf, char img_err_str[], char post_fix[], struct device *dev);
 int get_md_resv_mem_info(int md_id, phys_addr_t *r_rw_base, unsigned int *r_rw_size,
@@ -1019,7 +1048,6 @@ int get_md_type_from_lk(int md_id);
 int get_raw_check_hdr(int md_id, char buf[], int size);
 int ccci_get_md_check_hdr_inf(int md_id, void *img_inf, char post_fix[]);
 int get_md_img_raw_size(int md_id);
-void clear_meta_1st_boot_arg(int md_id);
 /* for kernel share memory user */
 void __iomem *get_smem_start_addr(int md_id, SMEM_USER_ID user_id, int *size_o);
 
@@ -1055,14 +1083,4 @@ typedef struct _mpu_cfg {
 	int relate_region; /* Using same behavior and setting */
 } mpu_cfg_t;
 mpu_cfg_t *get_mpu_region_cfg_info(int region_id);
-int ccci_get_opt_val(char *opt_name);
-
-/* Rat configure relate */
-int ccci_get_rat_str_from_drv(int md_id, char rat_str[], int size);
-void ccci_set_rat_str_to_drv(int md_id, char rat_str[]);
-unsigned int get_wm_bitmap_for_ubin(void); /* Universal bin */
-void update_rat_bit_map_to_drv(int md_id, unsigned int val);
-int get_md_img_type(int md_id);
-int get_legacy_md_type(int md_id);
-
 #endif

@@ -80,6 +80,8 @@
 #define MJC_DEVNAME     "MJC"
 #define MTK_MJC_DEV_MAJOR_NUMBER 168
 #define MJC_FORCE_REG_NUM 100
+#define MJC_MMDVFS_ENABLE 1
+#define MJC_MMDVFS_DISABLE 0
 
 /* variable */
 static DEFINE_SPINLOCK(ContextLock);
@@ -426,6 +428,8 @@ static int mjc_open(struct inode *pInode, struct file *pFile)
 	}
 #endif
 
+	mmdvfs_mjc_enable(MJC_MMDVFS_ENABLE);
+
 #ifdef CONFIG_FPGA_EARLY_PORTING
 	node = of_find_compatible_node(NULL, NULL, "mediatek,mjc_config-v1");
 	gulCGRegister = (unsigned long)of_iomap(node, 0);
@@ -490,6 +494,8 @@ static int mjc_release(struct inode *pInode, struct file *pFile)
 		MJCMSG("[ERROR] mjc_ioctl() OOPS: mmdvfs_set_step error!");
 	}
 #endif
+
+	mmdvfs_mjc_enable(MJC_MMDVFS_DISABLE);
 
 	m4u_unregister_fault_callback(M4U_PORT_MJC_MV_RD);
 	m4u_unregister_fault_callback(M4U_PORT_MJC_MV_WR);

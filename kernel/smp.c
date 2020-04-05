@@ -19,11 +19,9 @@
 #include <linux/proc_fs.h>
 #include <linux/time.h>
 #include <linux/spinlock.h>
-#include <linux/seq_file.h>
 #endif
 
 #include "smpboot.h"
-#include "mt-plat/mt_devinfo.h"
 
 enum {
 	CSD_FLAG_LOCK		= 0x01,
@@ -215,30 +213,6 @@ void generic_smp_call_function_single_interrupt(void)
 	flush_smp_call_function_queue(true);
 }
 
-#ifdef CONFIG_MTPROF
-static unsigned long long mt_record_smp_call_func_start(void)
-{
-	return sched_clock();
-}
-
-static void mt_record_smp_call_func_end(struct call_single_data *csd,
-					unsigned long long start)
-{
-#define WARN_LONG_CALL_FUNC_TIME       3000000
-	unsigned long long duration;
-
-	duration = sched_clock() - start;
-	if (duration > WARN_LONG_CALL_FUNC_TIME)
-		pr_warn("func:%pF: too long: %llu ns\n", csd->func, duration);
-}
-#else
-static unsigned long long mt_record_smp_call_func_start(void) { return 0; }
-
-static void mt_record_smp_call_func_end(struct call_single_data *csd,
-					unsigned long long start) {}
-#endif
-
-
 /**
  * flush_smp_call_function_queue - Flush pending smp-call-function callbacks
  *
@@ -282,11 +256,7 @@ static void flush_smp_call_function_queue(bool warn_cpu_offline)
 	}
 
 	llist_for_each_entry_safe(csd, csd_next, entry, llist) {
-		unsigned long long start;
-
-		start = mt_record_smp_call_func_start();
 		csd->func(csd->info);
-		mt_record_smp_call_func_end(csd, start);
 		csd_unlock(csd);
 	}
 
@@ -581,7 +551,7 @@ void __weak smp_announce(void)
 	printk(KERN_INFO "Brought up %d CPUs\n", num_online_cpus());
 }
 
-#ifdef CONFIG_MTK_CPU_HOTPLUG_DEBUG_3
+#ifdef MTK_CPU_HOTPLUG_DEBUG_3
 struct timestamp_rec hotplug_ts_rec;
 DEFINE_SPINLOCK(hotplug_timestamp_lock);
 unsigned int timestamp_enable = 1;
@@ -618,7 +588,7 @@ static int profile_timestamp_init(void)
 {
 	int ret = 0;
 	int i = 0;
-	spin_lock(&hotplug_timestamp_lock);
+
 	for (i = 0; i < TIMESTAMP_REC_SIZE; i++) {
 		hotplug_ts_rec.rec[i].func = NULL;
 		hotplug_ts_rec.rec[i].line = 0;
@@ -635,11 +605,10 @@ static int profile_timestamp_init(void)
 
 	SET_TIMESTAMP_FILTER(hotplug_ts_rec, TIMESTAMP_FILTER);
 	timestamp_enable = 0;
-	spin_unlock(&hotplug_timestamp_lock);
 
 	return ret;
 }
-#endif /* #ifdef CONFIG_MTK_CPU_HOTPLUG_DEBUG_3 */
+#endif /* #ifdef MTK_CPU_HOTPLUG_DEBUG_3 */
 
 
 #ifdef CONFIG_PROFILE_CPU
@@ -738,7 +707,7 @@ static const struct file_operations name ## _proc_fops = {		\
 
 #define PROC_ENTRY(name)	{__stringify(name), &name ## _proc_fops}
 
-#ifdef CONFIG_MTK_CPU_HOTPLUG_DEBUG_3
+#ifdef MTK_CPU_HOTPLUG_DEBUG_3
 PROC_FOPS_RW(timestamp_enable);
 #endif
 #ifdef CONFIG_PROFILE_CPU
@@ -760,7 +729,7 @@ static int create_procfs(void)
 	};
 #endif
 
-#ifdef CONFIG_MTK_CPU_HOTPLUG_DEBUG_3
+#ifdef MTK_CPU_HOTPLUG_DEBUG_3
 	const struct pentry entries_rw[] = {
 		PROC_ENTRY(timestamp_enable),
 	};
@@ -771,7 +740,7 @@ static int create_procfs(void)
 	if (!dir)
 		return -ENOMEM;
 
-#ifdef CONFIG_MTK_CPU_HOTPLUG_DEBUG_3
+#ifdef MTK_CPU_HOTPLUG_DEBUG_3
 
 	for (i = 0; i < ARRAY_SIZE(entries_rw); i++) {
 		if (!proc_create(entries_rw[i].name, S_IRUGO | S_IWUSR | S_IWGRP, dir, entries_rw[i].fops))
@@ -795,20 +764,11 @@ static int create_procfs(void)
 /* Called by boot processor to activate the rest. */
 void __init smp_init(void)
 {
-	unsigned int cpu, segment, i;
-
-	segment =  get_devinfo_with_index(21) & 0xFF;
-	if ((segment == 0x43) || (segment == 0x4B)) {
-			for (i = 1; i <= 3; i++) {
-				set_cpu_present(i, false);
-				set_cpu_active(i, false);
-				set_cpu_online(i, false);
-			}
-	}
+	unsigned int cpu;
 
 	idle_threads_init();
 
-#if defined(CONFIG_PROFILE_CPU) || defined(CONFIG_MTK_CPU_HOTPLUG_DEBUG_3)
+#if defined(CONFIG_PROFILE_CPU) || defined(MTK_CPU_HOTPLUG_DEBUG_3)
 	create_procfs();
 #endif
 
@@ -816,7 +776,7 @@ void __init smp_init(void)
 	profile_cpu_stats_init();
 #endif
 
-#ifdef CONFIG_MTK_CPU_HOTPLUG_DEBUG_3
+#ifdef MTK_CPU_HOTPLUG_DEBUG_3
 	profile_timestamp_init();
 #endif
 

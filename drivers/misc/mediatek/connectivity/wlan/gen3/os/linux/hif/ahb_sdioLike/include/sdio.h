@@ -1,17 +1,3 @@
-/*
-* Copyright (C) 2016 MediaTek Inc.
-*
-* This program is free software: you can redistribute it and/or modify it under the terms of the
-* GNU General Public License version 2 as published by the Free Software Foundation.
-*
-* This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
-* without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-* See the GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License along with this program.
-* If not, see <http://www.gnu.org/licenses/>.
-*/
-
 #ifndef MMC_SDIO_H
 #define MMC_SDIO_H
 
@@ -88,7 +74,7 @@ typedef union _sdio_gen3_cmd53_info
 
 struct sdio_func;
 extern struct sdio_func g_sdio_func;
-extern spinlock_t HifLock;
+
 typedef void (sdio_irq_handler_t)(struct sdio_func *);
 
 struct sdio_func {
@@ -128,6 +114,7 @@ int ahb_sdio_disable_func(struct sdio_func *func);
 int ahb_sdio_set_block_size(struct sdio_func *func, unsigned blksz);
 int ahb_sdio_claim_irq(struct sdio_func *func, sdio_irq_handler_t *handler);
 
+
 #define sdio_f0_readb(func, addr, err_ret) ahb_sdio_f0_readb((func), (addr), (err_ret))
 #define sdio_f0_writeb(func, b, addr, err_ret) ahb_sdio_f0_writeb((func), (b), (addr), (err_ret))
 #define sdio_enable_func(func) ahb_sdio_enable_func((func))
@@ -144,11 +131,11 @@ extern UINT_8 **g_pHifRegBaseAddr;
 
 #define __disable_irq()						\
 {											\
-	writel(0x01, (volatile UINT_32*)(*g_pHifRegBaseAddr + 0x200));\
+	writel(0x01, (volatile UINT_32 *)(*g_pHifRegBaseAddr + 0x200));\
 }
 #define __enable_irq()						\
 {											\
-	writel(0, (volatile UINT_32*)(*g_pHifRegBaseAddr + 0x200));\
+	writel(0, (volatile UINT_32 *)(*g_pHifRegBaseAddr + 0x200));\
 }
 
 /*  ===========================  PART 2: mmc/sdio.h ============================ */

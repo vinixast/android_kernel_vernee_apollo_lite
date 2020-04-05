@@ -86,8 +86,7 @@ typedef enum _VDEC_DRV_VIDEO_FORMAT_T {
 	VDEC_DRV_VIDEO_FORMAT_S263                  = (1 << 26),    /* /< Sorenson Spark */
 	VDEC_DRV_VIDEO_FORMAT_H264HP                = (1 << 27),
 	VDEC_DRV_VIDEO_FORMAT_H264SEC               = (1 << 28),
-	VDEC_DRV_VIDEO_FORMAT_H265SEC               = (1 << 29),
-	VDEC_DRV_VIDEO_FORMAT_VP9SEC                = (1 << 30)
+	VDEC_DRV_VIDEO_FORMAT_H265SEC               = (1 << 29)
 } VDEC_DRV_VIDEO_FORMAT_T;
 
 
@@ -447,19 +446,6 @@ typedef enum __VDEC_DRV_MRESULT_T {
 	VDEC_DRV_MRESULT_MAX = 0x0FFFFFFF               /* /< Max Value */
 } VDEC_DRV_MRESULT_T;
 
-typedef enum _VDEC_DRV_COLOR_PRIMARIES_E {
-	COLOR_PRIMARIES_NO_INFO = 0,
-	COLOR_PRIMARIES_BT601,
-	COLOR_PRIMARIES_BT709,
-	COLOR_PRIMARIES_BT2020
-} VDEC_DRV_COLOR_PRIMARIES_E;
-
-typedef struct __VDEC_DRV_COLOR_PRIMARIES_INFO_T {
-	VAL_BOOL_T  bVideoRangeExist;           /* 0: not exist; 1: exist */
-	VAL_UINT32_T u4VideoRange;                 /* 0: narrow; 1: full  */
-	VAL_BOOL_T  bColourPrimariesExist;   /* 0: not exist; 1: exist */
-	VDEC_DRV_COLOR_PRIMARIES_E eColourPrimaries;         /* VDEC_DRV_COLOR_PRIMARIES_E */
-} VDEC_DRV_COLOR_PRIMARIES_INFO_T;
 
 /**
  * @par Structure
@@ -482,7 +468,6 @@ typedef struct __VDEC_DRV_RINGBUF_T { /* union extend 64bits for TEE*/
 	VAL_UINT32_T    u4Timestamp;   /* /< [IN/OUT] store timestamp */
 	VAL_UINT32_T    rSecMemHandle; /* /< [IN/OUT] security memory handle    // MTK_SEC_VIDEO_PATH_SUPPORT */
 	VAL_UINT32_T    u4InputFlag;   /*/ < [IN]     the property of input buffer */
-	VAL_UINT32_T    u4OmxInputBufSz;/*/ < [IN]     the OMX input buffer Size */
 } VDEC_DRV_RINGBUF_T;
 
 /**
@@ -525,7 +510,6 @@ typedef struct __VDEC_DRV_FRAMEBUF_T {
 
 	/* /< [IN/OUT] share handle of rBaseAddr.u4VA (for UT only)  // MTK_SEC_VIDEO_PATH_SUPPORT */
 	VAL_UINT32_T    rFrameBufVaShareHandle;
-	VDEC_DRV_COLOR_PRIMARIES_INFO_T rColorPriInfo;
 } VDEC_DRV_FRAMEBUF_T;
 
 /**

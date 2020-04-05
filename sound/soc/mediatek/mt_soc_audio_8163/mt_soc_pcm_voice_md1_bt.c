@@ -1,19 +1,17 @@
 /*
- * Copyright (C) 2015 MediaTek Inc.
+ * Copyright (C) 2007 The Android Open Source Project
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- * You should have received a copy of the GNU General Public License
- * along with this program
- * If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 /*******************************************************************************
  *
@@ -123,10 +121,13 @@ static struct snd_pcm_hardware mtk_pcm_hardware = {
 static int mtk_voice_bt_pcm_open(struct snd_pcm_substream *substream)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
+	int err = 0;
 	int ret = 0;
 
 	AudDrv_ANA_Clk_On();
 	AudDrv_Clk_On();
+
+	pr_debug("mtk_voice_bt_pcm_open\n");
 
 	if (substream->stream == SNDRV_PCM_STREAM_CAPTURE) {
 		pr_err("%s with SNDRV_PCM_STREAM_CAPTURE\n", __func__);
@@ -139,34 +140,30 @@ static int mtk_voice_bt_pcm_open(struct snd_pcm_substream *substream)
 
 	ret = snd_pcm_hw_constraint_list(runtime, 0, SNDRV_PCM_HW_PARAM_RATE,
 					 &constraints_sample_rates);
-
-	if (ret < 0)
-		pr_err("%s snd_pcm_hw_constraint_list failed\n", __func__);
-
 	ret = snd_pcm_hw_constraint_integer(runtime, SNDRV_PCM_HW_PARAM_PERIODS);
 
 	if (ret < 0)
-		pr_err("%s snd_pcm_hw_constraint_integer failed\n", __func__);
+		pr_err("snd_pcm_hw_constraint_integer failed\n");
 
 	/* print for hw pcm information */
-	PRINTK_AUDDRV("%s runtime rate = %d channels = %d\n", __func__,
+	pr_debug("mtk_voice_bt_pcm_open runtime rate = %d channels = %d\n",
 		runtime->rate, runtime->channels);
 
 	runtime->hw.info |= SNDRV_PCM_INFO_INTERLEAVED;
 	runtime->hw.info |= SNDRV_PCM_INFO_NONINTERLEAVED;
 
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
-		PRINTK_AUDDRV("%s SNDRV_PCM_STREAM_PLAYBACK\n", __func__);
+		pr_debug("SNDRV_PCM_STREAM_PLAYBACK mtkalsa_voice_bt_constraints\n");
 		runtime->rate = 16000;
 	}
 
-	if (ret < 0) {
-		pr_err("%s error, close it\n", __func__);
+	if (err < 0) {
+		pr_err("mtk_voice_bt_close\n");
 		mtk_voice_bt_close(substream);
-		return ret;
+		return err;
 	}
 
-	PRINTK_AUDDRV("%s return\n", __func__);
+	pr_debug("mtk_voice_bt_pcm_open return\n");
 	return 0;
 }
 
@@ -187,8 +184,7 @@ static void ConfigAdcI2S(struct snd_pcm_substream *substream)
 
 static int mtk_voice_bt_close(struct snd_pcm_substream *substream)
 {
-	PRINTK_AUDDRV("mtk_voice_bt_close\n");
-
+	pr_debug("mtk_voice_bt_close\n");
 	if (substream->stream == SNDRV_PCM_STREAM_CAPTURE) {
 		pr_err("%s with SNDRV_PCM_STREAM_CAPTURE\n", __func__);
 		AudDrv_Clk_Off();
@@ -221,7 +217,7 @@ static int mtk_voice_bt_close(struct snd_pcm_substream *substream)
 
 static int mtk_voice_bt_trigger(struct snd_pcm_substream *substream, int cmd)
 {
-	PRINTK_AUDDRV("mtk_voice_bt_trigger cmd = %d\n", cmd);
+	pr_debug("mtk_voice_bt_trigger cmd = %d\n", cmd);
 	switch (cmd) {
 	case SNDRV_PCM_TRIGGER_START:
 	case SNDRV_PCM_TRIGGER_RESUME:

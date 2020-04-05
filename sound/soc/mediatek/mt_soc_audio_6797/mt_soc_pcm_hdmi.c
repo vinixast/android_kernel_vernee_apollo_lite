@@ -1,19 +1,17 @@
 /*
- * Copyright (C) 2015 MediaTek Inc.
+ * Copyright (C) 2007 The Android Open Source Project
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- * You should have received a copy of the GNU General Public License
- * along with this program
- * If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 /*******************************************************************************
  *
@@ -639,7 +637,6 @@ static int mtk_pcm_hdmi_hw_params(struct snd_pcm_substream *substream,
 		runtime->dma_area = HDMI_dma_buf->area;
 		runtime->dma_addr = HDMI_dma_buf->addr;
 		SetHighAddr(Soc_Aud_Digital_Block_MEM_HDMI, true);
-		AudDrv_Emi_Clk_On();
 #else
 		runtime->dma_area = (unsigned char *)Get_Afe_SramBase_Pointer();
 		runtime->dma_addr = AFE_INTERNAL_SRAM_PHY_BASE;
@@ -651,7 +648,6 @@ static int mtk_pcm_hdmi_hw_params(struct snd_pcm_substream *substream,
 	} else {
 		PRINTK_AUD_HDMI("[mtk_pcm_hdmi_hw_params] snd_pcm_lib_malloc_pages\n");
 		ret = snd_pcm_lib_malloc_pages(substream, params_buffer_bytes(hw_params));
-		AudDrv_Emi_Clk_On();
 	}
 	PRINTK_AUD_HDMI("2 dma_bytes = %zu dma_area = %p dma_addr = 0x%lx\n",
 			substream->runtime->dma_bytes, substream->runtime->dma_area,
@@ -665,14 +661,8 @@ static int mtk_pcm_hdmi_hw_params(struct snd_pcm_substream *substream,
 static int mtk_pcm_hdmi_hw_free(struct snd_pcm_substream *substream)
 {
 	PRINTK_AUD_HDMI("mtk_pcm_hdmi_hw_free\n");
-	if (fake_buffer) {
-#ifdef _NO_SRAM_USAGE_
-		AudDrv_Emi_Clk_Off();
-#endif
+	if (fake_buffer)
 		return 0;
-	}
-
-	AudDrv_Emi_Clk_Off();
 	return snd_pcm_lib_free_pages(substream);
 }
 
@@ -693,6 +683,7 @@ static int mtk_pcm_hdmi_open(struct snd_pcm_substream *substream)
 {
 
 	struct snd_pcm_runtime *runtime = substream->runtime;
+	int err = 0;
 	int ret = 0;
 
 	pr_warn("mtk_pcm_hdmi_open\n");
@@ -725,6 +716,11 @@ static int mtk_pcm_hdmi_open(struct snd_pcm_substream *substream)
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
 		PRINTK_AUD_HDMI("SNDRV_PCM_STREAM_PLAYBACK mtkalsa_hdmi_playback_constraints\n");
 
+	if (err < 0) {
+		PRINTK_AUD_HDMI("mtk_pcm_hdmi_close\n");
+		mtk_pcm_hdmi_close(substream);
+		return err;
+	}
 	EnableApll1(true);
 	EnableApll2(true);
 	EnableI2SDivPower(AUDIO_APLL12_DIV4, true);

@@ -93,8 +93,6 @@
 
 #define EGIS_MASS_READ_SEGMENT_COUNT 10
 
-int finger_is_connect = 0;
-
 unsigned int fp_detect_irq = 0;
 #ifdef CONFIG_OF
 static const struct of_device_id fp_of_match[] = {
@@ -189,11 +187,11 @@ static struct mt_chip_conf spi_conf_dma =
 #define USE_SPI1_4GB_TEST (1)
 
 #if USE_SPI1_4GB_TEST
-static dma_addr_t SpiDmaBufTx_pa;
-static dma_addr_t SpiDmaBufRx_pa;
+//static dma_addr_t SpiDmaBufTx_pa;
+//static dma_addr_t SpiDmaBufRx_pa;
 static char *spi_tx_local_buf;
 static char *spi_rx_local_buf;
-
+/*
 static int reserve_memory_spi_fn(struct reserved_mem *rmem)
 {
 	printk(" 11111name: %s, base: 0x%llx, size: 0x%llx\n", rmem->name,
@@ -204,6 +202,7 @@ static int reserve_memory_spi_fn(struct reserved_mem *rmem)
 	return 0;
 }
 RESERVEDMEM_OF_DECLARE(reserve_memory_test, "mediatek,spi-reserve-memory", reserve_memory_spi_fn);
+*/
 #endif
 
 static int spi_setup_xfer(struct spi_transfer *xfer)
@@ -264,7 +263,7 @@ int fp_mass_read(struct fp_data *fp, u8 addr, u8 *buf, int read_len)
 	spi_message_init(&m);
 	spi_setup_xfer(&t_set_addr);
 	memset(spi_tx_local_buf, 0, 4);
-	strncpy(spi_tx_local_buf, write_addr, 4);
+	strcpy(spi_tx_local_buf, write_addr);
 	spi_message_add_tail(&t_set_addr, &m);
 	status = spi_sync(spi, &m);
 
@@ -272,7 +271,7 @@ int fp_mass_read(struct fp_data *fp, u8 addr, u8 *buf, int read_len)
 	spi_message_init(&m);
 	spi_setup_xfer(&t_read_data);
 	memset(spi_tx_local_buf, 0, 4);
-	strncpy(spi_tx_local_buf, read_addr, 4);
+	strcpy(spi_tx_local_buf, read_addr);
 	spi_message_add_tail(&t_read_data, &m);
 	status = spi_sync(spi, &m);
 
@@ -325,7 +324,7 @@ int fp_io_read_register(struct fp_data *fp, u8 *addr, u8 *buf)
 	spi_message_init(&m);
 	spi_setup_xfer(&t_set_addr);
 	memset(spi_tx_local_buf, 0, 4);
-	strncpy(spi_tx_local_buf, write_addr, 4);
+	strcpy(spi_tx_local_buf, write_addr);
 	spi_message_add_tail(&t_set_addr, &m);
 	spi_sync(spi, &m);
 
@@ -333,7 +332,7 @@ int fp_io_read_register(struct fp_data *fp, u8 *addr, u8 *buf)
 	spi_message_init(&m);
 	spi_setup_xfer(&t);
 	memset(spi_tx_local_buf, 0, 4);
-	strncpy(spi_tx_local_buf, read_addr, 4);
+	strcpy(spi_tx_local_buf, read_addr);
 	spi_message_add_tail(&t, &m);
 	status = spi_sync(spi, &m);
 
@@ -397,7 +396,7 @@ int fp_io_write_register(struct fp_data *fp, u8 *buf)
 	write_value[1] = val[1];
 	spi_setup_xfer(&t1);
 	memset(spi_tx_local_buf, 0, 4);
-	strncpy(spi_tx_local_buf, write_addr, 4);
+	strcpy(spi_tx_local_buf, write_addr);
 	spi_message_add_tail(&t1, &m);
 	spi_sync(spi, &m);
 
@@ -405,7 +404,7 @@ int fp_io_write_register(struct fp_data *fp, u8 *buf)
 	spi_message_init(&m);
 	spi_setup_xfer(&t2);
 	memset(spi_tx_local_buf, 0, 4);
-	strncpy(spi_tx_local_buf, write_value, 4);
+	strcpy(spi_tx_local_buf, write_value);
 	spi_message_add_tail(&t2, &m);
 	status = spi_sync(spi, &m);
 
@@ -446,7 +445,7 @@ int fp_read_register(struct fp_data *fp, u8 addr, u8 *buf)
 	spi_message_init(&m);
 	spi_setup_xfer(&t1);
 	memset(spi_tx_local_buf, 0, 4);
-	strncpy(spi_tx_local_buf, write_addr, 4);
+	strcpy(spi_tx_local_buf, write_addr);
 	spi_message_add_tail(&t1, &m);
 	spi_sync(spi, &m);
 
@@ -454,7 +453,7 @@ int fp_read_register(struct fp_data *fp, u8 addr, u8 *buf)
 	spi_message_init(&m);
 	spi_setup_xfer(&t2);
 	memset(spi_tx_local_buf, 0, 4);
-	strncpy(spi_tx_local_buf, read_addr, 4);
+	strcpy(spi_tx_local_buf, read_addr);
 	spi_message_add_tail(&t2, &m);
 	status = spi_sync(spi, &m);
 
@@ -492,7 +491,7 @@ int fp_set_single_register(struct fp_data *fp, u8 addr, u8 val)
 	spi = fp->spi;
 	spi_setup_xfer(&t1);
 	memset(spi_tx_local_buf, 0, 4);
-	strncpy(spi_tx_local_buf, write_addr, 4);
+	strcpy(spi_tx_local_buf, write_addr);
 	spi_message_add_tail(&t1, &m);
 	spi_sync(spi, &m);
 
@@ -500,7 +499,7 @@ int fp_set_single_register(struct fp_data *fp, u8 addr, u8 val)
 	spi_message_init(&m);
 	spi_setup_xfer(&t2);
 	memset(spi_tx_local_buf, 0, 4);
-	strncpy(spi_tx_local_buf, write_value, 4);
+	strcpy(spi_tx_local_buf, write_value);
 	spi_message_add_tail(&t2, &m);
 	status = spi_sync(spi, &m);
 

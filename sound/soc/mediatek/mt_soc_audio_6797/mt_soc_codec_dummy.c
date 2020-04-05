@@ -1,19 +1,17 @@
 /*
- * Copyright (C) 2015 MediaTek Inc.
+ * Copyright (C) 2007 The Android Open Source Project
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- * You should have received a copy of the GNU General Public License
- * along with this program
- * If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 /*******************************************************************************
  *
@@ -204,6 +202,16 @@ static struct snd_soc_dai_driver dummy_6323_dai_codecs[] = {
 		     .formats = SND_SOC_ADV_MT_FMTS,
 		     }
 	 },
+	{
+	.name = MT_SOC_CODEC_I2S2_ADC2_NAME,
+	.capture = {
+		.stream_name = MT_SOC_I2S2ADC2_STREAM_NAME,
+		.channels_min = 1,
+		.channels_max = 2,
+		.rates = SOC_HIGH_USE_RATE,
+		.formats = SND_SOC_ADV_MT_FMTS,
+	}
+	},
 	{
 	 .name = MT_SOC_CODEC_VOICE_MD2_BTDAI_NAME,
 	 .playback = {
@@ -453,6 +461,13 @@ static struct snd_soc_dai_driver dummy_6323_dai_codecs[] = {
 	 },
 	{
 	 .name = MT_SOC_CODEC_FM_I2S_DUMMY_DAI_NAME,
+	 .playback = {
+		      .stream_name = MT_SOC_FM_I2S_PLAYBACK_STREAM_NAME,
+		      .channels_min = 1,
+		      .channels_max = 8,
+		      .rates = SOC_HIGH_USE_RATE,
+		      .formats = SND_SOC_ADV_MT_FMTS,
+		      },
 	 .capture = {
 		     .stream_name = MT_SOC_FM_I2S_PLAYBACK_STREAM_NAME,
 		     .channels_min = 1,

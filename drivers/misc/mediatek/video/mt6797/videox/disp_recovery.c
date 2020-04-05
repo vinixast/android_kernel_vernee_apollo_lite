@@ -1,16 +1,3 @@
-/*
- * Copyright (C) 2016 MediaTek Inc.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- * See http://www.gnu.org/licenses/gpl-2.0.html for more details.
- */
-
 #include <linux/delay.h>
 #include <linux/sched.h>
 #include <linux/semaphore.h>
@@ -18,6 +5,7 @@
 #include <linux/wait.h>
 #include <linux/kthread.h>
 #include <linux/mutex.h>
+#include <linux/rtpm_prio.h>
 #include <linux/types.h>
 #include <linux/ktime.h>
 #include <linux/of.h>
@@ -498,7 +486,7 @@ done:
 
 static int primary_display_check_recovery_worker_kthread(void *data)
 {
-	struct sched_param param = {.sched_priority = 87 };
+	struct sched_param param = {.sched_priority = RTPM_PRIO_FB_THREAD };
 	int ret = 0;
 	int i = 0;
 	int esd_try_cnt = 5;	/* 20; */

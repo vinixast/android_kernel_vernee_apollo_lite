@@ -23,9 +23,6 @@ obj-y := mt_ppm_main.o
 obj-y += mt_ppm_interface.o
 obj-y += mt_ppm_api.o
 
-# for profiling
-obj-y += mt_ppm_profile.o
-
 # policies
 obj-y += mt_ppm_policy_dlpt.o
 obj-y += mt_ppm_policy_perfserv.o
@@ -36,7 +33,6 @@ obj-y += mt_ppm_policy_thermal.o
 obj-y += mt_ppm_policy_lcm_off.o
 obj-y += mt_ppm_policy_hica.o
 obj-y += mt_ppm_policy_user_limit.o
-obj-y += mt_ppm_policy_force_limit.o
 # for test purpose
 obj-y += mt_ppm_policy_ut.o
 

@@ -248,23 +248,6 @@ int mt7620a_has_carrier(struct fe_priv *priv)
 	return 0;
 }
 
-int mt7623_has_carrier(struct fe_priv *priv)
-{
-	struct mt7620_gsw *gsw = (struct mt7620_gsw *)priv->soc->swpriv;
-	unsigned int link;
-	int i = 4;
-
-	link = mt7530_mdio_r32(gsw, 0x3008 + (i * 0x100)) & 0x1;
-
-	if (!link) {
-		pr_err("port 4 is not linked\n");
-	} else {
-		pr_err("port 4 is linked\n");
-		return 1;
-	}
-	return 0;
-}
-
 static void mt7620a_handle_carrier(struct fe_priv *priv)
 {
 	if (!priv->phy)
@@ -341,19 +324,15 @@ static irqreturn_t gsw_interrupt_mt7621(int irq, void *_priv)
 			if (link != priv->link[i]) {
 				priv->link[i] = link;
 				if (link)
-					pr_err("port %d link up\n", i);
+					netdev_info(priv->netdev,
+						    "port %d link up\n", i);
 				else
-					pr_err("port %d link down\n", i);
-#ifdef CONFIG_ARCH_MT7623
-				if (i == 4 && link)
-					netif_carrier_on(priv->netdev);
-				else if (i == 4)
-					netif_carrier_off(priv->netdev);
-#endif
+					netdev_info(priv->netdev,
+						    "port %d link down\n", i);
 			}
 		}
-	if (!IS_ENABLED(CONFIG_ARCH_MT7623))
-		mt7620a_handle_carrier(priv);
+
+	mt7620a_handle_carrier(priv);
 	mt7530_mdio_w32(gsw, 0x700c, 0x1f);
 
 	return IRQ_HANDLED;

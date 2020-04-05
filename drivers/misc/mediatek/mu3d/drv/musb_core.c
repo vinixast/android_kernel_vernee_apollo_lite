@@ -137,7 +137,7 @@ const char musb_driver_name[] = MUSB_DRIVER_NAME;
 struct musb *_mu3d_musb = NULL;
 
 
-u32 debug_level = K_ALET | K_CRIT | K_ERR | K_WARNIN /* | K_NOTICE | K_INFO */;
+u32 debug_level = K_ALET | K_CRIT | K_ERR | K_WARNIN;
 u32 fake_CDP = 0;
 
 module_param(debug_level, int, 0644);
@@ -164,27 +164,12 @@ MODULE_ALIAS("platform:" MUSB_DRIVER_NAME);
  * 0: High Speed
  * 1: Super Speed
  */
-unsigned int musb_speed;
-static int set_musb_speed(const char *val, const struct kernel_param *kp)
-{
-	int rv;
-
-	/* update module parameter */
-	rv = param_set_int(val, kp);
-	if (rv)
-		return rv;
-
-	musb_hal_speed = musb_speed;
-
-	pr_warn("musb_speed:%d, musb_hal_speed:%d\n", musb_speed, musb_hal_speed);
-
-	return 0;
-}
-static struct kernel_param_ops musb_speed_param_ops = {
-	.set = set_musb_speed,
-	.get = param_get_int,
-};
-module_param_cb(speed, &musb_speed_param_ops, &musb_speed, S_IRUGO | S_IWUSR);
+#if defined(CONFIG_USB_MU3D_DEFAULT_U2_MODE) && !defined(U3_COMPLIANCE)
+unsigned int musb_speed = 0;
+#else
+unsigned int musb_speed = 1;
+#endif
+module_param_named(speed, musb_speed, uint, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(debug, "USB speed configuration. default = 1, spuper speed.");
 #endif
 
@@ -193,12 +178,8 @@ void __iomem *u3_sif_base;
 void __iomem *u3_sif2_base;
 void __iomem *ap_uart0_base;
 
-#ifdef CONFIG_FPGA_EARLY_PORTING
-#ifdef USB_ELBRUS
-void __iomem *i2c_base;
-#else
+#ifdef CONFIG_MTK_FPGA
 void __iomem *i2c1_base;
-#endif
 #endif
 
 /*-------------------------------------------------------------------------*/
@@ -913,7 +894,7 @@ void musb_start(struct musb *musb)
 	os_printk(K_INFO, "%s  <== devctl %02x\n", __func__, devctl);
 
 	if (musb->is_clk_on == 0) {
-#ifndef CONFIG_FPGA_EARLY_PORTING
+#ifndef CONFIG_MTK_FPGA
 		/* Recovert PHY. And turn on CLK. */
 		usb_phy_recover(musb->is_clk_on);
 		musb->is_clk_on = 1;
@@ -944,8 +925,6 @@ void musb_start(struct musb *musb)
 		udelay(20);
 
 		musb_restore_context(musb);
-
-		mu3d_reset_gpd_resource();
 	}
 
 	/*Enable Level 1 interrupt (BMU, QMU, MAC3, DMA, MAC2, EPCTL) */
@@ -975,7 +954,6 @@ void musb_start(struct musb *musb)
 
 	/* set vbus force enable */
 	os_setmsk(U3D_MISC_CTRL, (VBUS_FRC_EN | VBUS_ON));
-	os_writel(U3D_LTSSM_PARAMETER, (os_readl(U3D_LTSSM_PARAMETER) & ~DISABLE_NUM) | (0xf << DISABLE_NUM_OFST));
 #endif
 
 	/* device responses to u3_exit from host automatically */
@@ -1008,14 +986,10 @@ void musb_start(struct musb *musb)
 #endif
 
 	if (musb->softconnect) {
-#ifdef SUPPORT_U3
 		if (musb_speed && (musb->charger_mode == STANDARD_HOST))
 			mu3d_hal_u3dev_en();
 		else
 			mu3d_hal_u2dev_connect();
-#else
-		mu3d_hal_u2dev_connect();
-#endif
 	}
 }
 
@@ -1050,10 +1024,7 @@ static void gadget_stop(struct musb *musb)
 static void set_ssusb_ip_sleep(struct musb *musb)
 {
 	/* Set below sequence to avoid power leakage */
-#ifdef SUPPORT_U3
-	if (musb_speed)
-		os_setmsk(U3D_SSUSB_U3_CTRL_0P, SSUSB_U3_PORT_PDN | SSUSB_U3_PORT_DIS);
-#endif
+	os_setmsk(U3D_SSUSB_U3_CTRL_0P, SSUSB_U3_PORT_PDN | SSUSB_U3_PORT_DIS);
 	os_setmsk(U3D_SSUSB_U2_CTRL_0P, SSUSB_U2_PORT_PDN | SSUSB_U2_PORT_DIS);
 	os_setmsk(U3D_SSUSB_IP_PW_CTRL2, SSUSB_IP_DEV_PDN);
 	os_setmsk(U3D_SSUSB_IP_PW_CTRL1, SSUSB_IP_HOST_PDN);
@@ -1105,7 +1076,7 @@ void musb_stop(struct musb *musb)
 	set_ssusb_ip_sleep(musb);
 #endif
 
-#ifndef CONFIG_FPGA_EARLY_PORTING
+#ifndef CONFIG_MTK_FPGA
 	/* Let PHY enter savecurrent mode. And turn off CLK. */
 	usb_phy_savecurrent(musb->is_clk_on);
 	musb->is_clk_on = 0;
@@ -2008,9 +1979,6 @@ static const struct attribute_group musb_attr_group = {
 
 static void musb_save_context(struct musb *musb)
 {
-#if 1
-	os_printk(K_INFO, "SKIP %s\n", __func__);
-#else
 	int i;
 
 	for (i = 0; i < musb->config->num_eps; ++i) {
@@ -2025,14 +1993,10 @@ static void musb_save_context(struct musb *musb)
 			  musb->context.index_regs[i].rxqmuaddr);
 #endif
 	}
-#endif
 }
 
 static void musb_restore_context(struct musb *musb)
 {
-#if 1
-	os_printk(K_INFO, "SKIP %s\n", __func__);
-#else
 	int i;
 
 	for (i = 0; i < musb->config->num_eps; ++i) {
@@ -2045,7 +2009,6 @@ static void musb_restore_context(struct musb *musb)
 			  os_readl(USB_QMU_RQSAR(i + 1)));
 #endif
 	}
-#endif
 }
 
 static void musb_suspend_work(struct work_struct *data)
@@ -2056,7 +2019,7 @@ static void musb_suspend_work(struct work_struct *data)
 		  musb->is_clk_on);
 
 	if (musb->is_clk_on == 1
-	    && !usb_cable_connected()) {
+	    && (!usb_cable_connected() || (musb->usb_mode != CABLE_MODE_NORMAL))) {
 
 #ifdef EP_PROFILING
 		cancel_delayed_work_sync(&musb->ep_prof_work);
@@ -2071,7 +2034,7 @@ static void musb_suspend_work(struct work_struct *data)
 
 		set_ssusb_ip_sleep(musb);
 
-#ifndef CONFIG_FPGA_EARLY_PORTING
+#ifndef CONFIG_MTK_FPGA
 		/* Let PHY enter savecurrent mode. And turn off CLK. */
 		usb_phy_savecurrent(musb->is_clk_on);
 		musb->is_clk_on = 0;
@@ -2159,10 +2122,8 @@ allocate_instance(struct device *dev, struct musb_hdrc_config *config, void __io
 	/* musb->xceiv->state = OTG_STATE_B_IDLE; //initial its value */
 
 #ifdef CONFIG_DEBUG_FS
-#ifndef USB_ELBRUS
 	if (usb20_phy_init_debugfs())
 		os_printk(K_ERR, "usb20_phy_init_debugfs fail!\n");
-#endif
 #endif
 
 	return musb;
@@ -2463,7 +2424,6 @@ static void __iomem *acquire_reg_base(struct platform_device *pdev, const char *
 		pr_err("Can't get resource for %s\n", res_name);
 		goto end;
 	}
-	os_printk(K_INFO, "iomem=0x%lx\n", (uintptr_t) iomem->start);
 
 	base = ioremap(iomem->start, resource_size(iomem));
 	if (!(uintptr_t) base) {
@@ -2497,14 +2457,6 @@ static int __init musb_probe(struct platform_device *pdev)
 	if (irq <= 0)
 		return -ENODEV;
 
-#ifdef SUPPORT_U3
-#if defined(CONFIG_USB_MU3D_DEFAULT_U2_MODE) && !defined(U3_COMPLIANCE)
-	musb_speed = musb_hal_speed = 0;
-#else
-	musb_speed = musb_hal_speed = 1;
-#endif
-#endif
-
 	os_printk(K_INFO, "[MU3D]musb_probe irq=%d\n", irq);
 
 	u3_base = acquire_reg_base(pdev, USB3_BASE_REGS_ADDR_RES_NAME);
@@ -2532,16 +2484,7 @@ static int __init musb_probe(struct platform_device *pdev)
 	}
 #endif
 
-#ifdef CONFIG_FPGA_EARLY_PORTING
-#ifdef USB_ELBRUS
-	/*Elbrus FPGA use I2C channel2*/
-	i2c_base = ioremap(0x110A0000, 0x1000);
-	if (!(i2c_base)) {
-		pr_err("Can't remap I2C BASE\n");
-		status = -ENOMEM;
-	}
-	os_printk(K_INFO, "I2C BASE=0x%lx\n", (uintptr_t) (i2c_base));
-#else
+#ifdef CONFIG_MTK_FPGA
 	/*i2c1_base = ioremap(0x11008000, 0x1000); */
 	i2c1_base = ioremap(0x11009000, 0x1000);
 	if (!(i2c1_base)) {
@@ -2549,7 +2492,6 @@ static int __init musb_probe(struct platform_device *pdev)
 		status = -ENOMEM;
 	}
 	os_printk(K_INFO, "I2C1 BASE=0x%lx\n", (uintptr_t) (i2c1_base));
-#endif
 #endif
 
 	status = musb_init_controller(dev, irq, u3_base);
@@ -2838,7 +2780,7 @@ static int musb_suspend_noirq(struct device *dev)
 
 	set_ssusb_ip_sleep(musb);
 
-#ifndef CONFIG_FPGA_EARLY_PORTING
+#ifndef CONFIG_MTK_FPGA
 	/* Let PHY enter savecurrent mode. And turn off CLK. */
 	usb_phy_savecurrent(musb->is_clk_on);
 	musb->is_clk_on = 0;
@@ -2853,7 +2795,7 @@ static int musb_resume_noirq(struct device *dev)
 
 	os_printk(K_INFO, "%s\n", __func__);
 
-#ifndef CONFIG_FPGA_EARLY_PORTING
+#ifndef CONFIG_MTK_FPGA
 	/* Recovert PHY. And turn on CLK. */
 	usb_phy_recover(musb->is_clk_on);
 	musb->is_clk_on = 1;
@@ -2924,38 +2866,6 @@ static struct platform_driver musb_driver = {
 	.remove = musb_remove,
 	.shutdown = musb_shutdown,
 };
-
-int mu3d_force_on;
-static int set_mu3d_force_on(const char *val, const struct kernel_param *kp)
-{
-	int option;
-	int rv;
-
-	rv = kstrtoint(val, 10, &option);
-	if (rv != 0)
-		return rv;
-
-	os_printk(K_WARNIN, "mu3d_force_on:%d, option:%d\n", mu3d_force_on, option);
-	if (option == 0 || option == 1) {
-		os_printk(K_WARNIN, "update to %d\n", option);
-		mu3d_force_on = option;
-	}
-
-	switch (option) {
-	case 2:
-		os_printk(K_WARNIN, "trigger reconnect\n");
-		mt_usb_connect();
-		break;
-	default:
-		break;
-	}
-	return 0;
-}
-static struct kernel_param_ops mu3d_force_on_param_ops = {
-	.set = set_mu3d_force_on,
-	.get = param_get_int,
-};
-module_param_cb(mu3d_force_on, &mu3d_force_on_param_ops, &mu3d_force_on, 0644);
 
 /*-------------------------------------------------------------------------*/
 #ifdef CONFIG_USBIF_COMPLIANCE

@@ -100,7 +100,6 @@
 					  <&cpu_sleep_0_0 &cpu_sleep_0_0 &cpu_sleep_0_0>;
 			cpu-release-addr = <0x0 0x40000200>;
 			clock-frequency = <1391000000>;
-			sched-energy-costs = <&CPU_COST_0 &CLUSTER_COST_0>;
 		};
 
 		cpu1: cpu@001 {
@@ -112,7 +111,6 @@
 					  <&cpu_sleep_0_0 &cpu_sleep_0_0 &cpu_sleep_0_0>;
 			cpu-release-addr = <0x0 0x40000200>;
 			clock-frequency = <1391000000>;
-			sched-energy-costs = <&CPU_COST_0 &CLUSTER_COST_0>;
 		};
 
 		cpu2: cpu@002 {
@@ -124,7 +122,6 @@
 					  <&cpu_sleep_0_0 &cpu_sleep_0_0 &cpu_sleep_0_0>;
 			cpu-release-addr = <0x0 0x40000200>;
 			clock-frequency = <1391000000>;
-			sched-energy-costs = <&CPU_COST_0 &CLUSTER_COST_0>;
 		};
 
 		cpu3: cpu@003 {
@@ -136,7 +133,6 @@
 					  <&cpu_sleep_0_0 &cpu_sleep_0_0 &cpu_sleep_0_0>;
 			cpu-release-addr = <0x0 0x40000200>;
 			clock-frequency = <1391000000>;
-			sched-energy-costs = <&CPU_COST_0 &CLUSTER_COST_0>;
 		};
 
 		cpu4: cpu@100 {
@@ -148,7 +144,6 @@
 					  <&cpu_sleep_0_0 &cpu_sleep_0_0 &cpu_sleep_0_0>;
 			cpu-release-addr = <0x0 0x40000200>;
 			clock-frequency = <1950000000>;
-			sched-energy-costs = <&CPU_COST_1 &CLUSTER_COST_1>;
 		};
 
 		cpu5: cpu@101 {
@@ -160,7 +155,6 @@
 					  <&cpu_sleep_0_0 &cpu_sleep_0_0 &cpu_sleep_0_0>;
 			cpu-release-addr = <0x0 0x40000200>;
 			clock-frequency = <1950000000>;
-			sched-energy-costs = <&CPU_COST_1 &CLUSTER_COST_1>;
 		};
 
 		cpu6: cpu@102 {
@@ -172,7 +166,6 @@
 					  <&cpu_sleep_0_0 &cpu_sleep_0_0 &cpu_sleep_0_0>;
 			cpu-release-addr = <0x0 0x40000200>;
 			clock-frequency = <1950000000>;
-			sched-energy-costs = <&CPU_COST_1 &CLUSTER_COST_1>;
 		};
 
 		cpu7: cpu@103 {
@@ -184,7 +177,6 @@
 					  <&cpu_sleep_0_0 &cpu_sleep_0_0 &cpu_sleep_0_0>;
 			cpu-release-addr = <0x0 0x40000200>;
 			clock-frequency = <1950000000>;
-			sched-energy-costs = <&CPU_COST_1 &CLUSTER_COST_1>;
 		};
 
 		cpu8: cpu@200 {
@@ -196,7 +188,6 @@
 					  <&cpu_sleep_0_0 &cpu_sleep_0_0 &cpu_sleep_0_0>;
 			cpu-release-addr = <0x0 0x40000200>;
 			clock-frequency = <2288000000>;
-			sched-energy-costs = <&CPU_COST_2 &CLUSTER_COST_2>;
 		};
 
 		cpu9: cpu@201 {
@@ -208,7 +199,6 @@
 					  <&cpu_sleep_0_0 &cpu_sleep_0_0 &cpu_sleep_0_0>;
 			cpu-release-addr = <0x0 0x40000200>;
 			clock-frequency = <2288000000>;
-			sched-energy-costs = <&CPU_COST_2 &CLUSTER_COST_2>;
 		};
 
 		cpu-map {
@@ -282,8 +272,6 @@
 			};
 
 		};
-
-		/include/ "mt6797-sched-energy.dtsi"
 
 	};
 
@@ -395,7 +383,7 @@
 		spi-reserve-memory {
 	   compatible = "mediatek,spi-reserve-memory";
 	   no-map;
-	   size = <0 0x8000>;
+	   size = <0 0x8000>; /* SPI USER MEMORY SIZE  ----大小需要与spi-dev.c的reserve_memory_spi_fn一 致*/
 	   alignment = <0 0x10000>;
 	   alloc-ranges = <0 0x40000000 0 0x80000000>;
   	};
@@ -602,6 +590,7 @@
 				regulator-min-microvolt = <3000000>;
 				regulator-max-microvolt = <3300000>;
 				regulator-enable-ramp-delay = <44>;
+				regulator-boot-on;
 			};
 
 			mt_pmic_vio28_ldo_reg: ldo_vio28 {
@@ -747,6 +736,7 @@
 				regulator-min-microvolt = <1200000>;
 				regulator-max-microvolt = <3300000>;
 				regulator-enable-ramp-delay = <44>;
+				regulator-boot-on;
 			};
 
 			mt_pmic_vldo28_0_ldo_reg: ldo_vldo28_0 {
@@ -2000,7 +1990,7 @@
 			cell-index = <2>;
 			ccif,major = <169>;
 			ccif,minor_base = <0>;
-			ccif,capability = <2>;	//tx busy stop
+			ccif,capability = <0>;
 			mediatek,md_smem_size = <0x400000>; //md share memory size
 			clocks = <&scpsys SCP_SYS_C2K>;
 			clock-names = "scp-sys-c2k-main";
@@ -2497,7 +2487,6 @@
 						<&infrasys INFRA_I2C2_ARB>;
 			clock-names = "main", "dma", "arb";
 			clock-div = <10>;
-			mediatek,buffermode_used;
 		};
 
 		spi0:spi@1100a000 {
@@ -2546,7 +2535,6 @@
 						<&infrasys INFRA_I2C3_ARB>;
 			clock-names = "main", "dma", "arb";
 			clock-div = <10>;
-			mediatek,buffermode_used;
 		};
 
 		i2c6:i2c@1100e000 {
@@ -2558,7 +2546,6 @@
 			clocks = <&infrasys INFRA_I2C_APPM>, <&infrasys INFRA_AP_DMA>;
 			clock-names = "main", "dma";
 			clock-div = <10>;
-			mediatek,appm_used;
 		};
 
 		pwm_disp@1100f000 {
@@ -2575,7 +2562,6 @@
 			clocks = <&infrasys INFRA_I2C_GPUPM>, <&infrasys INFRA_AP_DMA>;
 			clock-names = "main", "dma";
 			clock-div = <10>;
-			mediatek,gpupm_used;
 
 			rt5735@1c {
 				status = "ok";
@@ -2737,7 +2723,7 @@
 		};
 
 		audgpio:mt_soc_dl1_pcm@11220000 {
-			compatible = "mediatek,mt_soc_pcm_dl1";
+			compatible = "mediatek,mt-soc-dl1-pcm";
 			reg = <0x11220000 0x1000>;
 			interrupts = <GIC_SPI 151 IRQ_TYPE_LEVEL_LOW>;
 			clocks = <&audiosys AUDIO_PDN_AFE>,
@@ -2897,7 +2883,6 @@
 		mt_soc_codec_name@11220000 {
 			compatible = "mediatek,mt_soc_codec_63xx";
 			use_hp_depop_flow = <0>; /* select 1: use, 0: not use */
-			use_ul_260k = <1>; /* select 1: use, 0: not use */
 		};
 
 		mt_soc_dummy_pcm@11220000 {
@@ -2922,10 +2907,6 @@
 
 		mt_soc_anc_pcm@11220000 {
 			compatible = "mediatek,mt_soc_pcm_anc";
-		};
-
-		mt_soc_pcm_voice_ultra@11220000 {
-			compatible = "mediatek,mt_soc_pcm_voice_ultra";
 		};
 
 		icusb@11200000 {
@@ -3974,7 +3955,7 @@
 			clocks =
 				<&topckgen TOP_MUX_MFG>,
 				<&topckgen TOP_MFGPLL_CK>,
-				<&clk26m>;
+				<&topckgen TOP_SYSPLL_D3>;
 			clock-names =
 				"clk_mux",
 				"clk_main_parent",
@@ -4055,10 +4036,6 @@
 
 		accdet: accdet@ {
 			compatible = "mediatek,mt6797-accdet";
-		};
-
-		swtp: swtp@ {
-			compatible = "mediatek, swtp-eint";
 		};
 
 		bat_notify {
@@ -4255,22 +4232,8 @@
 		sub_bus = <3>;
 	};
 
-	firmware {
-		android {
-			compatible = "android,firmware";
-			fstab {
-				compatible = "android,fstab";
-				system {
-					compatible = "android,system";
-					dev = "/dev/block/platform/mtk-msdc.0/11230000.msdc0/by-name/system";
-					type = "ext4";
-					mnt_flags = "ro,lazytime,barrier=0";
-					fsmgr_flags = "wait";
-				};
-			};
-		};
-	};
 };
 
 #include "cust.dtsi"
 #include <trusty.dtsi>
+

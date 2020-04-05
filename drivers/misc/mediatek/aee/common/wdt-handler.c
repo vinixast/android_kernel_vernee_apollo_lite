@@ -34,6 +34,9 @@
 #include <mach/wd_api.h>
 #ifndef __aarch64__
 #include <smp.h>
+#ifndef CONFIG_ARCH_MT8127
+#include <mach/irqs.h>
+#endif
 #endif
 #include "aee-common.h"
 
@@ -350,6 +353,8 @@ void aee_fiq_ipi_cpu_stop(void *arg, void *regs, void *svc_sp)
 	aee_dump_cpu_reg_bin(cpu, regs);
 	aee_wdt_dump_stack_bin(cpu, ((struct pt_regs *)regs)->ARM_sp,
 			       ((struct pt_regs *)regs)->ARM_sp + WDT_SAVE_STACK_SIZE);
+
+	set_cpu_online(cpu, false);
 	local_fiq_disable();
 	local_irq_disable();
 
@@ -498,9 +503,6 @@ void aee_wdt_fiq_info(void *arg, void *regs, void *svc_sp)
 	if (atomic_xchg(&wdt_enter_fiq, 1) != 0) {
 		aee_rr_rec_fiq_step(AEE_FIQ_STEP_WDT_FIQ_LOOP);
 		aee_wdt_percpu_printf(cpu, "Other CPU already enter WDT FIQ handler\n");
-#ifdef CONFIG_TRUSTY_WDT_FIQ_ARMV7_SUPPORT
-		aee_fiq_ipi_cpu_stop(arg, regs, svc_sp);
-#endif
 		/* loop forever here to avoid SMP deadlock risk during panic flow */
 		while (1)
 			;

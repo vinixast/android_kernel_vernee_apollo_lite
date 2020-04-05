@@ -1,16 +1,3 @@
-/*
- * Copyright (C) 2015 MediaTek Inc.
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- */
-
 #include <linux/interrupt.h>
 #include <linux/i2c.h>
 #include <linux/slab.h>
@@ -415,32 +402,30 @@ static int fan49101_driver_probe(struct i2c_client *client, const struct i2c_dev
 	int err = 0;
 
 	PMICLOG1("[fan49101_driver_probe]\n");
-/*
 	new_client = kmalloc(sizeof(struct i2c_client), GFP_KERNEL);
 	if (new_client == NULL) {
 		err = -ENOMEM;
 		goto exit;
 	}
 	memset(new_client, 0, sizeof(struct i2c_client));
-*/
+
 	new_client = client;
 
 	/* --------------------- */
 	fan49101_hw_component_detect();
-
 	if (g_fan49101_hw_exist == 1) {
 		fan49101_hw_init();
 		fan49101_dump_register();
-	} else {
-		PMICLOG1("[fan49101_driver_probe] hw_exist = %d\n", g_fan49101_hw_exist);
-		err = -ENOMEM;
-		goto exit;
 	}
-
 	g_fan49101_driver_ready = 1;
 
 	PMICLOG1("[fan49101_driver_probe] g_fan49101_hw_exist=%d, g_fan49101_driver_ready=%d\n",
 		 g_fan49101_hw_exist, g_fan49101_driver_ready);
+
+	if (g_fan49101_hw_exist == 0) {
+		PMICLOG1("[fan49101_driver_probe] return err\n");
+		return err;
+	}
 
 	return 0;
 

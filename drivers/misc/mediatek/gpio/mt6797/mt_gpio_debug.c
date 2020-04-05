@@ -1,18 +1,15 @@
-/*
-* Copyright (C) 2016 MediaTek Inc.
-*
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License version 2 as
-* published by the Free Software Foundation.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-* See http://www.gnu.org/licenses/gpl-2.0.html for more details.
-*/
+/******************************************************************************
+ * mt_gpio_debug.c - MTKLinux GPIO Device Driver
+ *
+ * Copyright 2008-2009 MediaTek Co.,Ltd.
+ *
+ * DESCRIPTION:
+ *     This file provid the other drivers GPIO debug functions
+ *
+ ******************************************************************************/
 
 #include <linux/slab.h>
-#include "6797_gpio.h"
+#include <6797_gpio.h>
 #include <mt-plat/mt_gpio.h>
 #include <mt-plat/mt_gpio_core.h>
 
@@ -542,15 +539,15 @@ static ssize_t mt_gpio_dump_regs(char *buf, ssize_t bufLen)
 	int idx = 0, len = 0;
 
 	/*char tmp[]="PIN: [MODE] [PULL_SEL] [DIN] [DOUT] [PULL EN] [DIR] [INV] [IES]\n"; */
-	char tmp[] = "PIN: [MODE] [PULL_SEL] [DIN] [DOUT] [PULL EN] [DIR] [IES] [SMT] [DRIVING]\n";
+	char tmp[] = "PIN: [MODE] [PULL_SEL] [DIN] [DOUT] [PULL EN] [DIR] [IES] [SMT]\n";
 
 	len += snprintf(buf + len, bufLen - len, "%s", tmp);
 	for (idx = MT_GPIO_BASE_START; idx < MT_GPIO_BASE_MAX; idx++) {
-		len += snprintf(buf + len, bufLen - len, "%3d:%x%d%d%d%d%d%d%d%d\n",
+		len += snprintf(buf + len, bufLen - len, "%3d:%d%d%d%d%d%d%d%d\n",
 				idx, mt_get_gpio_mode_base(idx), mt_get_gpio_pull_select_base(idx),
 				mt_get_gpio_in_base(idx), mt_get_gpio_out_base(idx),
 				mt_get_gpio_pull_enable_base(idx), mt_get_gpio_dir_base(idx),
-				mt_get_gpio_ies_base(idx), mt_get_gpio_smt_base(idx), mt_get_gpio_driving_base(idx));
+				mt_get_gpio_ies_base(idx), mt_get_gpio_smt_base(idx));
 	}
 
 	return len;
@@ -566,14 +563,14 @@ ssize_t mt_gpio_show_pin(struct device *dev, struct device_attribute *attr, char
 ssize_t mt_gpio_store_pin(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
 	int pin;
-	/*int ret;*/
+	int ret;
 
 #ifdef MTK_MT6306_SUPPORT
 	int group, on;
 #endif
-	int mode, pullsel, dout, pullen, dir, ies, smt, driving;
+	int mode, pullsel, dout, pullen, dir, ies, smt;
 	u32 num, src, div;
-	/*char md_str[128] = "GPIO_MD_TEST";*/
+	char md_str[128] = "GPIO_MD_TEST";
 	/* struct mt_gpio_obj *obj = (struct mt_gpio_obj*)dev_get_drvdata(dev); */
 	if (!strncmp(buf, "-h", 2)) {
 		GPIOMSG("cat pin  #show all pin setting\n");
@@ -583,10 +580,9 @@ ssize_t mt_gpio_store_pin(struct device *dev, struct device_attribute *attr, con
 		GPIOMSG("echo -wpen num x > pin  #x: 1,pull enable; 0 pull disable\n");
 		GPIOMSG("echo -wies num x > pin  #x: 1,ies enable; 0 ies disable\n");
 		GPIOMSG("echo -wdir num x > pin  #x: 1, output; 0, input\n");
-		GPIOMSG("echo -wdriving num x > pin  #x: driving register value\n");
 		/*GPIOMSG("echo -wdinv num x > pin #x: 1, inversion enable; 0, disable\n"); */
 		GPIOMSG("echo -w=num x x x x x x > pin #set all property one time\n");
-		GPIOMSG("PIN: [MODE] [PSEL] [DIN] [DOUT] [PEN] [DIR] [IES] [DRIVING]\n");
+		GPIOMSG("PIN: [MODE] [PSEL] [DIN] [DOUT] [PEN] [DIR] [IES]\n");
 	} else if (!strncmp(buf, "-r0", 3) && (1 == sscanf(buf + 3, "%d", &pin))) {
 		GPIO_CFG cfg = {.no = pin };
 		/*if pmic */
@@ -616,12 +612,10 @@ ssize_t mt_gpio_store_pin(struct device *dev, struct device_attribute *attr, con
 			GPIOMSG("set ies (%3d, %d)=%d\n", pin, ies, mt_set_gpio_ies(pin, ies));
 		else if (!strncmp(buf, "dir", 3) && (2 == sscanf(buf + 3, "%d %d", &pin, &dir)))
 			GPIOMSG("set dir (%3d, %d)=%d\n", pin, dir, mt_set_gpio_dir(pin, dir));
-		else if (!strncmp(buf, "driving", 7) && (2 == sscanf(buf + 7, "%d %d", &pin, &driving)))
-			GPIOMSG("set dir (%3d, %d)=%d\n", pin, driving, mt_set_gpio_driving(pin, driving));
 		/* else if (!strncmp(buf, "dinv", 4) && (2 == sscanf(buf+4, "%d %d", &pin, &dinv))) */
 		/* GPIOMSG("set dinv(%3d, %d)=%d\n", pin, dinv, mt_set_gpio_inversion(pin, dinv)); */
-		else if (8 == sscanf(buf, "=%d:%d %d %d %d %d %d %d %d", &pin, &mode, &pullsel, &dout,
-				&pullen, &dir, &ies, &smt, &driving)) {
+		else if (8 == sscanf(buf, "=%d:%d %d %d %d %d %d %d", &pin, &mode, &pullsel, &dout,
+				&pullen, &dir, &ies, &smt)) {
 			GPIOMSG("set mode(%3d, %d)=%d\n", pin, mode, mt_set_gpio_mode(pin, mode));
 			GPIOMSG("set psel(%3d, %d)=%d\n", pin, pullsel,
 				mt_set_gpio_pull_select(pin, pullsel));
@@ -632,7 +626,7 @@ ssize_t mt_gpio_store_pin(struct device *dev, struct device_attribute *attr, con
 			/* GPIOMSG("set dinv(%3d, %d)=%d\n", pin, dinv, mt_set_gpio_inversion(pin, dinv)); */
 			GPIOMSG("set ies (%3d, %d)=%d\n", pin, ies, mt_set_gpio_ies(pin, ies));
 			GPIOMSG("set smt (%3d, %d)=%d\n", pin, smt, mt_set_gpio_smt(pin, smt));
-			GPIOMSG("set smt (%3d, %d)=%d\n", pin, driving, mt_set_gpio_driving(pin, driving));
+
 		} else
 			GPIOMSG("invalid format: '%s'", buf);
 	} else if (!strncmp(buf, "ww", 2)) {
@@ -673,9 +667,9 @@ ssize_t mt_gpio_store_pin(struct device *dev, struct device_attribute *attr, con
 		/* GPIOMSG("gpio reg test for next chip!\n"); */
 		/* mt_reg_test(); */
 	} else if (!strncmp(buf, "-md", 3)) {
-		/*buf += 3;*/
-		/*ret = sscanf(buf, "%s", md_str);*/
-		/*mt_get_md_gpio_debug(md_str);*/
+		buf += 3;
+		ret = sscanf(buf, "%s", md_str);
+		mt_get_md_gpio_debug(md_str);
 	} else if (!strncmp(buf, "-k", 2)) {
 		buf += 2;
 		if (!strncmp(buf, "s", 1) && (3 == sscanf(buf + 1, "%d %d %d", &num, &src, &div)))

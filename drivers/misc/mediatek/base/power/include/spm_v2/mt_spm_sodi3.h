@@ -15,14 +15,12 @@
 #define __MT_SPM_SODI3_H_
 
 #include <mt_cpuidle.h>
-#include "mt_spm_idle.h"
-#include "mt_spm_misc.h"
-#include "mt_spm_internal.h"
-#if !defined(CONFIG_FPGA_EARLY_PORTING)
-#include "mt_spm_pmic_wrap.h"
-#endif
-#include "mt_spm_misc.h"
-#include "mt_spm_internal.h"
+#include <mt_spm_idle.h>
+#include <mt_spm_misc.h>
+#include <mt_spm_internal.h>
+#include <mt_spm_pmic_wrap.h>
+#include <mt_spm_misc.h>
+#include <mt_spm_internal.h>
 
 #include "mt_vcorefs_governor.h"
 
@@ -36,8 +34,7 @@
 
 #if defined(CONFIG_MICROTRUST_TEE_SUPPORT)
 #define WAKE_SRC_FOR_SODI3 \
-	(WAKE_SRC_R12_PCM_TIMER | \
-	WAKE_SRC_R12_KP_IRQ_B | \
+	(WAKE_SRC_R12_KP_IRQ_B | \
 	WAKE_SRC_R12_APXGPT1_EVENT_B | \
 	WAKE_SRC_R12_CONN2AP_SPM_WAKEUP_B | \
 	WAKE_SRC_R12_EINT_EVENT_B | \
@@ -54,8 +51,7 @@
 	WAKE_SRC_R12_CLDMA_EVENT_B)
 #else
 #define WAKE_SRC_FOR_SODI3 \
-	(WAKE_SRC_R12_PCM_TIMER | \
-	WAKE_SRC_R12_KP_IRQ_B | \
+	(WAKE_SRC_R12_KP_IRQ_B | \
 	WAKE_SRC_R12_APXGPT1_EVENT_B | \
 	WAKE_SRC_R12_CONN2AP_SPM_WAKEUP_B | \
 	WAKE_SRC_R12_EINT_EVENT_B | \
@@ -81,8 +77,8 @@
 
 #if defined(CONFIG_MICROTRUST_TEE_SUPPORT)
 #define WAKE_SRC_FOR_SODI3 \
-	(WAKE_SRC_R12_PCM_TIMER | \
-	WAKE_SRC_R12_KP_IRQ_B | \
+	(WAKE_SRC_R12_KP_IRQ_B | \
+	WAKE_SRC_R12_PCM_TIMER | \
 	WAKE_SRC_R12_APXGPT1_EVENT_B | \
 	WAKE_SRC_R12_CONN2AP_SPM_WAKEUP_B | \
 	WAKE_SRC_R12_EINT_EVENT_B | \
@@ -100,8 +96,8 @@
 	WAKE_SRC_R12_CLDMA_EVENT_B)
 #else
 #define WAKE_SRC_FOR_SODI3 \
-	(WAKE_SRC_R12_PCM_TIMER | \
-	WAKE_SRC_R12_KP_IRQ_B | \
+	(WAKE_SRC_R12_KP_IRQ_B | \
+	WAKE_SRC_R12_PCM_TIMER | \
 	WAKE_SRC_R12_APXGPT1_EVENT_B | \
 	WAKE_SRC_R12_CONN2AP_SPM_WAKEUP_B | \
 	WAKE_SRC_R12_EINT_EVENT_B | \
@@ -122,55 +118,13 @@
 
 #define WAKE_SRC_FOR_MD32  0
 
-#elif defined(CONFIG_ARCH_MT6757)
-
-#if defined(CONFIG_MICROTRUST_TEE_SUPPORT)
-#define WAKE_SRC_FOR_SODI3 \
-	(WAKE_SRC_R12_PCM_TIMER | \
-	WAKE_SRC_R12_KP_IRQ_B | \
-	WAKE_SRC_R12_APXGPT1_EVENT_B | \
-	WAKE_SRC_R12_CONN2AP_SPM_WAKEUP_B | \
-	WAKE_SRC_R12_EINT_EVENT_B | \
-	WAKE_SRC_R12_CONN_WDT_IRQ_B | \
-	WAKE_SRC_R12_CCIF0_EVENT_B | \
-	WAKE_SRC_R12_MD32_SPM_IRQ_B | \
-	WAKE_SRC_R12_USB_CDSC_B | \
-	WAKE_SRC_R12_USB_POWERDWN_B | \
-	WAKE_SRC_R12_C2K_WDT_IRQ_B | \
-	WAKE_SRC_R12_EINT_EVENT_SECURE_B | \
-	WAKE_SRC_R12_CCIF1_EVENT_B | \
-	WAKE_SRC_R12_SYS_CIRQ_IRQ_B | \
-	WAKE_SRC_R12_CSYSPWREQ_B | \
-	WAKE_SRC_R12_MD1_WDT_B | \
-	WAKE_SRC_R12_CLDMA_EVENT_B)
-#else
-#define WAKE_SRC_FOR_SODI3 \
-	(WAKE_SRC_R12_PCM_TIMER | \
-	WAKE_SRC_R12_KP_IRQ_B | \
-	WAKE_SRC_R12_APXGPT1_EVENT_B | \
-	WAKE_SRC_R12_CONN2AP_SPM_WAKEUP_B | \
-	WAKE_SRC_R12_EINT_EVENT_B | \
-	WAKE_SRC_R12_CONN_WDT_IRQ_B | \
-	WAKE_SRC_R12_CCIF0_EVENT_B | \
-	WAKE_SRC_R12_MD32_SPM_IRQ_B | \
-	WAKE_SRC_R12_USB_CDSC_B | \
-	WAKE_SRC_R12_USB_POWERDWN_B | \
-	WAKE_SRC_R12_C2K_WDT_IRQ_B | \
-	WAKE_SRC_R12_EINT_EVENT_SECURE_B | \
-	WAKE_SRC_R12_CCIF1_EVENT_B | \
-	WAKE_SRC_R12_SYS_CIRQ_IRQ_B | \
-	WAKE_SRC_R12_CSYSPWREQ_B | \
-	WAKE_SRC_R12_MD1_WDT_B | \
-	WAKE_SRC_R12_CLDMA_EVENT_B | \
-	WAKE_SRC_R12_SEJ_WDT_GPT_B)
-#endif /* #if defined(CONFIG_MICROTRUST_TEE_SUPPORT) */
-
-#define WAKE_SRC_FOR_MD32  0
-
 #else
 #error "Does not support!"
 #endif
 
+
+#define reg_read(addr)         __raw_readl(IOMEM(addr))
+#define reg_write(addr, val)   mt_reg_sync_writel((val), ((void *)addr))
 
 #ifdef SPM_SODI3_PROFILE_TIME
 extern unsigned int	soidle3_profile[4];
@@ -204,12 +158,6 @@ u32 __attribute__((weak)) aee_rr_curr_sodi3_val(void)
 
 #endif
 
-#if defined(CONFIG_FPGA_EARLY_PORTING)
-void __attribute__((weak)) clk_buf_write_afcdac(void)
-{
-}
-#endif
-
 static inline void spm_sodi3_footprint(enum spm_sodi3_step step)
 {
 #if SPM_AEE_RR_REC
@@ -232,6 +180,11 @@ static inline void spm_sodi3_aee_init(void)
 }
 
 #define spm_sodi3_reset_footprint() spm_sodi3_aee_init()
+
+
+extern void spm_trigger_wfi_for_sodi(struct pwr_ctrl *pwrctrl);
+extern void spm_enable_mmu_smi_async(void);
+extern void spm_disable_mmu_smi_async(void);
 
 #endif /* __MT_SPM_SODI3_H_ */
 

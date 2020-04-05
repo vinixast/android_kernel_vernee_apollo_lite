@@ -11,6 +11,5 @@
 # GNU General Public License for more details.
 #
 
-ccflags-y += -I$(srctree)/drivers/misc/mediatek/mmp/
 
 obj-y += mmprofile.o

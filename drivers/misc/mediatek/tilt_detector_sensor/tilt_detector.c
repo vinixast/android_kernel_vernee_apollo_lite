@@ -70,7 +70,7 @@ static int tilt_real_enable(int enable)
 
 		if (NULL != cxt->tilt_ctl.set_delay) {
 			if (cxt->is_batch_enable == false)
-				cxt->tilt_ctl.set_delay(120000000);
+				cxt->tilt_ctl.set_delay(66000000);
 		} else {
 			TILT_ERR("tilt set delay = NULL\n");
 		}
@@ -221,14 +221,14 @@ static ssize_t tilt_store_batch(struct device *dev, struct device_attribute *att
 	cxt = tilt_context_obj;
 	TILT_LOG("tilt_store_batch buf=%s\n", buf);
 	mutex_lock(&cxt->tilt_op_mutex);
-
-	if (!strncmp(buf, "1", 1))
+	
+	if (!strncmp(buf, "1", 1)) {
 		cxt->is_batch_enable = true;
-	else if (!strncmp(buf, "0", 1))
+	} else if (!strncmp(buf, "0", 1)) {
 		cxt->is_batch_enable = false;
-	else
+	} else {
 		TILT_ERR(" tilt_store_batch error !!\n");
-
+	}
 	mutex_unlock(&cxt->tilt_op_mutex);
 	return len;
 }
@@ -261,15 +261,9 @@ static ssize_t tilt_show_flush(struct device *dev, struct device_attribute *attr
 static ssize_t tilt_show_devnum(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	const char *devname = NULL;
-	struct input_handle *handle;
 
-	list_for_each_entry(handle, &tilt_context_obj->idev->h_list, d_node)
-		if (strncmp(handle->name, "event", 5) == 0) {
-			devname = handle->name;
-			break;
-		}
-
-	return snprintf(buf, PAGE_SIZE, "%s\n", devname + 5);
+	devname = dev_name(&tilt_context_obj->idev->dev);
+	return snprintf(buf, PAGE_SIZE, "%s\n", devname + 5);	/* TODO: why +5? */
 }
 
 static int tilt_detector_remove(struct platform_device *pdev)

@@ -36,7 +36,6 @@ static LCM_STATUS _lcm_util_check_data(char type, const LCM_DATA_T1 *t1)
 
 	case LCM_UTIL_MDELAY:
 	case LCM_UTIL_UDELAY:
-	case LCM_UTIL_RAR:
 		/* no limitation */
 		break;
 
@@ -53,6 +52,8 @@ static LCM_STATUS _lcm_util_check_write_cmd_v1(const LCM_DATA_T5 *t5)
 {
 	if (t5 == NULL)
 		return LCM_STATUS_ERROR;
+	if (t5->cmd == NULL)
+		return LCM_STATUS_ERROR;
 	if (t5->size == 0)
 		return LCM_STATUS_ERROR;
 
@@ -64,6 +65,8 @@ static LCM_STATUS _lcm_util_check_write_cmd_v2(const LCM_DATA_T3 *t3)
 {
 	if (t3 == NULL)
 		return LCM_STATUS_ERROR;
+	if ((t3->size > 0) && (t3->data == NULL))
+		return LCM_STATUS_ERROR;
 
 	return LCM_STATUS_OK;
 }
@@ -72,6 +75,8 @@ static LCM_STATUS _lcm_util_check_write_cmd_v2(const LCM_DATA_T3 *t3)
 static LCM_STATUS _lcm_util_check_write_cmd_v23(const LCM_DATA_T3 *t3)
 {
 	if (t3 == NULL)
+		return LCM_STATUS_ERROR;
+	if ((t3->size > 0) && (t3->data == NULL))
 		return LCM_STATUS_ERROR;
 
 	return LCM_STATUS_OK;
@@ -102,10 +107,6 @@ LCM_STATUS lcm_util_set_data(const LCM_UTIL_FUNCS *lcm_util, char type, LCM_DATA
 
 		case LCM_UTIL_UDELAY:
 			lcm_util->udelay((unsigned int)t1->data);
-			break;
-
-		case LCM_UTIL_RAR:
-			lcm_util->rar((unsigned int)t1->data);
 			break;
 
 		default:
@@ -149,15 +150,10 @@ LCM_STATUS lcm_util_set_write_cmd_v2(const LCM_UTIL_FUNCS *lcm_util, LCM_DATA_T3
 				     unsigned char force_update)
 {
 	/* check parameter is valid */
-	if (LCM_STATUS_OK == _lcm_util_check_write_cmd_v2(t3)) {
-		if (t3->cmd == LCM_UTIL_WRITE_CMD_V2_NULL) {
-			lcm_util->dsi_set_null((unsigned char)t3->cmd, (unsigned char)t3->size,
-					       (unsigned char *)t3->data, force_update);
-		} else {
-			lcm_util->dsi_set_cmdq_V2((unsigned char)t3->cmd, (unsigned char)t3->size,
-						  (unsigned char *)t3->data, force_update);
-		}
-	} else {
+	if (LCM_STATUS_OK == _lcm_util_check_write_cmd_v2(t3))
+		lcm_util->dsi_set_cmdq_V2((unsigned char)t3->cmd, (unsigned char)t3->size,
+					  (unsigned char *)t3->data, force_update);
+	else {
 		pr_debug("[LCM][ERROR] %s/%d: 0x%x, %d, 0x%p\n", __func__, __LINE__, t3->cmd,
 		       t3->size, t3->data);
 		return LCM_STATUS_ERROR;

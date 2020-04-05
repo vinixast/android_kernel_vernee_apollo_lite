@@ -944,7 +944,7 @@ static int io_init(struct ubi_device *ubi, int max_beb_per1024)
 	ubi->max_write_size = COMBO_NAND_PAGE_SIZE;
 #endif
 #if defined(CONFIG_MTK_MLC_NAND_SUPPORT) || defined(CONFIG_MTK_SLC_BUFFER_SUPPORT)
-	ubi->max_write_size = rounddown_pow_of_two(ubi->mtd->erasesize/4);
+	ubi->max_write_size = ubi->mtd->erasesize/4;
 #endif
 	/*
 	 * Maximum write size has to be greater or equivalent to min. I/O
@@ -1273,9 +1273,6 @@ int ubi_attach_mtd_dev(struct mtd_info *mtd, int ubi_num,
 			goto out_detach;
 	}
 
-	/* Make device "available" before it becomes accessible via sysfs */
-	ubi_devices[ubi_num] = ubi;
-
 	err = uif_init(ubi, &ref);
 	if (err)
 		goto out_detach;
@@ -1322,6 +1319,7 @@ int ubi_attach_mtd_dev(struct mtd_info *mtd, int ubi_num,
 	wake_up_process(ubi->bgt_thread);
 	spin_unlock(&ubi->wl_lock);
 
+	ubi_devices[ubi_num] = ubi;
 	ubi_notify_all(ubi, UBI_VOLUME_ADDED, NULL);
 	return ubi_num;
 
@@ -1332,7 +1330,6 @@ out_uif:
 	ubi_assert(ref);
 	uif_close(ubi);
 out_detach:
-	ubi_devices[ubi_num] = NULL;
 	ubi_wl_close(ubi);
 	ubi_free_internal_volumes(ubi);
 	vfree(ubi->vtbl);

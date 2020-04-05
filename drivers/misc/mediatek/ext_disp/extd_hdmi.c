@@ -40,15 +40,9 @@
 #include <linux/atomic.h>
 #include <linux/io.h>
 
-#if defined(CONFIG_ARCH_MT8167)
-#ifdef CONFIG_MTK_CLKMGR
-#include <mach/mt_clkmgr.h>
-#endif
-#else
 #include <mach/irqs.h>
-#include "mach/irqs.h"
 #include <mach/mt_clkmgr.h>
-#endif
+#include "mach/irqs.h"
 
 #include <asm/cacheflush.h>
 #include <asm/tlbflush.h>
@@ -61,11 +55,7 @@
 #include "mtkfb.h"
 
 #include "mtkfb_fence.h"
-#if defined(CONFIG_ARCH_MT6755)
-#include "disp_recorder.h"
-#else
 #include "display_recorder.h"
-#endif
 
 #include "ddp_info.h"
 #include "ddp_irq.h"
@@ -312,10 +302,10 @@ int hdmi_free_hdmi_buffer(void)
 static int hdmi_wait_vsync_kthread(void *data)
 {
 	disp_session_vsync_config vsync_config;
-
-	struct sched_param param = {.sched_priority = 94 }; /*RTPM_PRIO_SCRN_UPDATE*/
+/*
+	struct sched_param param = {.sched_priority = RTPM_PRIO_SCRN_UPDATE };
 	sched_setscheduler(current, SCHED_RR, &param);
-
+*/
 
 	for (;;) {
 		ext_disp_wait_for_vsync((void *)&vsync_config, MHL_SESSION_ID);
@@ -735,7 +725,7 @@ static void hdmi_state_reset(void)
 	ext_disp_suspend(MHL_SESSION_ID);
 	session_id = ext_disp_get_sess_id();
 
-	for (i = 0; i < HW_OVERLAY_COUNT; i++)
+	for (i = 0; i < EXTD_OVERLAY_CNT; i++)
 		mtkfb_release_layer_fence(session_id, i);
 
 	first_frame_done = 0;
@@ -803,9 +793,6 @@ static void hdmi_state_reset(void)
 
 /*static*/ void hdmi_power_off(void)
 {
-	int i = 0;
-	int session_id = 0;
-
 	HDMI_FUNC();
 	if (IS_HDMI_OFF())
 		return;
@@ -817,11 +804,6 @@ static void hdmi_state_reset(void)
 
 	hdmi_drv->power_off();
 	ext_disp_suspend(MHL_SESSION_ID);
-	session_id = ext_disp_get_sess_id();
-
-	for (i = 0; i < HW_OVERLAY_COUNT; i++)
-		mtkfb_release_layer_fence(session_id, i);
-
 	p->is_clock_on = false;
 	SET_HDMI_OFF();
 	up(&hdmi_update_mutex);
@@ -1186,8 +1168,8 @@ int hdmi_set_resolution(int res)
 
 	HDMI_LOG("video resolution configuration, res:%d, old res:%ld, video_on:%d\n",
 		res, hdmi_reschange, p->is_mhl_video_on);
-	if (!p->is_enabled) {
-		HDMI_LOG("return in %d\n", __LINE__);
+	if ((!p->is_enabled) || IS_HDMI_STANDBY()) {
+		HDMI_LOG("return in %d, enable: %d, state: %d\n", __LINE__, p->is_enabled, atomic_read(&p->state));
 		return 0;
 	}
 
@@ -1218,7 +1200,7 @@ int hdmi_set_resolution(int res)
 
 		session_id = ext_disp_get_sess_id();
 
-		for (i = 0; i < HW_OVERLAY_COUNT; i++)
+		for (i = 0; i < EXTD_OVERLAY_CNT; i++)
 			mtkfb_release_layer_fence(session_id, i);
 	}
 
@@ -1284,11 +1266,11 @@ int hdmi_get_dev_info(int is_sf, void *info)
 		hdmi_info.isHwVsyncAvailable = HW_DPI_VSYNC_SUPPORT;
 
 		if ((hdmi_reschange == HDMI_VIDEO_1920x1080p_30Hz) || (hdmi_reschange == HDMI_VIDEO_2160p_DSC_30Hz))
-			hdmi_info.vsyncFPS = 3000;
+			hdmi_info.vsyncFPS = 30;
 		else if (hdmi_reschange == HDMI_VIDEO_2160p_DSC_24Hz)
-			hdmi_info.vsyncFPS = 2400;
+			hdmi_info.vsyncFPS = 24;
 		else
-			hdmi_info.vsyncFPS = 6000;
+			hdmi_info.vsyncFPS = 60;
 
 		if (copy_to_user(info, &hdmi_info, sizeof(hdmi_info))) {
 			MMProfileLogEx(ddp_mmp_get_events()->Extd_ErrorInfo, MMProfileFlagPulse, Devinfo, 1);
@@ -1325,11 +1307,11 @@ int hdmi_get_dev_info(int is_sf, void *info)
 		dispif_info->isHwVsyncAvailable = HW_DPI_VSYNC_SUPPORT;
 
 		if ((hdmi_reschange == HDMI_VIDEO_1920x1080p_30Hz) || (hdmi_reschange == HDMI_VIDEO_2160p_DSC_30Hz))
-			dispif_info->vsyncFPS = 3000;
+			dispif_info->vsyncFPS = 30;
 		else if (hdmi_reschange == HDMI_VIDEO_2160p_DSC_24Hz)
-			dispif_info->vsyncFPS = 2400;
+			dispif_info->vsyncFPS = 24;
 		else
-			dispif_info->vsyncFPS = 6000;
+			dispif_info->vsyncFPS = 60;
 
 		if (dispif_info->displayWidth * dispif_info->displayHeight <= 240 * 432)
 			dispif_info->physicalHeight = dispif_info->physicalWidth = 0;
@@ -1393,8 +1375,6 @@ int hdmi_get_edid(void *edid_info)
 #ifdef MHL_RESOLUTION_LIMIT_720P_60
 		pv_get_info.ui4_pal_resolution &= (~SINK_1080P60);
 		pv_get_info.ui4_pal_resolution &= (~SINK_1080P30);
-		pv_get_info.ui4_pal_resolution &= (~SINK_2160p30);
-		pv_get_info.ui4_pal_resolution &= (~SINK_2160p24);
 #endif
 
 #ifdef MHL_RESOLUTION_LIMIT_1080P_30

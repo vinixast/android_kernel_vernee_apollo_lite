@@ -419,17 +419,6 @@ static void process_dbg_opt(const char *opt)
 		}
 		primary_display_switch_dst_mode(mode % 2);
 		return;
-	} else if (0 == strncmp(opt, "cv_switch:", 10)) {
-		char *p = (char *)opt + 10;
-		UINT32 mode;
-
-		ret = kstrtouint(p, 0, &mode);
-		if (ret) {
-			pr_err("error to parse cmd %s\n", opt);
-			return;
-		}
-		disp_helper_set_option(DISP_OPT_CV_BYSUSPEND, mode % 2);
-		return;
 	} else if (0 == strncmp(opt, "cmmva_dprec", 11)) {
 		dprec_handle_option(0x7);
 	} else if (0 == strncmp(opt, "cmmpa_dprec", 11)) {
@@ -632,17 +621,6 @@ static void process_dbg_opt(const char *opt)
 		pan_display_test(frame_num, bpp);
 	}
 
-	if (0 == strncmp(opt, "scenario:", 8)) {
-		int scen;
-
-		ret = sscanf(opt, "scenario:%d\n", &scen);
-		if (ret != 1) {
-			pr_err("error to parse cmd %s\n", opt);
-			return;
-		}
-		primary_display_set_scenario(scen);
-	}
-
 }
 
 
@@ -704,7 +682,6 @@ void debug_info_dump_to_printk(char *buf, int buf_len)
 static ssize_t debug_read(struct file *file, char __user *ubuf, size_t count, loff_t *ppos)
 {
 	int debug_bufmax;
-	char *str = "idlemgr disable mtcmos now, all the regs may 0x00000000\n";
 	static int n;
 
 	/* Debugfs read only fetch 4096 byte each time, thus whole ringbuffer need massive
@@ -719,10 +696,7 @@ static ssize_t debug_read(struct file *file, char __user *ubuf, size_t count, lo
 	n = debug_get_info(debug_buffer, debug_bufmax);
 	/* debug_info_dump_to_printk(); */
 out:
-	if (is_mipi_enterulps())
-		return simple_read_from_buffer(ubuf, count, ppos, str, strlen(str));
-	else
-		return simple_read_from_buffer(ubuf, count, ppos, debug_buffer, n);
+	return simple_read_from_buffer(ubuf, count, ppos, debug_buffer, n);
 }
 
 static ssize_t debug_write(struct file *file, const char __user *ubuf, size_t count, loff_t *ppos)

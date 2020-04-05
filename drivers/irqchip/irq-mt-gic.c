@@ -180,11 +180,7 @@ phys_addr_t INT_POL_CTL0_phys;
 
 __weak void mt_set_pol_reg(u32 reg_index, u32 value)
 {
-#ifndef mcusys_smc_write_phy
 	writel_relaxed(value, (INT_POL_CTL0 + (reg_index * 4)));
-#else
-	mcusys_smc_write_phy((INT_POL_CTL0_phys + (reg_index * 4)), value);
-#endif
 }
 
 void mt_irq_set_polarity(unsigned int irq, unsigned int polarity)
@@ -1237,8 +1233,8 @@ overflow:
 
 void mt_irq_dump_status(int irq)
 {
-	int len = 2048;
-	char *buf = kmalloc(len, GFP_ATOMIC);
+	int len = PAGE_SIZE;
+	char *buf = kmalloc(len, GFP_KERNEL);
 
 	if (!buf)
 		return;

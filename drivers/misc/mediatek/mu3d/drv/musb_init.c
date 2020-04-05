@@ -80,7 +80,7 @@ static struct musb_hdrc_config mtu3d_config = {
 	.fifo_cfg_size = ARRAY_SIZE(mtu3d_cfg),
 };
 
-#if defined(CONFIG_USB_MTK_DUALMODE) && !defined(CONFIG_USB_MTK_OTG_SWITCH)
+#ifdef CONFIG_USB_MTK_DUALMODE
 static struct pinctrl *pinctrl;
 static struct pinctrl_state *pinctrl_iddig;
 #endif
@@ -304,7 +304,7 @@ static inline void mtu3d_u3_ltssm_intr_handler(struct musb *musb, u32 dwLtssmVal
 		   If LTSSM state is still at RxDet. Clear USB3_EN and set again. */
 		os_printk(K_INFO, "LTSSM: RXDET_SUCCESS_INTR\n");
 		sts_ltssm = RXDET_SUCCESS_INTR;
-		schedule_delayed_work(&musb->check_ltssm_work, msecs_to_jiffies(1000));
+		schedule_delayed_work_on(0, &musb->check_ltssm_work, msecs_to_jiffies(1000));
 	}
 }
 
@@ -416,7 +416,7 @@ static inline void mtu3d_link_intr_handler(struct musb *musb, u32 dwLinkIntValue
 			if (timespec_compare(&ss_timestamp, &tmp) > 0) {
 				os_printk(K_INFO, "queue reconnect work\n");
 
-				schedule_delayed_work(&musb->reconnect_work, 0);
+				schedule_delayed_work_on(0, &musb->reconnect_work, 0);
 			}
 		}
 		speed_last = speed;
@@ -446,9 +446,9 @@ static inline void mtu3d_link_intr_handler(struct musb *musb, u32 dwLinkIntValue
 
 	case SSUSB_SPEED_SUPER:
 		os_printk(K_ALET, "USB Speed = Super Speed\n");
-#ifndef CONFIG_USBIF_COMPLIANCE
 		if (speed == SSUSB_SPEED_INACTIVE)
 			musb_g_reset(musb);
+#ifndef CONFIG_USBIF_COMPLIANCE
 		speed_last = speed;
 		speed = SSUSB_SPEED_SUPER;
 		ss_timestamp = CURRENT_TIME;
@@ -559,14 +559,12 @@ static irqreturn_t generic_interrupt(int irq, void *__hci)
 		os_printk(K_INFO, "===L1[%x] DMA[%x]\n", dwL1Value, dwDmaIntrValue);
 	}
 
-#ifdef SUPPORT_U3
-	if (musb_speed && (dwL1Value & MAC3_INTR)) {
+	if (dwL1Value & MAC3_INTR) {
 		dwLtssmValue = os_readl(U3D_LTSSM_INTR) & os_readl(U3D_LTSSM_INTR_ENABLE);
 		/* Write 1 clear */
 		os_writel(U3D_LTSSM_INTR, dwLtssmValue);
 		os_printk(K_DEBUG, "===L1[%x] LTSSM[%x]\n", dwL1Value, dwLtssmValue);
 	}
-#endif
 #ifdef USE_SSUSB_QMU
 	if (dwL1Value & QMU_INTR) {
 		wIntrQMUValue = os_readl(U3D_QISAR1) & os_readl(U3D_QIER1);
@@ -709,7 +707,7 @@ static void mtu3d_musb_reg_init(struct musb *musb)
 	if (!u3phy_ops)
 		ret = u3phy_init();
 
-	if (u3phy_ops) {
+	if (ret || u3phy_ops) {
 
 #ifdef CONFIG_MTK_UART_USB_SWITCH
 		if (usb_phy_check_in_uart_mode()) {
@@ -724,7 +722,7 @@ static void mtu3d_musb_reg_init(struct musb *musb)
 
 		musb->is_clk_on = 1;
 
-#ifndef CONFIG_FPGA_EARLY_PORTING
+#ifndef CONFIG_MTK_FPGA
 		usb_phy_recover(musb->is_clk_on);
 #endif
 		/* USB 2.0 slew rate calibration */
@@ -812,7 +810,7 @@ static int mtu3d_probe(struct platform_device *pdev)
 		goto err2;
 	}
 
-#if defined(CONFIG_USB_MTK_DUALMODE) && !defined(CONFIG_USB_MTK_OTG_SWITCH)
+#ifdef CONFIG_USB_MTK_DUALMODE
 	pinctrl = devm_pinctrl_get(&pdev->dev);
 	if (IS_ERR(pinctrl))
 		dev_err(&pdev->dev, "Cannot find usb pinctrl!\n");
@@ -821,12 +819,8 @@ static int mtu3d_probe(struct platform_device *pdev)
 		if (IS_ERR(pinctrl_iddig))
 			dev_err(&pdev->dev, "Cannot find usb pinctrl iddig_init\n");
 		else
-			pinctrl_select_state(pinctrl, pinctrl_iddig);
+		pinctrl_select_state(pinctrl, pinctrl_iddig);
 	}
-#endif
-
-#if defined(CONFIG_FPGA_EARLY_PORTING) || defined(U3_COMPLIANCE) || defined(FOR_BRING_UP)
-	mu3d_force_on = 1;
 #endif
 
 	return 0;

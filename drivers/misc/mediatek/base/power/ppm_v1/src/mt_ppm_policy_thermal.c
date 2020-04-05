@@ -94,7 +94,7 @@ unsigned int mt_ppm_thermal_get_max_power(void)
 	cluster_status_rebase[2].freq_idx = 0;
 
 	power = ppm_find_pwr_idx(cluster_status_rebase);
-	if (power > 0)
+	if(power > 0)
 		return power;
 	else
 		return ppm_get_power_table().power_tbl[0].power_idx;

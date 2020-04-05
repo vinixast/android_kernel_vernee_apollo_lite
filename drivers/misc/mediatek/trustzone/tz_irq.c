@@ -101,6 +101,8 @@ TZ_RESULT KREE_ServRequestIrq(u32 op, u8 uparam[REE_SERVICE_BUFFER_SIZE])
 		}
 
 		virq = tz_hwirq_to_virq(param->irq, flags);
+		pr_debug("%s: [irq] of_map got virq:%u, hwirq:%u(gic#)\n"
+			 , __func__, virq, param->irq);
 
 		if (virq > 0)
 			rret = request_irq(virq, KREE_IrqHandler, flags,
@@ -110,8 +112,7 @@ TZ_RESULT KREE_ServRequestIrq(u32 op, u8 uparam[REE_SERVICE_BUFFER_SIZE])
 
 		if (rret) {
 			kfree(token);
-			pr_warn("%s (virq:%d, hwirq:%d) return error: %d\n",
-				__func__, virq, param->irq, rret);
+			pr_warn("request_irq return error: %d\n", rret);
 			if (rret == -ENOMEM)
 				ret = TZ_RESULT_ERROR_OUT_OF_MEMORY;
 			else
@@ -256,14 +257,11 @@ unsigned int kree_fiq_get_intack(void)
 
 void kree_fiq_eoi(unsigned int iar)
 {
-	TZ_RESULT ret;
 	MTEEC_PARAM param[4];
 
 	param[0].value.a = iar;
-	ret = KREE_TeeServiceCall(irq_session, TZCMD_IRQ_EOI,
+	KREE_TeeServiceCall(irq_session, TZCMD_IRQ_EOI,
 				TZ_ParamTypes1(TZPT_VALUE_INPUT), param);
-	if (ret != TZ_RESULT_SUCCESS)
-		pr_warn("%s() fails! ret=0x%x\n", __func__, ret);
 }
 
 int kree_raise_softfiq(unsigned int mask, unsigned int irq)

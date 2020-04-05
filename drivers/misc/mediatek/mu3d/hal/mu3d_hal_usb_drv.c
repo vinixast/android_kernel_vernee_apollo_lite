@@ -20,13 +20,6 @@
 #include "mu3d_hal_comm.h"
 #include "mtk-phy.h"
 
-#ifdef SUPPORT_U3
-#include <linux/module.h>
-unsigned int musb_hal_speed = 1;
-module_param_named(hal_speed, musb_hal_speed, uint, S_IRUGO | S_IWUSR);
-MODULE_PARM_DESC(debug, "USB super speed support for hal layer");
-#endif
-
 struct USB_REQ *mu3d_hal_get_req(DEV_INT32 ep_num, USB_DIR dir)
 {
 	DEV_INT32 ep_index = 0;
@@ -95,8 +88,7 @@ void _ex_mu3d_hal_ssusb_en(void)
 	os_clrmsk(U3D_SSUSB_IP_PW_CTRL0, SSUSB_IP_SW_RST);
 	os_clrmsk(U3D_SSUSB_IP_PW_CTRL2, SSUSB_IP_DEV_PDN);
 #ifdef SUPPORT_U3
-	if (musb_hal_speed)
-		os_clrmsk(U3D_SSUSB_U3_CTRL_0P,
+	os_clrmsk(U3D_SSUSB_U3_CTRL_0P,
 		  (SSUSB_U3_PORT_DIS | SSUSB_U3_PORT_PDN | SSUSB_U3_PORT_HOST_SEL));
 #endif
 	os_clrmsk(U3D_SSUSB_U2_CTRL_0P,
@@ -169,7 +161,7 @@ void mu3d_hal_dft_reg(void)
 #endif				/* NEVER */
 
 	/* code to override HW default values, FPGA ONLY */
-#ifndef CONFIG_FPGA_EARLY_PORTING
+#ifndef CONFIG_MTK_FPGA
 	/* enable debug probe */
 	os_writel(U3D_SSUSB_PRB_CTRL0, 0xffff);
 #endif
@@ -188,7 +180,7 @@ void mu3d_hal_dft_reg(void)
 	/* device responses to u3_exit from host automatically */
 	os_writel(U3D_LTSSM_CTRL, os_readl(U3D_LTSSM_CTRL) & ~SOFT_U3_EXIT_EN);
 
-#ifndef CONFIG_FPGA_EARLY_PORTING
+#ifndef CONFIG_MTK_FPGA
 	os_writel(U3D_PIPE_LATCH_SELECT, 0);
 #endif
 
@@ -271,7 +263,7 @@ DEV_INT32 mu3d_hal_check_clk_sts(void)
 	}
 #ifdef SUPPORT_U3
 	/* do not check when SSUSB_U3_PORT_PDN = 1, because U3 port stays in reset state */
-	if (musb_hal_speed && (!(os_readl(U3D_SSUSB_U3_CTRL_0P) & SSUSB_U3_PORT_PDN))) {
+	if (!(os_readl(U3D_SSUSB_U3_CTRL_0P) & SSUSB_U3_PORT_PDN)) {
 		ret =
 		    wait_for_value(U3D_SSUSB_IP_PW_STS1, SSUSB_U3_MAC_RST_B_STS,
 				   SSUSB_U3_MAC_RST_B_STS, 1, 100);
@@ -373,11 +365,8 @@ void mu3d_hal_clear_intr(void)
 	/* Clear U2 USB common interrupt status */
 	os_writel(U3D_COMMON_USB_INTR, 0xFFFFFFFF);
 
-#ifdef SUPPORT_U3
 	/* Clear U3 LTSSM interrupt status */
-	if (musb_hal_speed)
-		os_writel(U3D_LTSSM_INTR, 0xFFFFFFFF);
-#endif
+	os_writel(U3D_LTSSM_INTR, 0xFFFFFFFF);
 }
 
 /**
@@ -387,9 +376,8 @@ void mu3d_hal_clear_intr(void)
 void mu3d_hal_system_intr_en(void)
 {
 	DEV_UINT16 int_en;
-#ifdef SUPPORT_U3
 	DEV_UINT32 ltssm_int_en;
-#endif
+
 	os_printk(K_ERR, "%s\n", __func__);
 
 	/* Disable All endpoint interrupt */
@@ -453,9 +441,8 @@ void mu3d_hal_system_intr_en(void)
 void _ex_mu3d_hal_system_intr_en(void)
 {
 	DEV_UINT16 int_en;
-#ifdef SUPPORT_U3
 	DEV_UINT32 ltssm_int_en;
-#endif
+
 	os_printk(K_DEBUG, "%s\n", __func__);
 
 	/* Disable All endpoint interrupt */
@@ -476,26 +463,23 @@ void _ex_mu3d_hal_system_intr_en(void)
 	os_writel(U3D_COMMON_USB_INTR_ENABLE, int_en);
 
 #ifdef SUPPORT_U3
-	if (musb_hal_speed) {
-		/* Disable U3 LTSSM interrupts */
-		os_writel(U3D_LTSSM_INTR_ENABLE, 0x00);
-		os_printk(K_ERR, "U3D_LTSSM_INTR: %x\n", os_readl(U3D_LTSSM_INTR));
+	/* Disable U3 LTSSM interrupts */
+	os_writel(U3D_LTSSM_INTR_ENABLE, 0x00);
+	os_printk(K_ERR, "U3D_LTSSM_INTR: %x\n", os_readl(U3D_LTSSM_INTR));
 
-		/* Clear U3 LTSSM interrupts */
-		os_writel(U3D_LTSSM_INTR, os_readl(U3D_LTSSM_INTR));
+	/* Clear U3 LTSSM interrupts */
+	os_writel(U3D_LTSSM_INTR, os_readl(U3D_LTSSM_INTR));
 
-		/* Enable U3 LTSSM interrupts */
-		ltssm_int_en =
-			SS_INACTIVE_INTR_EN | SS_DISABLE_INTR_EN | COMPLIANCE_INTR_EN | LOOPBACK_INTR_EN |
-			HOT_RST_INTR_EN | WARM_RST_INTR_EN | RECOVERY_INTR_EN | ENTER_U0_INTR_EN |
-			ENTER_U1_INTR_EN | ENTER_U2_INTR_EN | ENTER_U3_INTR_EN | EXIT_U1_INTR_EN |
-			EXIT_U2_INTR_EN | EXIT_U3_INTR_EN | RXDET_SUCCESS_INTR_EN | VBUS_RISE_INTR_EN |
-			VBUS_FALL_INTR_EN | U3_LFPS_TMOUT_INTR_EN | U3_RESUME_INTR_EN;
-		os_writel(U3D_LTSSM_INTR_ENABLE, ltssm_int_en);
-	}
+	/* Enable U3 LTSSM interrupts */
+	ltssm_int_en =
+	    SS_INACTIVE_INTR_EN | SS_DISABLE_INTR_EN | COMPLIANCE_INTR_EN | LOOPBACK_INTR_EN |
+	    HOT_RST_INTR_EN | WARM_RST_INTR_EN | RECOVERY_INTR_EN | ENTER_U0_INTR_EN |
+	    ENTER_U1_INTR_EN | ENTER_U2_INTR_EN | ENTER_U3_INTR_EN | EXIT_U1_INTR_EN |
+	    EXIT_U2_INTR_EN | EXIT_U3_INTR_EN | RXDET_SUCCESS_INTR_EN | VBUS_RISE_INTR_EN |
+	    VBUS_FALL_INTR_EN | U3_LFPS_TMOUT_INTR_EN | U3_RESUME_INTR_EN;
+	os_writel(U3D_LTSSM_INTR_ENABLE, ltssm_int_en);
 #endif
 
-#if 0
 #ifdef SUPPORT_OTG
 	/* os_writel(U3D_SSUSB_OTG_INT_EN, 0x0); */
 	os_printk(K_ERR, "U3D_SSUSB_OTG_STS: %x\n", os_readl(U3D_SSUSB_OTG_STS));
@@ -505,7 +489,7 @@ void _ex_mu3d_hal_system_intr_en(void)
 		  SSUSB_CHG_B_ROLE_B_INT_EN | SSUSB_CHG_A_ROLE_B_INT_EN |
 		  SSUSB_ATTACH_B_ROLE_INT_EN);
 #endif
-#endif
+
 #ifdef USE_SSUSB_QMU
 	/* Enable QMU interrupt. */
 	os_writel(U3D_QIESR1, TXQ_EMPTY_IESR | TXQ_CSERR_IESR | TXQ_LENERR_IESR |
@@ -709,15 +693,11 @@ void mu3d_hal_u3dev_en(void)
  */
 void mu3d_hal_u3dev_dis(void)
 {
-#ifdef SUPPORT_U3
 	/*
 	 * If usb3_en =0 => LTSSM will go to SS.Disable state.
 	 */
-	if (musb_hal_speed) {
-		os_writel(U3D_USB3_CONFIG, 0);
-		os_printk(K_INFO, "USB3_EN = 0\n");
-	}
-#endif
+	os_writel(U3D_USB3_CONFIG, 0);
+	os_printk(K_INFO, "USB3_EN = 0\n");
 }
 
 /**

@@ -31,9 +31,6 @@ else
        ifneq (,$(filter $(CONFIG_MTK_PLATFORM), "mt7623"))
        obj-y += mt7623/
        endif
-        ifneq (,$(filter $(CONFIG_MTK_PLATFORM), "mt8167"))
-        obj-y += mt8167/
-        endif
       endif
      endif
   endif

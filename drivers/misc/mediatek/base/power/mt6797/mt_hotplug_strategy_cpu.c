@@ -1,16 +1,3 @@
-/*
- * Copyright (C) 2016 MediaTek Inc.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- * See http://www.gnu.org/licenses/gpl-2.0.html for more details.
- */
-
 /**
 * @file    mt_hotplug_strategy_cpu.c
 * @brief   hotplug strategy(hps) - cpu
@@ -143,13 +130,18 @@ unsigned int hps_cpu_get_nr_heavy_task(void)
 #endif
 }
 
-void hps_cpu_get_tlp(unsigned int *avg, unsigned int *iowait_avg)
+int hps_cpu_get_tlp(unsigned int *avg, unsigned int *iowait_avg)
 {
+	int scaled_tlp = 0; /* The scaled tasks number of the last poll  */
 #ifdef CONFIG_MTK_SCHED_RQAVG_KS
-	sched_get_nr_running_avg((int *)avg, (int *)iowait_avg);
+	scaled_tlp = sched_get_nr_running_avg((int *)avg, (int *)iowait_avg);
+
+	return scaled_tlp;
 #else
 	*avg = 0;
 	*iowait_avg = 0;
+
+	return scaled_tlp;
 #endif
 }
 

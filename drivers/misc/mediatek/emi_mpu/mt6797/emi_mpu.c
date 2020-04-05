@@ -915,7 +915,7 @@ static int mpu_check_violation(void)
 #ifdef CONFIG_MTK_AEE_FEATURE
 	if (wr_vio != 0) {
 		/* EMI violation is relative to MD at user build*/
-		#if 0 /* #ifndef CONFIG_MT_ENG_BUILD */
+		#ifndef CONFIG_MT_ENG_BUILD
 			if (((master_ID & 0x7) == MASTER_MDMCU) ||
 				((master_ID & 0x7) == MASTER_MDHW)) {
 					int md_id = 0;
@@ -924,24 +924,6 @@ static int mpu_check_violation(void)
 					ID_FORCE_MD_ASSERT, NULL, 0);
 					pr_err("[EMI MPU] MPU violation trigger MD\n");
 				}
-		#else
-			if (((master_ID & 0x7) == MASTER_MDMCU) ||
-				((master_ID & 0x7) == MASTER_MDHW)) {
-					char str[60] = "0";
-					char *pstr = str;
-
-					sprintf(pstr, "EMI_MPUS = 0x%x, ADDR = 0x%x",
-						dbg_s, dbg_t + emi_physical_offset);
-
-					exec_ccci_kern_func_by_md_id(0,
-					ID_MD_MPU_ASSERT, str, strlen(str));
-					pr_err("[EMI MPU] MPU violation trigger MD str=%s strlen(str)=%d\n"
-					, str, (int)strlen(str));
-				} else {
-					exec_ccci_kern_func_by_md_id(0,
-					ID_MD_MPU_ASSERT, NULL, 0);
-					pr_err("[EMI MPU] MPU violation ack to MD\n");
-					}
 		#endif
 		if ((region == 0) && (mt_emi_reg_read(EMI_MPUA) == 0)
 			&& (mt_emi_reg_read(EMI_MPUI) == 0)
@@ -949,13 +931,15 @@ static int mpu_check_violation(void)
 				pr_err("[EMI MPU] A strange violation.\n");
 		} else {
 		aee_kernel_exception("EMI MPU",
-"%sEMI_MPUS = 0x%x,EMI_MPUT = 0x%x\n CHKER = 0x%x,CHKER_TYPE = 0x%x,CHKER_ADR = 0x%x\n%s%s\n",
+"%sEMI_MPUS = 0x%x,EMI_MPUT = 0x%x\n CHKER = 0x%x,CHKER_TYPE = 0x%x,CHKER_ADR = 0x%x\n MPUA = 0x%x, MPUI = 0x%x\n%s%s\n",
 				     "EMI MPU violation.\n",
 				     dbg_s,
 				     dbg_t+emi_physical_offset,
 				     readl(IOMEM(EMI_CHKER)),
 				     readl(IOMEM(EMI_CHKER_TYPE)),
 				     readl(IOMEM(EMI_CHKER_ADR)),
+				     mt_emi_reg_read(EMI_MPUA),
+				     mt_emi_reg_read(EMI_MPUI),
 				     "CRDISPATCH_KEY:EMI MPU Violation Issue/",
 				     master_name);
 		}

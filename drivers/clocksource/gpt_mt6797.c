@@ -1,15 +1,3 @@
-/*
- * Copyright (C) 2016 MediaTek Inc.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- * See http://www.gnu.org/licenses/gpl-2.0.html for more details.
- */
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -455,7 +443,7 @@ static inline void setup_clksrc(u32 freq)
 
 static inline void setup_clkevt(u32 freq)
 {
-	unsigned int cmp[2];
+	unsigned int cmp;
 	struct clock_event_device *evt = &gpt_clockevent;
 	struct gpt_device *dev = id_to_dev(GPT_CLKEVT_ID);
 
@@ -467,8 +455,8 @@ static inline void setup_clkevt(u32 freq)
 	setup_gpt_dev_locked(dev, GPT_REPEAT, GPT_CLK_SRC_SYS, GPT_CLK_DIV_1,
 		freq / HZ, clkevt_handler, GPT_ISR);
 
-	__gpt_get_cmp(dev, cmp);
-	pr_alert("GPT1_CMP = %d, HZ = %d\n", cmp[0], HZ);
+	__gpt_get_cmp(dev, &cmp);
+	pr_alert("GPT1_CMP = %d, HZ = %d\n", cmp, HZ);
 
 	clockevents_register_device(evt);
 }

@@ -50,7 +50,6 @@
 
 #ifdef CONFIG_MTK_ECCCI_C2K
 #include <mt-plat/mt_ccci_common.h>
-#define FS_CH_C2K 4
 #endif
 
 #define terr(t, fmt, args...) pr_err("Rawbulk [%s]:" fmt "\n", t->name,  ##args)
@@ -250,11 +249,7 @@ static struct upstream_transaction *alloc_upstream_transaction(struct rawbulk_tr
 	if (!t)
 		return NULL;
 
-#if defined(CONFIG_64BIT) && defined(CONFIG_MTK_LM_MODE)
-	t->buffer = (char *)__get_free_page(GFP_KERNEL | GFP_DMA);
-#else
 	t->buffer = (char *)__get_free_page(GFP_KERNEL);
-#endif
 	/* t->buffer = kmalloc(bufsz, GFP_KERNEL); */
 	if (!t->buffer) {
 		kfree(t);
@@ -642,11 +637,7 @@ static struct downstream_transaction *alloc_downstream_transaction(struct rawbul
 	if (!t)
 		return NULL;
 
-#if defined(CONFIG_64BIT) && defined(CONFIG_MTK_LM_MODE)
-	t->buffer = (char *)__get_free_page(GFP_ATOMIC | GFP_DMA);
-#else
 	t->buffer = (char *)__get_free_page(GFP_ATOMIC);
-#endif
 	/* t->buffer = kmalloc(bufsz, GFP_ATOMIC); */
 	if (!t->buffer) {
 		kfree(t);
@@ -982,7 +973,7 @@ int rawbulk_start_transactions(int transfer_id, int nups, int ndowns, int upsz, 
 
 		c->buffer = (char *)__get_free_page(GFP_KERNEL);
 		/* c->buffer = kmalloc(upsz, GFP_KERNEL); */
-		if (!c->buffer) {
+		if (!c) {
 			rc = -ENOMEM;
 			kfree(c);
 			mutex_unlock(&transfer->modem_up_mutex);

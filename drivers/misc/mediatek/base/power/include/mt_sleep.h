@@ -14,7 +14,7 @@
 #ifndef __MT_SLEEP_H__
 #define __MT_SLEEP_H__
 
-#if defined(CONFIG_ARCH_MT6755) || defined(CONFIG_ARCH_MT6757) || defined(CONFIG_ARCH_MT6797)
+#if defined(CONFIG_ARCH_MT6755) || defined(CONFIG_ARCH_MT6797)
 
 #include "spm_v2/mt_sleep.h"
 
@@ -22,13 +22,9 @@
 
 #include "../mt6735/mt_sleep.h"
 
-#elif defined(CONFIG_ARCH_MT6570) || defined(CONFIG_ARCH_MT6580)
+#elif defined(CONFIG_ARCH_MT6580)
 
 #include "spm_v1/mt_sleep.h"
-
-#elif defined(CONFIG_ARCH_ELBRUS)
-
-#include "spm_v3/mt_sleep.h"
 
 #endif
 

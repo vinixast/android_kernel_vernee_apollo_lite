@@ -21,8 +21,9 @@
 #include <linux/init.h>
 #include <asm/assembler.h>
 #include <asm/cpufeature.h>
-#include <asm/alternative.h>
-#include <asm/uaccess.h>
+#include <asm/alternative-asm.h>
+
+#include "proc-macros.S"
 
 /*
  *	__flush_dcache_all()
@@ -121,12 +122,11 @@ ENTRY(flush_icache_range)
  *	- end     - virtual end address of region
  */
 ENTRY(__flush_cache_user_range)
-	uaccess_ttbr0_enable x2, x3
 	dcache_line_size x2, x3
 	sub	x3, x2, #1
 	bic	x4, x0, x3
 1:
-USER(9f, dc	cvau, x4	)		// clean D line to PoU
+	user_alternative_insn 9f, "dc cvau, x4", "dc civac, x4", ARM64_WORKAROUND_CLEAN_CACHE
 	add	x4, x4, x2
 	cmp	x4, x1
 	b.lo	1b
@@ -143,7 +143,6 @@ USER(9f, ic	ivau, x4	)		// invalidate I line PoU
 9:						// ignore any faulting cache operation
 	dsb	ish
 	isb
-	uaccess_ttbr0_disable x1
 	ret
 ENDPROC(flush_icache_range)
 ENDPROC(__flush_cache_user_range)
@@ -168,7 +167,7 @@ ENTRY(__flush_dcache_area)
 	b.lo	1b
 	dsb	sy
 	ret
-ENDPIPROC(__flush_dcache_area)
+ENDPROC(__flush_dcache_area)
 
 /*
  *	__inval_cache_range(start, end)
@@ -201,7 +200,7 @@ __dma_inv_range:
 	b.lo	2b
 	dsb	sy
 	ret
-ENDPIPROC(__inval_cache_range)
+ENDPROC(__inval_cache_range)
 ENDPROC(__dma_inv_range)
 
 /*
@@ -213,12 +212,7 @@ __dma_clean_range:
 	dcache_line_size x2, x3
 	sub	x3, x2, #1
 	bic	x0, x0, x3
-1:
-alternative_if_not ARM64_WORKAROUND_CLEAN_CACHE
-	dc	cvac, x0
-alternative_else
-	dc	civac, x0
-alternative_endif
+1:	alternative_insn "dc cvac, x0", "dc civac, x0", ARM64_WORKAROUND_CLEAN_CACHE
 	add	x0, x0, x2
 	cmp	x0, x1
 	b.lo	1b
@@ -241,7 +235,7 @@ ENTRY(__dma_flush_range)
 	b.lo	1b
 	dsb	sy
 	ret
-ENDPIPROC(__dma_flush_range)
+ENDPROC(__dma_flush_range)
 
 /*
  *	__dma_map_area(start, size, dir)
@@ -254,7 +248,7 @@ ENTRY(__dma_map_area)
 	cmp	w2, #DMA_FROM_DEVICE
 	b.eq	__dma_inv_range
 	b	__dma_clean_range
-ENDPIPROC(__dma_map_area)
+ENDPROC(__dma_map_area)
 
 /*
  *	__dma_unmap_area(start, size, dir)
@@ -267,4 +261,4 @@ ENTRY(__dma_unmap_area)
 	cmp	w2, #DMA_TO_DEVICE
 	b.ne	__dma_inv_range
 	ret
-ENDPIPROC(__dma_unmap_area)
+ENDPROC(__dma_unmap_area)

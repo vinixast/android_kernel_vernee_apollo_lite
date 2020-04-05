@@ -42,8 +42,6 @@
 static int mtk_cpu_num;
 
 static int ram_console_init_done;
-static unsigned int old_wdt_status;
-static int ram_console_clear;
 
 /*
    This group of API call by sub-driver module to report reboot reasons
@@ -66,15 +64,6 @@ struct last_reboot_reason {
 	uint8_t hotplug_cpu_event;
 	uint8_t hotplug_cb_index;
 	uint64_t hotplug_cb_fp;
-	uint32_t cpu_caller;
-	uint32_t cpu_callee;
-	uint64_t cpu_up_prepare_ktime;
-	uint64_t cpu_starting_ktime;
-	uint64_t cpu_online_ktime;
-	uint64_t cpu_down_prepare_ktime;
-	uint64_t cpu_dying_ktime;
-	uint64_t cpu_dead_ktime;
-	uint64_t cpu_post_dead_ktime;
 
 	uint32_t mcdi_wfi;
 	uint32_t mcdi_r15;
@@ -89,13 +78,6 @@ struct last_reboot_reason {
 
 	uint32_t vcore_dvfs_opp;
 	uint32_t vcore_dvfs_status;
-
-	uint32_t ppm_cluster_limit[8];
-	uint8_t ppm_step;
-	uint8_t ppm_cur_state;
-	uint32_t ppm_min_pwr_bgt;
-	uint32_t ppm_policy_mask;
-	uint8_t ppm_waiting_for_pbm;
 
 	uint8_t cpu_dvfs_vproc_big;
 	uint8_t cpu_dvfs_vproc_little;
@@ -254,19 +236,17 @@ static char *ram_console2_log;
 void last_kmsg_store_to_emmc(void)
 {
 	int buff_size;
-	int res;
 	struct wd_api *wd_api = NULL;
 
-	res = get_wd_api(&wd_api);
-	if (res == 0) {
-		/* if(num_online_cpus() > 1){ */
-		if (wd_api->wd_get_check_bit() > 1) {
-			pr_err("ram_console: online cpu %d!\n", wd_api->wd_get_check_bit());
+	get_wd_api(&wd_api);
+
+/* if(num_online_cpus() > 1){ */
+	if (wd_api->wd_get_check_bit() > 1) {
+		pr_err("ram_console: online cpu %d!\n", wd_api->wd_get_check_bit());
 #ifdef CONFIG_MTPROF
-			if (boot_finish == 0)
-				return;
+		if (boot_finish == 0)
+			return;
 #endif
-		}
 	}
 
 	/* save log to emmc */
@@ -515,12 +495,10 @@ void ram_console_enable_console(int enabled)
 
 static int ram_console_check_header(struct ram_console_buffer *buffer)
 {
-	/*int i;*/
-	if (!buffer || (buffer->sz_buffer != ram_console_buffer->sz_buffer) || buffer->off_pl > buffer->sz_buffer
-	    || buffer->off_lk > buffer->sz_buffer || buffer->off_linux > buffer->sz_buffer
-	    || buffer->off_console > buffer->sz_buffer
-	    || buffer->off_pl + ALIGN(buffer->sz_pl, 64) != buffer->off_lpl
-	    || buffer->off_lk + ALIGN(buffer->sz_lk, 64) != buffer->off_llk) {
+	/*int i; */
+	if (!buffer || (buffer->sz_buffer != ram_console_buffer->sz_buffer)
+	    || buffer->off_pl > buffer->sz_buffer || buffer->off_lk > buffer->sz_buffer
+	    || buffer->off_linux > buffer->sz_buffer || buffer->off_console > buffer->sz_buffer) {
 		pr_err("ram_console: ilegal header.");
 		/*
 		   for (i = 0; i < 16; i++)
@@ -536,16 +514,13 @@ static int ram_console_lastk_show(struct ram_console_buffer *buffer, struct seq_
 {
 	unsigned int wdt_status;
 
-	if (!buffer) {
-		pr_err("ram_console: buffer is null\n");
-		seq_puts(m, "buffer is null.\n");
-		return 0;
-	}
-
 	if (ram_console_check_header(buffer) && buffer->sz_buffer != 0) {
 		pr_err("ram_console: buffer %p, size %x(%x)\n", buffer, buffer->sz_buffer,
 		       ram_console_buffer->sz_buffer);
-		seq_write(m, buffer, ram_console_buffer->sz_buffer);
+		if (buffer)
+			seq_write(m, buffer, ram_console_buffer->sz_buffer);
+		else
+			seq_puts(m, "NO VALID DATA.\n");
 		return 0;
 	}
 	if (buffer->off_pl == 0 || buffer->off_pl + ALIGN(buffer->sz_pl, 64) != buffer->off_lpl) {
@@ -556,7 +531,6 @@ static int ram_console_lastk_show(struct ram_console_buffer *buffer, struct seq_
 
 	seq_printf(m, "ram console header, hw_status: %u, fiq step %u.\n",
 		   wdt_status, LAST_RRR_BUF_VAL(buffer, fiq_step));
-	seq_printf(m, "%s, old status is %u.\n", ram_console_clear ? "Clear" : "Not Clear", old_wdt_status);
 
 #ifdef CONFIG_PSTORE_CONSOLE
 	/*pr_err("ram_console: pstore show start\n");*/
@@ -593,14 +567,10 @@ static int __init ram_console_save_old(struct ram_console_buffer *buffer, size_t
 static int __init ram_console_init(struct ram_console_buffer *buffer, size_t buffer_size)
 {
 	ram_console_buffer = buffer;
-	buffer->sz_buffer = buffer_size;
 
-	if (buffer->sig != REBOOT_REASON_SIG  || ram_console_check_header(buffer)) {
+	if (buffer->sig != REBOOT_REASON_SIG) {
 		memset_io((void *)buffer, 0, buffer_size);
 		buffer->sig = REBOOT_REASON_SIG;
-		ram_console_clear = 1;
-	} else {
-		old_wdt_status = LAST_RRPL_BUF_VAL(buffer, wdt_status);
 	}
 	ram_console_save_old(buffer, buffer_size);
 	if (buffer->sz_lk != 0 && buffer->off_lk + ALIGN(buffer->sz_lk, 64) == buffer->off_llk)
@@ -927,68 +897,6 @@ void aee_rr_rec_hotplug_cb_fp(unsigned long val)
 	LAST_RR_SET(hotplug_cb_fp, val);
 }
 
-void aee_rr_rec_cpu_caller(u32 val)
-{
-	if (!ram_console_init_done || !ram_console_buffer)
-		return;
-	LAST_RR_SET(cpu_caller, val);
-}
-
-void aee_rr_rec_cpu_callee(u32 val)
-{
-	if (!ram_console_init_done || !ram_console_buffer)
-		return;
-	LAST_RR_SET(cpu_callee, val);
-}
-
-void aee_rr_rec_cpu_up_prepare_ktime(u64 val)
-{
-	if (!ram_console_init_done || !ram_console_buffer)
-		return;
-	LAST_RR_SET(cpu_up_prepare_ktime, val);
-}
-
-void aee_rr_rec_cpu_starting_ktime(u64 val)
-{
-	if (!ram_console_init_done || !ram_console_buffer)
-		return;
-	LAST_RR_SET(cpu_starting_ktime, val);
-}
-
-void aee_rr_rec_cpu_online_ktime(u64 val)
-{
-	if (!ram_console_init_done || !ram_console_buffer)
-		return;
-	LAST_RR_SET(cpu_online_ktime, val);
-}
-
-void aee_rr_rec_cpu_down_prepare_ktime(u64 val)
-{
-	if (!ram_console_init_done || !ram_console_buffer)
-		return;
-	LAST_RR_SET(cpu_down_prepare_ktime, val);
-}
-
-void aee_rr_rec_cpu_dying_ktime(u64 val)
-{
-	if (!ram_console_init_done || !ram_console_buffer)
-		return;
-	LAST_RR_SET(cpu_dying_ktime, val);
-}
-
-void aee_rr_rec_cpu_dead_ktime(u64 val)
-{
-	if (!ram_console_init_done || !ram_console_buffer)
-		return;
-	LAST_RR_SET(cpu_dead_ktime, val);
-}
-
-void aee_rr_rec_cpu_post_dead_ktime(u64 val)
-{
-	if (!ram_console_init_done || !ram_console_buffer)
-		return;
-	LAST_RR_SET(cpu_post_dead_ktime, val);
-}
 void aee_rr_rec_clk(int id, u32 val)
 {
 	if (!ram_console_init_done || !ram_console_buffer)
@@ -1127,48 +1035,6 @@ void aee_rr_rec_vcore_dvfs_status(u32 val)
 u32 aee_rr_curr_vcore_dvfs_status(void)
 {
 	return LAST_RR_VAL(vcore_dvfs_status);
-}
-
-void aee_rr_rec_ppm_cluster_limit(int id, u32 val)
-{
-	if (!ram_console_init_done || !ram_console_buffer)
-		return;
-	LAST_RR_SET_WITH_ID(ppm_cluster_limit, id, val);
-}
-
-void aee_rr_rec_ppm_step(u8 val)
-{
-	if (!ram_console_init_done || !ram_console_buffer)
-		return;
-	LAST_RR_SET(ppm_step, val);
-}
-
-void aee_rr_rec_ppm_cur_state(u8 val)
-{
-	if (!ram_console_init_done || !ram_console_buffer)
-		return;
-	LAST_RR_SET(ppm_cur_state, val);
-}
-
-void aee_rr_rec_ppm_min_pwr_bgt(u32 val)
-{
-	if (!ram_console_init_done || !ram_console_buffer)
-		return;
-	LAST_RR_SET(ppm_min_pwr_bgt, val);
-}
-
-void aee_rr_rec_ppm_policy_mask(u32 val)
-{
-	if (!ram_console_init_done || !ram_console_buffer)
-		return;
-	LAST_RR_SET(ppm_policy_mask, val);
-}
-
-void aee_rr_rec_ppm_waiting_for_pbm(u8 val)
-{
-	if (!ram_console_init_done || !ram_console_buffer)
-		return;
-	LAST_RR_SET(ppm_waiting_for_pbm, val);
 }
 
 void aee_rr_rec_cpu_dvfs_vproc_big(u8 val)
@@ -2079,53 +1945,12 @@ void aee_rr_show_hotplug_footprint(struct seq_file *m, int cpu)
 
 void aee_rr_show_hotplug_status(struct seq_file *m)
 {
-	seq_printf(m, "CPU notifier status: %d, %d, 0x%llx\n",
+	seq_printf(m, "CPU hotplug status:\n notifier: %d, %d, 0x%llx\n",
 		   LAST_RRR_VAL(hotplug_cpu_event),
-		   LAST_RRR_VAL(hotplug_cb_index),
-		   LAST_RRR_VAL(hotplug_cb_fp));
+		   LAST_RRR_VAL(hotplug_cb_index), LAST_RRR_VAL(hotplug_cb_fp));
 }
 
-void aee_rr_show_hotplug_caller_callee_status(struct seq_file *m)
-{
-	seq_printf(m, "CPU Hotplug: caller CPU%d, callee CPU%d\n",
-		   LAST_RRR_VAL(cpu_caller),
-		   LAST_RRR_VAL(cpu_callee));
-}
 
-void aee_rr_show_hotplug_up_prepare_ktime(struct seq_file *m)
-{
-	seq_printf(m, "CPU_UP_PREPARE: %lld\n", LAST_RRR_VAL(cpu_up_prepare_ktime));
-}
-
-void aee_rr_show_hotplug_starting_ktime(struct seq_file *m)
-{
-	seq_printf(m, "CPU_STARTING: %lld\n", LAST_RRR_VAL(cpu_starting_ktime));
-}
-
-void aee_rr_show_hotplug_online_ktime(struct seq_file *m)
-{
-	seq_printf(m, "CPU_ONLINE: %lld\n", LAST_RRR_VAL(cpu_online_ktime));
-}
-
-void aee_rr_show_hotplug_down_prepare_ktime(struct seq_file *m)
-{
-	seq_printf(m, "CPU_DOWN_PREPARE: %lld\n", LAST_RRR_VAL(cpu_down_prepare_ktime));
-}
-
-void aee_rr_show_hotplug_dying_ktime(struct seq_file *m)
-{
-	seq_printf(m, "CPU_DYING: %lld\n", LAST_RRR_VAL(cpu_dying_ktime));
-}
-
-void aee_rr_show_hotplug_dead_ktime(struct seq_file *m)
-{
-	seq_printf(m, "CPU_DEAD: %lld\n", LAST_RRR_VAL(cpu_dead_ktime));
-}
-
-void aee_rr_show_hotplug_post_dead_ktime(struct seq_file *m)
-{
-	seq_printf(m, "CPU_POST_DEAD: %lld\n", LAST_RRR_VAL(cpu_post_dead_ktime));
-}
 void aee_rr_show_mcdi(struct seq_file *m)
 {
 	seq_printf(m, "mcdi_wfi: 0x%x\n", LAST_RRR_VAL(mcdi_wfi));
@@ -2182,39 +2007,6 @@ void aee_rr_show_vcore_dvfs_opp(struct seq_file *m)
 void aee_rr_show_vcore_dvfs_status(struct seq_file *m)
 {
 	seq_printf(m, "vcore_dvfs_status: 0x%x\n", LAST_RRR_VAL(vcore_dvfs_status));
-}
-
-void aee_rr_show_ppm_cluster_limit(struct seq_file *m)
-{
-	int i = 0;
-
-	for (i = 0; i < 8; i++)
-		seq_printf(m, "ppm_cluster_limit: 0x%08x\n", LAST_RRR_VAL(ppm_cluster_limit[i]));
-}
-
-void aee_rr_show_ppm_step(struct seq_file *m)
-{
-	seq_printf(m, "ppm_step: 0x%x\n", LAST_RRR_VAL(ppm_step));
-}
-
-void aee_rr_show_ppm_cur_state(struct seq_file *m)
-{
-	seq_printf(m, "ppm_cur_state: 0x%x\n", LAST_RRR_VAL(ppm_cur_state));
-}
-
-void aee_rr_show_ppm_min_pwr_bgt(struct seq_file *m)
-{
-	seq_printf(m, "ppm_min_pwr_bgt: %d\n", LAST_RRR_VAL(ppm_min_pwr_bgt));
-}
-
-void aee_rr_show_ppm_policy_mask(struct seq_file *m)
-{
-	seq_printf(m, "ppm_policy_mask: 0x%x\n", LAST_RRR_VAL(ppm_policy_mask));
-}
-
-void aee_rr_show_ppm_waiting_for_pbm(struct seq_file *m)
-{
-	seq_printf(m, "ppm_waiting_for_pbm: 0x%x\n", LAST_RRR_VAL(ppm_waiting_for_pbm));
 }
 
 void aee_rr_show_cpu_dvfs_vproc_big(struct seq_file *m)
@@ -2793,12 +2585,6 @@ last_rr_show_t aee_rr_show[] = {
 	aee_rr_show_vcore_dvfs_status,
 	aee_rr_show_vcore_dvfs_debug_regs,
 	aee_rr_show_clk,
-	aee_rr_show_ppm_cluster_limit,
-	aee_rr_show_ppm_step,
-	aee_rr_show_ppm_cur_state,
-	aee_rr_show_ppm_min_pwr_bgt,
-	aee_rr_show_ppm_policy_mask,
-	aee_rr_show_ppm_waiting_for_pbm,
 	aee_rr_show_cpu_dvfs_vproc_big,
 	aee_rr_show_cpu_dvfs_vproc_little,
 	aee_rr_show_cpu_dvfs_oppidx,
@@ -2862,15 +2648,7 @@ last_rr_show_t aee_rr_show[] = {
 	aee_rr_show_ocp_2_enable,
 	aee_rr_show_scp_pc,
 	aee_rr_show_scp_lr,
-	aee_rr_show_hotplug_status,
-	aee_rr_show_hotplug_caller_callee_status,
-	aee_rr_show_hotplug_up_prepare_ktime,
-	aee_rr_show_hotplug_starting_ktime,
-	aee_rr_show_hotplug_online_ktime,
-	aee_rr_show_hotplug_down_prepare_ktime,
-	aee_rr_show_hotplug_dying_ktime,
-	aee_rr_show_hotplug_dead_ktime,
-	aee_rr_show_hotplug_post_dead_ktime
+	aee_rr_show_hotplug_status
 
 };
 
@@ -2883,12 +2661,6 @@ last_rr_show_cpu_t aee_rr_show_cpu[] = {
 	aee_rr_show_cpu_dormant,
 };
 
-last_rr_show_t aee_rr_last_xxx[] = {
-	aee_rr_show_last_pc,
-	aee_rr_show_last_bus,
-	aee_rr_show_suspend_debug_flag
-};
-
 #define array_size(x) (sizeof(x) / sizeof((x)[0]))
 int aee_rr_reboot_reason_show(struct seq_file *m, void *v)
 {
@@ -2896,10 +2668,6 @@ int aee_rr_reboot_reason_show(struct seq_file *m, void *v)
 
 	if (ram_console_check_header(ram_console_old)) {
 		seq_puts(m, "NO VALID DATA.\n");
-		seq_printf(m, "%s, old status is %u.\n", ram_console_clear ? "Clear" : "Not Clear", old_wdt_status);
-		seq_puts(m, "Only try to dump last_XXX.\n");
-		for (i = 0; i < array_size(aee_rr_last_xxx); i++)
-			aee_rr_last_xxx[i] (m);
 		return 0;
 	}
 	for (i = 0; i < array_size(aee_rr_show); i++)

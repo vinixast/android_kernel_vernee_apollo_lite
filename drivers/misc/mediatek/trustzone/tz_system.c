@@ -25,8 +25,6 @@
 #include "trustzone/kree/system.h"
 #include "kree_int.h"
 #include "sys_ipc.h"
-#include "kree/mem.h"
-
 #include "kree/tz_trusty.h"
 
 #include <linux/trusty/trusty_ipc.h>
@@ -72,10 +70,6 @@ static const KREE_REE_Service_Func ree_service_funcs[] = {
 	KREE_ServThread_Create,
 
 	KREE_ServSemaphoreDownInterruptible,
-#ifdef CONFIG_MTEE_CMA_SECURE_MEMORY
-	KREE_ServGetChunkmemPool,
-	KREE_ServReleaseChunkmemPool,
-#endif
 };
 
 #define ree_service_funcs_num \
@@ -360,12 +354,8 @@ TZ_RESULT KREE_TeeServiceCall(KREE_SESSION_HANDLE handle, uint32_t command,
 		switch (type) {
 		case TZPT_VALUE_INPUT:
 		case TZPT_VALUE_INOUT:
-			param[i] = oparam[i];
-			break;
 		case TZPT_VALUE_OUTPUT:
-			/* reset to zero if output */
-			param[i].value.a = 0;
-			param[i].value.b = 0;
+			param[i] = oparam[i];
 			break;
 
 		case TZPT_MEM_INPUT:
@@ -389,10 +379,9 @@ TZ_RESULT KREE_TeeServiceCall(KREE_SESSION_HANDLE handle, uint32_t command,
 					goto error;
 				}
 
-				if (TZPT_MEM_OUTPUT != type)
-					memcpy(param[i].mem.buffer,
-						oparam[i].mem.buffer,
-						param[i].mem.size);
+				memcpy(param[i].mem.buffer,
+					oparam[i].mem.buffer,
+					param[i].mem.size);
 			}
 			break;
 
@@ -529,7 +518,6 @@ static TZ_RESULT tz_ree_service(u32 op, u8 param[REE_SERVICE_BUFFER_SIZE])
 
 	return (func) (op, param);
 }
-
 #endif /* ~CONFIG_TRUSTY */
 
 TZ_RESULT KREE_InitTZ(void)
@@ -570,35 +558,6 @@ TZ_RESULT KREE_CreateSession(const char *ta_uuid, KREE_SESSION_HANDLE *pHandle)
 	return ret;
 }
 EXPORT_SYMBOL(KREE_CreateSession);
-
-TZ_RESULT KREE_CreateSessionWithTag(const char *ta_uuid, KREE_SESSION_HANDLE *pHandle, const char *tag)
-{
-	uint32_t paramTypes;
-	MTEEC_PARAM param[4];
-	TZ_RESULT ret;
-
-	if (!ta_uuid || !pHandle)
-		return TZ_RESULT_ERROR_BAD_PARAMETERS;
-
-	param[0].mem.buffer = (char *)ta_uuid;
-	param[0].mem.size = strlen(ta_uuid) + 1;
-	param[1].mem.buffer = (char *)tag;
-	if (tag != NULL && strlen(tag) != 0)
-		param[1].mem.size = strlen(tag) + 1;
-	else
-		param[1].mem.size = 0;
-	paramTypes = TZ_ParamTypes3(TZPT_MEM_INPUT, TZPT_MEM_INPUT, TZPT_VALUE_OUTPUT);
-
-	ret = KREE_TeeServiceCall(
-			(KREE_SESSION_HANDLE) MTEE_SESSION_HANDLE_SYSTEM,
-			TZCMD_SYS_SESSION_CREATE_WITH_TAG, paramTypes, param);
-
-	if (ret == TZ_RESULT_SUCCESS)
-		*pHandle = (KREE_SESSION_HANDLE)param[2].value.a;
-
-	return ret;
-}
-EXPORT_SYMBOL(KREE_CreateSessionWithTag);
 
 TZ_RESULT KREE_CloseSession(KREE_SESSION_HANDLE handle)
 {

@@ -16,14 +16,10 @@
 #include <linux/kthread.h>
 #include <linux/scatterlist.h>
 #include <linux/dma-mapping.h>
-#ifdef CONFIG_MTK_EMMC_CQ_SUPPORT
 #include <linux/delay.h>
-#endif
-
 #include <linux/mmc/card.h>
 #include <linux/mmc/host.h>
 #include "queue.h"
-#include "mt_mmc_block.h"
 
 #define MMC_QUEUE_BOUNCESZ	65536
 
@@ -107,7 +103,6 @@ static int mmc_queue_thread(void *d)
 	current->flags |= PF_MEMALLOC;
 
 	down(&mq->thread_sem);
-	mt_bio_queue_alloc(current);
 	do {
 		struct request *req = NULL;
 		struct mmc_queue_req *tmp;
@@ -199,6 +194,7 @@ fetch_done:
 #ifdef MTK_BKOPS_IDLE_MAYA
 			mmc_start_delayed_bkops(card);
 #endif
+
 #ifdef CONFIG_MTK_EMMC_CQ_SUPPORT
 			if (!cmdq_full) {
 				up(&mq->thread_sem);
@@ -206,7 +202,7 @@ fetch_done:
 				down(&mq->thread_sem);
 			} else {
 				cmdq_full = 0;
-				/* msleep(20); */
+				msleep(20);
 			}
 #else
 			up(&mq->thread_sem);
@@ -215,7 +211,6 @@ fetch_done:
 #endif
 		}
 	} while (1);
-	mt_bio_queue_free(current);
 	up(&mq->thread_sem);
 
 	return 0;
@@ -231,7 +226,9 @@ static void mmc_request_fn(struct request_queue *q)
 {
 	struct mmc_queue *mq = q->queuedata;
 	struct request *req;
+#ifndef CONFIG_MTK_EMMC_CQ_SUPPORT
 	unsigned long flags;
+#endif
 	struct mmc_context_info *cntx;
 
 	if (!mq) {
@@ -244,10 +241,8 @@ static void mmc_request_fn(struct request_queue *q)
 
 	cntx = &mq->card->host->context_info;
 #ifdef CONFIG_MTK_EMMC_CQ_SUPPORT
-	if (mq->card->ext_csd.cmdq_mode_en) {
-		wake_up_process(mq->thread);
-	} else {
-#endif
+	wake_up_process(mq->thread);
+#else
 	if (!mq->mqrq_cur->req && mq->mqrq_prev->req) {
 		/*
 		 * New MMC request arrived when MMC thread may be
@@ -260,13 +255,8 @@ static void mmc_request_fn(struct request_queue *q)
 			wake_up_interruptible(&cntx->wait);
 		}
 		spin_unlock_irqrestore(&cntx->lock, flags);
-#ifdef CONFIG_MTK_EMMC_CQ_SUPPORT
-		wake_up_process(mq->thread);
-#endif
 	} else if (!mq->mqrq_cur->req && !mq->mqrq_prev->req)
 		wake_up_process(mq->thread);
-#ifdef CONFIG_MTK_EMMC_CQ_SUPPORT
-	}
 #endif
 }
 

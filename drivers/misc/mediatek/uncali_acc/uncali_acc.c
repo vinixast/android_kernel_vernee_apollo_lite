@@ -1,15 +1,3 @@
-/*
- * Copyright (C) 2016 MediaTek Inc.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- * See http://www.gnu.org/licenses/gpl-2.0.html for more details.
- */
 
 #include "uncali_acc.h"
 
@@ -335,15 +323,10 @@ static ssize_t uncali_acc_show_sensordevnum(struct device *dev,
 					    struct device_attribute *attr, char *buf)
 {
 	struct uncali_acc_context *cxt = NULL;
-	const char *devname = NULL;
-	struct input_handle *handle;
+	char *devname = NULL;
 
 	cxt = uncali_acc_context_obj;
-	list_for_each_entry(handle, &cxt->idev->h_list, d_node)
-		if (strncmp(handle->name, "event", 5) == 0) {
-			devname = handle->name;
-			break;
-		}
+	devname = (char *)dev_name(&cxt->idev->dev);
 	return snprintf(buf, PAGE_SIZE, "%s\n", devname + 5);
 }
 

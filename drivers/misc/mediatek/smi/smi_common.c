@@ -26,7 +26,7 @@
 #include <aee.h>
 
 /* Define SMI_INTERNAL_CCF_SUPPORT when CCF needs to be enabled */
-#if !defined(CONFIG_MTK_CLKMGR) && !defined(SMI_BRINGUP)
+#if !defined(CONFIG_MTK_CLKMGR)
 #define SMI_INTERNAL_CCF_SUPPORT
 #endif
 
@@ -259,13 +259,6 @@ static unsigned short int *larb_port_backup[SMI_LARB_NR] = { larb0_port_backup,
 	larb1_port_backup, larb2_port_backup, larb3_port_backup,
 	larb4_port_backup, larb5_port_backup, larb6_port_backup
 };
-
-#elif defined(SMI_BRINGUP)
-#define SMI_REG_REGION_MAX 1
-
-static const unsigned int larb_port_num[SMI_LARB_NR] = {0};
-static unsigned short int *larb_port_backup[SMI_LARB_NR] = {0};
-
 #endif
 
 static unsigned long gSMIBaseAddrs[SMI_REG_REGION_MAX];
@@ -1184,7 +1177,7 @@ static void smiclk_subsys_after_on(enum subsys_id sys)
 					on_larb_power_on_with_ccf(i);
 #if defined(SMI_D1)
 					/* inform m4u to restore register value */
-					m4u_larb_backup(i);
+					m4u_larb_backup((int)i4larbid);
 #endif
 				}
 		}
@@ -1210,7 +1203,7 @@ static void smiclk_subsys_before_off(enum subsys_id sys)
 					on_larb_power_off_with_ccf(i);
 #if defined(SMI_D1)
 					/* inform m4u to backup register value */
-					m4u_larb_restore(i);
+					m4u_larb_restore((int)i4larbid);
 #endif
 					}
 
@@ -2299,14 +2292,6 @@ int is_mmdvfs_disabled(void)
 	return disable_mmdvfs;
 }
 
-void mmdvfs_enable(int enable)
-{
-	if (enable)
-		disable_mmdvfs = 0;
-	else
-		disable_mmdvfs = 1;
-	SMIDBG(1, "disable_mmdvfs=%d, enable=%d", disable_mmdvfs, enable);
-}
 
 int is_mmdvfs_freq_hopping_disabled(void)
 {

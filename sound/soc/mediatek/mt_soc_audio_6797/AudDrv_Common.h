@@ -101,7 +101,6 @@ typedef struct {
 	kal_uint32 MemIfNum;
 	bool interruptTrigger;
 	spinlock_t substream_lock;
-	bool mWaitForIRQ;
 } AFE_MEM_CONTROL_T;
 
 struct pcm_afe_info {
@@ -132,14 +131,5 @@ struct mtk_dai {
 	bool enable;
 	uint32_t sample_rate;
 };
-
-typedef struct {
-	kal_int8 *pBufferBase;
-	kal_int8 *pBufferIndx;
-	kal_uint32 u4BufferSize;
-	kal_uint32 u4BufferSizeMax;
-
-	kal_uint32 u4IsrConsumeSize;
-} AFE_DL_ISR_COPY_T;
 
 #endif

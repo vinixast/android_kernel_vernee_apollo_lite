@@ -1,16 +1,3 @@
-/*
- * Copyright (C) 2016 MediaTek Inc.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- * See http://www.gnu.org/licenses/gpl-2.0.html for more details.
- */
-
 /**
 * @file    mt_hotplug_strategy_internal.h
 * @brief   hotplug strategy(hps) - internal header file
@@ -18,6 +5,7 @@
 
 #ifndef __MT_HOTPLUG_STRATEGY_INTERNAL_H__
 #define __MT_HOTPLUG_STRATEGY_INTERNAL_H__
+
 
 /*=============================================================*/
 /* Include files */
@@ -159,8 +147,7 @@ typedef enum {
 	HPS_FUNC_CTRL_HPS,	/* bit  0, 0x0001 */
 	HPS_FUNC_CTRL_RUSH,	/* bit  1, 0x0002 */
 	HPS_FUNC_CTRL_HVY_TSK,	/* bit  2, 0x0004 */
-	HPS_FUNC_CTRL_PPM_INIT,	/* big  3, 0x0008 */
-	HPS_FUNC_CTRL_EFUSE,	/* big  4, 0x0010 */
+	HPS_FUNC_CTRL_HVY_TSK_EXT, /* bit 3, 0x0008*/
 	HPS_FUNC_CTRL_COUNT
 } hps_ctxt_func_ctrl_e;
 
@@ -219,7 +206,7 @@ typedef struct hps_ctxt_struct {
 	unsigned int power_mode;
 	unsigned int ppm_power_mode;
 	unsigned int heavy_task_enabled;
-	unsigned int is_ppm_init;
+	unsigned int heavy_task_enabled_EXT;
 	unsigned int hps_func_control;
 	/* core */
 	struct mutex lock;	/* Synchronizes accesses */
@@ -321,7 +308,7 @@ DECLARE_PER_CPU(hps_cpu_ctxt_t, hps_percpu_ctxt);
 extern struct cpumask cpu_domain_big_mask;	/* definition in kernel-3.10/arch/arm/kernel/topology.c */
 extern struct cpumask cpu_domain_little_mask;	/* definition in kernel-3.10/arch/arm/kernel/topology.c */
 
-extern void sched_get_nr_running_avg(int *avg, int *iowait_avg);
+extern int sched_get_nr_running_avg(int *avg, int *iowait_avg);
 	/* definition in mediatek/kernel/kernel/sched/rq_stats.c */
 
 /*=============================================================*/
@@ -387,14 +374,21 @@ extern int hps_cpu_is_cpu_big(int cpu);
 extern int hps_cpu_is_cpu_little(int cpu);
 extern unsigned int hps_cpu_get_percpu_load(int cpu);
 extern unsigned int hps_cpu_get_nr_heavy_task(void);
-extern void hps_cpu_get_tlp(unsigned int *avg, unsigned int *iowait_avg);
+extern int hps_cpu_get_tlp(unsigned int *avg, unsigned int *iowait_avg);
+#ifdef CONFIG_MTK_SCHED_RQAVG_US
 extern unsigned int sched_get_nr_heavy_task2(int cluster_id);
+#endif
+
+extern int get_avg_heavy_task_threshold(void);
+extern int get_heavy_task_threshold(void);
+extern unsigned int sched_get_nr_heavy_task_by_threshold(int cluster_id, unsigned int threshold);
+extern int sched_get_nr_heavy_running_avg(int cid, int *avg);
 /*=============================================================*/
 /* End */
 /*=============================================================*/
 extern struct cpumask cpu_domain_big_mask;
 extern struct cpumask cpu_domain_little_mask;
-extern void sched_get_nr_running_avg(int *avg, int *iowait_avg);
+extern int sched_get_nr_running_avg(int *avg, int *iowait_avg);
 
 extern unsigned int sched_get_percpu_load(int cpu, bool reset, bool use_maxfreq);
 extern unsigned int sched_get_nr_heavy_task(void);

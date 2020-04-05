@@ -14,9 +14,11 @@
 #include <drm/drm_edid.h>
 #include <linux/clk.h>
 #include <linux/delay.h>
+#include <linux/phy/phy.h>
 #include "mtk_cec.h"
 #include "mtk_hdmi.h"
 #include "mtk_hdmi_hw.h"
+#include "mtk_hdmi_phy.h"
 
 static u8 mtk_hdmi_aud_get_chnl_count(enum hdmi_aud_channel_type channel_type)
 {
@@ -88,7 +90,8 @@ static u8 mtk_hdmi_aud_get_chnl_count(enum hdmi_aud_channel_type channel_type)
 	}
 }
 
-static int mtk_hdmi_video_change_vpll(struct mtk_hdmi *hdmi, u32 clock)
+static int mtk_hdmi_video_change_vpll(struct mtk_hdmi *hdmi, u32 clock,
+				      enum hdmi_display_color_depth depth)
 {
 	unsigned long rate;
 	int ret;
@@ -109,8 +112,9 @@ static int mtk_hdmi_video_change_vpll(struct mtk_hdmi *hdmi, u32 clock)
 	else
 		dev_dbg(hdmi->dev, "Want PLL %u Hz, got %lu Hz\n", clock, rate);
 
+	mtk_hdmi_phy_set_pll(hdmi->phy, clock, depth);
 	mtk_hdmi_hw_config_sys(hdmi);
-	mtk_hdmi_hw_set_deep_color_mode(hdmi);
+	mtk_hdmi_hw_set_deep_color_mode(hdmi, depth);
 	return 0;
 }
 
@@ -245,7 +249,7 @@ static int mtk_hdmi_aud_set_src(struct mtk_hdmi *hdmi,
 			break;
 		}
 	}
-	mtk_hdmi_hw_aud_set_ncts(hdmi, hdmi->aud_param.aud_hdmi_fs,
+	mtk_hdmi_hw_aud_set_ncts(hdmi, hdmi->depth, hdmi->aud_param.aud_hdmi_fs,
 				 display_mode->clock);
 
 	mtk_hdmi_hw_aud_src_reenable(hdmi);
@@ -302,13 +306,13 @@ static int mtk_hdmi_setup_avi_infoframe(struct mtk_hdmi *hdmi,
 	err = drm_hdmi_avi_infoframe_from_display_mode(&frame, mode);
 	if (err < 0) {
 		dev_err(hdmi->dev,
-			"Failed to get AVI infoframe from mode: %zd\n", err);
+			"Failed to get AVI infoframe from mode: %ld\n", err);
 		return err;
 	}
 
 	err = hdmi_avi_infoframe_pack(&frame, buffer, sizeof(buffer));
 	if (err < 0) {
-		dev_err(hdmi->dev, "Failed to pack AVI infoframe: %zd\n", err);
+		dev_err(hdmi->dev, "Failed to pack AVI infoframe: %ld\n", err);
 		return err;
 	}
 
@@ -326,14 +330,14 @@ static int mtk_hdmi_setup_spd_infoframe(struct mtk_hdmi *hdmi,
 
 	err = hdmi_spd_infoframe_init(&frame, vendor, product);
 	if (err < 0) {
-		dev_err(hdmi->dev, "Failed to initialize SPD infoframe %zd\n",
+		dev_err(hdmi->dev, "Failed to initialize SPD infoframe %ld\n",
 			     err);
 		return err;
 	}
 
 	err = hdmi_spd_infoframe_pack(&frame, buffer, sizeof(buffer));
 	if (err < 0) {
-		dev_err(hdmi->dev, "Failed to pack SDP infoframe: %zd\n", err);
+		dev_err(hdmi->dev, "Failed to pack SDP infoframe: %ld\n", err);
 		return err;
 	}
 
@@ -349,7 +353,7 @@ static int mtk_hdmi_setup_audio_infoframe(struct mtk_hdmi *hdmi)
 
 	err = hdmi_audio_infoframe_init(&frame);
 	if (err < 0) {
-		dev_err(hdmi->dev, "Faied to setup audio infoframe: %zd\n",
+		dev_err(hdmi->dev, "Faied to setup audio infoframe: %ld\n",
 			err);
 		return err;
 	}
@@ -363,7 +367,7 @@ static int mtk_hdmi_setup_audio_infoframe(struct mtk_hdmi *hdmi)
 
 	err = hdmi_audio_infoframe_pack(&frame, buffer, sizeof(buffer));
 	if (err < 0) {
-		dev_err(hdmi->dev, "Failed to pack audio infoframe: %zd\n",
+		dev_err(hdmi->dev, "Failed to pack audio infoframe: %ld\n",
 			err);
 		return err;
 	}
@@ -382,13 +386,13 @@ static int mtk_hdmi_setup_vendor_specific_infoframe(struct mtk_hdmi *hdmi,
 	err = drm_hdmi_vendor_infoframe_from_display_mode(&frame, mode);
 	if (err) {
 		dev_err(hdmi->dev,
-			"Failed to get vendor infoframe from mode: %zd\n", err);
+			"Failed to get vendor infoframe from mode: %ld\n", err);
 		return err;
 	}
 
 	err = hdmi_vendor_infoframe_pack(&frame, buffer, sizeof(buffer));
 	if (err) {
-		dev_err(hdmi->dev, "Failed to pack vendor infoframe: %zd\n",
+		dev_err(hdmi->dev, "Failed to pack vendor infoframe: %ld\n",
 			err);
 		return err;
 	}
@@ -410,6 +414,7 @@ int mtk_hdmi_output_init(struct mtk_hdmi *hdmi)
 		return -EINVAL;
 
 	hdmi->csp = HDMI_COLORSPACE_RGB;
+	hdmi->depth = HDMI_DEEP_COLOR_24BITS;
 	hdmi->output = true;
 	aud_param->aud_codec = HDMI_AUDIO_CODING_TYPE_PCM;
 	aud_param->aud_hdmi_fs = HDMI_AUDIO_SAMPLE_FREQUENCY_48000;
@@ -482,15 +487,20 @@ int mtk_hdmi_output_set_display_mode(struct mtk_hdmi *hdmi,
 	mtk_hdmi_hw_vid_black(hdmi, true);
 	mtk_hdmi_hw_aud_mute(hdmi, true);
 	mtk_hdmi_setup_av_mute_packet(hdmi);
+	phy_power_off(hdmi->phy);
 
 	ret = mtk_hdmi_video_change_vpll(hdmi,
-					 mode->clock * 1000);
+					 mode->clock * 1000,
+					 hdmi->depth);
 	if (ret) {
 		dev_err(hdmi->dev, "set vpll failed!\n");
 		return ret;
 	}
 	mtk_hdmi_video_set_display_mode(hdmi, mode);
+
+	phy_power_on(hdmi->phy);
 	mtk_hdmi_aud_output_config(hdmi, mode);
+
 	mtk_hdmi_setup_audio_infoframe(hdmi);
 	mtk_hdmi_setup_avi_infoframe(hdmi, mode);
 	mtk_hdmi_setup_spd_infoframe(hdmi, "mediatek", "chromebook");

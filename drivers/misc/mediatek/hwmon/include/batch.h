@@ -1,16 +1,3 @@
-/*
-* Copyright (C) 2013 MediaTek Inc.
-*
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License version 2 as
-* published by the Free Software Foundation.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-* See http://www.gnu.org/licenses/gpl-2.0.html for more details.
-*/
-
 #ifndef __BATCH_H__
 #define __BATCH_H__
 
@@ -22,9 +9,9 @@
 #include <linux/workqueue.h>
 #include <linux/slab.h>
 #include <linux/module.h>
-#include "hwmsensor.h"
+#include <hwmsensor.h>
 #include <linux/string.h>
-#include "hwmsen_dev.h"
+#include <hwmsen_dev.h>
 
 #define BATCH_TAG					"<BATCHDEV> "
 #define BATCH_FUN(f)				pr_debug(BATCH_TAG"%s\n", __func__)
@@ -127,7 +114,7 @@ struct batch_context {
 	struct timer_list   timer;  /* polling timer */
 	atomic_t            trace;
 
-	/* struct wake_lock read_data_wake_lock; */
+	struct wakeup_source read_data_wake_lock;
 	struct batch_dev_list	dev_list;
 
 	uint64_t		active_sensor;

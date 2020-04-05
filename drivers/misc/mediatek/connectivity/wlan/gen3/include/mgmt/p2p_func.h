@@ -1,17 +1,3 @@
-/*
-* Copyright (C) 2016 MediaTek Inc.
-*
-* This program is free software: you can redistribute it and/or modify it under the terms of the
-* GNU General Public License version 2 as published by the Free Software Foundation.
-*
-* This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
-* without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-* See the GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License along with this program.
-* If not, see <http://www.gnu.org/licenses/>.
-*/
-
 #ifndef _P2P_FUNC_H
 #define _P2P_FUNC_H
 
@@ -85,10 +71,8 @@ P_BSS_INFO_T p2pFuncBSSIDFindBssInfo(IN P_ADAPTER_T prAdapter, IN PUINT_8 pucBSS
 VOID p2pFuncGCJoin(IN P_ADAPTER_T prAdapter, IN P_BSS_INFO_T prP2pBssInfo, IN P_P2P_JOIN_INFO_T prP2pJoinInfo);
 
 VOID
-p2pFuncStartGO(IN P_ADAPTER_T prAdapter,
-	       IN P_BSS_INFO_T prBssInfo,
-	       IN P_P2P_CONNECTION_REQ_INFO_T prP2pConnReqInfo,
-	       IN P_P2P_CHNL_REQ_INFO_T prP2pChnlReqInfo);
+p2pFuncStartGO(IN P_ADAPTER_T prAdapter, IN P_BSS_INFO_T prBssInfo, IN P_P2P_CONNECTION_REQ_INFO_T prP2pConnReqInfo, IN
+	       P_P2P_CHNL_REQ_INFO_T prP2pChnlReqInfo);
 
 VOID p2pFuncStopGO(IN P_ADAPTER_T prAdapter, IN P_BSS_INFO_T prP2pBssInfo);
 
@@ -109,13 +93,9 @@ p2pFuncTxMgmtFrame(IN P_ADAPTER_T prAdapter, IN UINT_8 ucBssIndex, IN P_MSDU_INF
 		   fgNonCckRate);
 
 WLAN_STATUS
-p2pFuncProcessBeacon(IN P_ADAPTER_T prAdapter,
-		     IN P_BSS_INFO_T prP2pBssInfo,
-		     IN P_P2P_BEACON_UPDATE_INFO_T prBcnUpdateInfo,
-		     IN PUINT_8 pucNewBcnHdr,
-		     IN UINT_32 u4NewHdrLen,
-		     IN PUINT_8 pucNewBcnBody,
-		     IN UINT_32 u4NewBodyLen);
+p2pFuncBeaconUpdate(IN P_ADAPTER_T prAdapter, IN P_BSS_INFO_T prP2pBssInfo, IN P_P2P_BEACON_UPDATE_INFO_T
+		    prBcnUpdateInfo, IN PUINT_8 pucNewBcnHdr, IN UINT_32 u4NewHdrLen, IN PUINT_8 pucNewBcnBody, IN
+		    UINT_32 u4NewBodyLen);
 
 BOOLEAN
 p2pFuncValidateAuth(IN P_ADAPTER_T prAdapter, IN P_BSS_INFO_T prBssInfo, IN P_SW_RFB_T prSwRfb, IN PP_STA_RECORD_T
@@ -140,10 +120,8 @@ VOID p2pFuncValidateRxActionFrame(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_T prSwRf
 BOOLEAN p2pFuncIsAPMode(IN P_P2P_CONNECTION_SETTINGS_T prP2pConnSettings);
 
 VOID
-p2pFuncParseBeaconIEs(IN P_ADAPTER_T prAdapter,
-		      IN P_BSS_INFO_T prP2pBssInfo,
-		      IN PUINT_8 pucIEInfo,
-		      IN UINT_32 u4IELen);
+p2pFuncParseBeaconContent(IN P_ADAPTER_T prAdapter, IN P_BSS_INFO_T prP2pBssInfo, IN PUINT_8 pucIEInfo, IN UINT_32
+			  u4IELen);
 
 P_BSS_DESC_T
 p2pFuncKeepOnConnection(IN P_ADAPTER_T prAdapter, IN P_BSS_INFO_T prBssInfo, IN P_P2P_CONNECTION_REQ_INFO_T

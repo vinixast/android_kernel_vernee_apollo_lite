@@ -149,7 +149,7 @@ static int hall_probe(struct platform_device *pdev)
     }
 
     info->idev = input;
-    info->sw_code = SW_LID;
+    info->sw_code = 12;
     info->name = HALL_NAME;
     input->name = info->name;
     
@@ -265,3 +265,4 @@ module_exit(hall_exit);
 MODULE_DESCRIPTION("Prowave Hall driver");
 MODULE_AUTHOR("Aka.Jiang <aka.jiang@hotmail.com>");
 MODULE_LICENSE("GPL");
+

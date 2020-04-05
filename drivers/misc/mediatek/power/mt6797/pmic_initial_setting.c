@@ -86,6 +86,8 @@ int PMIC_MD_INIT_SETTING_V1(void)
 
 	if (modem_temp_node == NULL) {
 		pr_err("PMIC get modem_temp_node failed\n");
+		if (modem_temp_base)
+			iounmap(modem_temp_base);
 		modem_temp_base = 0;
 	} else {
 		modem_temp_base = of_iomap(modem_temp_node, 0);
@@ -178,6 +180,26 @@ void PMIC_INIT_SETTING_V1(void)
 
 	pmic_set_register_value(PMIC_TOP_RST_MISC_SET,  0x1);
 
+	pr_err("[PMIC_INIT_SETTING_V1][pmic_status]\n");
+	/*1.UVLO off*/
+	pr_err("Reg[0x%x]=0x%x\n", MT6351_TOP_RST_STATUS, upmu_get_reg_value(MT6351_TOP_RST_STATUS));
+	/*2.thermal shutdown 150*/
+	pr_err("Reg[0x%x]=0x%x\n", MT6351_THERMALSTATUS, upmu_get_reg_value(MT6351_THERMALSTATUS));
+	/*3.power not good*/
+	pr_err("Reg[0x%x]=0x%x\n", MT6351_PGSTATUS0, upmu_get_reg_value(MT6351_PGSTATUS0));
+	pr_err("Reg[0x%x]=0x%x\n", MT6351_PGSTATUS1, upmu_get_reg_value(MT6351_PGSTATUS1));
+	/*4.LDO oc*/
+	pr_err("Reg[0x%x]=0x%x\n", MT6351_OCSTATUS1, upmu_get_reg_value(MT6351_OCSTATUS1));
+	pr_err("Reg[0x%x]=0x%x\n", MT6351_OCSTATUS2, upmu_get_reg_value(MT6351_OCSTATUS2));
+	/*5.long press shutdown*/
+	pr_err("Reg[0x%x]=0x%x\n", MT6351_STRUP_CON12, upmu_get_reg_value(MT6351_STRUP_CON12));
+	/* 6.WDTRST */
+	pr_err("Reg[0x%x]=0x%x\n", MT6351_TOP_RST_MISC, upmu_get_reg_value(MT6351_TOP_RST_MISC));
+	pr_err("Reg[0x%x]=0x%x\n", MT6351_TOP_CLK_TRIM, upmu_get_reg_value(MT6351_TOP_CLK_TRIM));
+	/* 7. BUCK oc */
+	pr_err("Reg[0x%x]=0x%x\n", MT6351_BUCK_OC_CON0, upmu_get_reg_value(MT6351_BUCK_OC_CON0));
+	pr_err("Reg[0x%x]=0x%x\n", MT6351_BUCK_OC_CON1, upmu_get_reg_value(MT6351_BUCK_OC_CON1));
+
 	ret_val = pmic_config_interface(MT6351_TOP_RST_STATUS_CLR, 0xFFFF, 0xFFFF, 0);
 	ret_val = pmic_set_register_value(PMIC_RG_STRUP_THR_CLR, 0x1);
 	udelay(200);
@@ -197,6 +219,25 @@ void PMIC_INIT_SETTING_V1(void)
 
 	ret_val = pmic_config_interface(MT6351_BUCK_OC_CON0, 0xFFFF, 0xFFFF, 0);
 	udelay(200);
+
+	/*1.UVLO off*/
+	pr_err("Reg[0x%x]=0x%x\n", MT6351_TOP_RST_STATUS, upmu_get_reg_value(MT6351_TOP_RST_STATUS));
+	/*2.thermal shutdown 150*/
+	pr_err("Reg[0x%x]=0x%x\n", MT6351_THERMALSTATUS, upmu_get_reg_value(MT6351_THERMALSTATUS));
+	/*3.power not good*/
+	pr_err("Reg[0x%x]=0x%x\n", MT6351_PGSTATUS0, upmu_get_reg_value(MT6351_PGSTATUS0));
+	pr_err("Reg[0x%x]=0x%x\n", MT6351_PGSTATUS1, upmu_get_reg_value(MT6351_PGSTATUS1));
+	/*4.LDO oc*/
+	pr_err("Reg[0x%x]=0x%x\n", MT6351_OCSTATUS1, upmu_get_reg_value(MT6351_OCSTATUS1));
+	pr_err("Reg[0x%x]=0x%x\n", MT6351_OCSTATUS2, upmu_get_reg_value(MT6351_OCSTATUS2));
+	/*5.long press shutdown*/
+	pr_err("Reg[0x%x]=0x%x\n", MT6351_STRUP_CON12, upmu_get_reg_value(MT6351_STRUP_CON12));
+	/* 6.WDTRST */
+	pr_err("Reg[0x%x]=0x%x\n", MT6351_TOP_RST_MISC, upmu_get_reg_value(MT6351_TOP_RST_MISC));
+	pr_err("Reg[0x%x]=0x%x\n", MT6351_TOP_CLK_TRIM, upmu_get_reg_value(MT6351_TOP_CLK_TRIM));
+	/* 7. BUCK oc */
+	pr_err("Reg[0x%x]=0x%x\n", MT6351_BUCK_OC_CON0, upmu_get_reg_value(MT6351_BUCK_OC_CON0));
+	pr_err("Reg[0x%x]=0x%x\n", MT6351_BUCK_OC_CON1, upmu_get_reg_value(MT6351_BUCK_OC_CON1));
 
 ret = pmic_config_interface(0x8, 0x1, 0x1, 0);
 ret = pmic_config_interface(0xA, 0x1, 0x1, 1);

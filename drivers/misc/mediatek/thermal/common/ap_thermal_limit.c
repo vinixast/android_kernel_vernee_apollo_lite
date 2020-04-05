@@ -1,16 +1,3 @@
-/*
-* Copyright (C) 2016 MediaTek Inc.
-*
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License version 2 as
-* published by the Free Software Foundation.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-* See http://www.gnu.org/licenses/gpl-2.0.html for more details.
-*/
-
 #include <linux/version.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -21,13 +8,12 @@
 #include <linux/seq_file.h>
 #include <linux/time.h>
 #include <linux/jiffies.h>
+#include "mtk_thermal_typedefs.h"
 #include <mach/mt_thermal.h> /* needed by tscpu_settings.h */
 #include <tscpu_settings.h> /* needed by tscpu_warn */
 #include <ap_thermal_limit.h>
 #include <mt-plat/aee.h>
-#if !defined(CONFIG_ARCH_MT6757)
 #include <mt_ptp.h>
-#endif
 #if defined(ATM_USES_PPM)
 #include "mach/mt_ppm_api.h"
 #else
@@ -44,9 +30,9 @@
  * Local variable definition
  *=============================================================*/
 static unsigned int apthermolmt_prev_cpu_pwr_lim;
-static unsigned int apthermolmt_curr_cpu_pwr_lim = 0x7FFFFFFF;
+static unsigned int apthermolmt_curr_cpu_pwr_lim;
 static unsigned int apthermolmt_prev_gpu_pwr_lim;
-static unsigned int apthermolmt_curr_gpu_pwr_lim = 0x7FFFFFFF;
+static unsigned int apthermolmt_curr_gpu_pwr_lim;
 
 static struct apthermolmt_user _dummy = {
 	.log = "dummy ",
@@ -67,8 +53,6 @@ static unsigned int gp_prev_cpu_pwr_limit;
 static unsigned int gp_curr_cpu_pwr_limit;
 static unsigned int gp_prev_gpu_pwr_limit;
 static unsigned int gp_curr_gpu_pwr_limit;
-
-static DEFINE_MUTEX(apthermolmt_cpu_mutex);
 
 /*=============================================================
  * Weak functions
@@ -145,8 +129,6 @@ void apthermolmt_set_cpu_power_limit(struct apthermolmt_user *handle, unsigned i
 	/* decide min CPU limit */
 	handle->cpu_limit = limit;
 
-	mutex_lock(&apthermolmt_cpu_mutex);
-
 #if AP_THERMO_LMT_MAX_USERS == 3
 	final_limit = MIN(_users[0]->cpu_limit, _users[1]->cpu_limit);
 	final_limit = MIN(final_limit, _users[2]->cpu_limit);
@@ -173,8 +155,6 @@ void apthermolmt_set_cpu_power_limit(struct apthermolmt_user *handle, unsigned i
 		if (time_after(jiffies, timeout))
 			tscpu_warn("blocked in cpu limit %u over 100ms\n", apthermolmt_curr_cpu_pwr_lim);
 	}
-
-	mutex_unlock(&apthermolmt_cpu_mutex);
 }
 EXPORT_SYMBOL(apthermolmt_set_cpu_power_limit);
 

@@ -1,16 +1,3 @@
-/*
-* Copyright (C) 2016 MediaTek Inc.
-*
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License version 2 as
-* published by the Free Software Foundation.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-* See http://www.gnu.org/licenses/gpl-2.0.html for more details.
-*/
-
 #include <linux/init.h>        /* For init/exit macros */
 #include <linux/module.h>      /* For MODULE_ marcros  */
 #include <linux/kernel.h>
@@ -24,7 +11,7 @@
 
 #include <asm/uaccess.h>
 #include <linux/types.h>
-#include "mt_wdt.h"
+#include <mt_wdt.h>
 #include <linux/delay.h>
 
 #include <linux/device.h>
@@ -42,14 +29,12 @@
 
 #include <mach/wd_api.h>
 #include <mach/mt_secure_api.h>
-#include <linux/irqchip/mt-eic.h>
 #include <mt-plat/upmu_common.h>
 
 #ifdef CONFIG_OF
 void __iomem *toprgu_base = 0;
 int	wdt_irq_id = 0;
 int ext_debugkey_io = -1;
-int ext_debugkey_io_eint = -1;
 
 static const struct of_device_id rgu_of_match[] = {
 	{ .compatible = "mediatek,mt6797-toprgu", },
@@ -484,8 +469,7 @@ int mtk_wdt_request_en_set(int mark_bit, WD_REQ_CTL en)
 	} else if (MTK_WDT_REQ_MODE_EINT == mark_bit) {
 		if (WD_REQ_EN == en) {
 			if (ext_debugkey_io != -1) {
-				ext_debugkey_io_eint = mt_gpio_to_eint(ext_debugkey_io);
-				ext_req_con = (ext_debugkey_io_eint << 4) | 0x01;
+				ext_req_con = (ext_debugkey_io << 4) | 0x01;
 				mt_reg_sync_writel(ext_req_con, MTK_WDT_EXT_REQ_CON);
 				tmp |= (MTK_WDT_REQ_MODE_EINT);
 			} else {

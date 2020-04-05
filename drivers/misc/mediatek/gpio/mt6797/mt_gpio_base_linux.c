@@ -1,15 +1,3 @@
-/*
-* Copyright (C) 2016 MediaTek Inc.
-*
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License version 2 as
-* published by the Free Software Foundation.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-* See http://www.gnu.org/licenses/gpl-2.0.html for more details.
-*/
 #include <linux/gpio.h>
 #include <linux/kernel.h>
 #include <linux/slab.h>
@@ -18,7 +6,7 @@
 #include <linux/platform_device.h>
 #include <linux/seq_file.h>
 
-#include "mt_gpio_base.h"
+#include <mt_gpio_base.h>
 #include <mt-plat/mt_gpio_core.h>
 #include <linux/irqchip/mt-eic.h>
 #include <linux/interrupt.h>
@@ -29,7 +17,6 @@
 #include <linux/debugfs.h>
 #include <linux/of_gpio.h>
 #include <linux/idr.h>
-#include <linux/irqchip/mt-eic.h>
 
 static const signed int pin_eint_map[MT_GPIO_BASE_MAX] = {
 
@@ -73,7 +60,8 @@ static void mtk_gpio_set(struct gpio_chip *chip, unsigned offset, int value)
 
 static int mtk_gpio_to_irq(struct gpio_chip *chip, unsigned pin)
 {
-	return mt_gpio_to_irq(pin);
+	/*return mt_gpio_to_irq(pin);*/
+	return 0;
 }
 
 static int mtk_gpio_set_debounce(struct gpio_chip *chip, unsigned offset, unsigned debounce)

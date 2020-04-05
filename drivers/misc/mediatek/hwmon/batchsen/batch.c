@@ -1,15 +1,3 @@
-/*
-* Copyright (C) 2013 MediaTek Inc.
-*
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License version 2 as
-* published by the Free Software Foundation.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-* See http://www.gnu.org/licenses/gpl-2.0.html for more details.
-*/
 
 #include <batch.h>
 #include <linux/time.h>
@@ -153,7 +141,7 @@ static int get_fifo_data(struct batch_context *obj)
 			#ifdef CONFIG_PM_WAKELOCKS
 				/* __pm_stay_awake(&(batch_context_obj->read_data_wake_lock)); */
 			#else
-				/* wake_lock(&(batch_context_obj->read_data_wake_lock)); */
+				wake_lock(&(batch_context_obj->read_data_wake_lock));
 			#endif
 				obj->numOfDataLeft = fifo_len;
 				input_report_rel(obj->idev, EVENT_TYPE_BATCH_READY, fifo_len);
@@ -590,14 +578,9 @@ static ssize_t batch_show_devnum(struct device *dev,
 {
 	struct batch_context *cxt = NULL;
 	const char *devname = NULL;
-	struct input_handle *handle;
 
 	cxt = batch_context_obj;
-	list_for_each_entry(handle, &cxt->idev->h_list, d_node)
-		if (strncmp(handle->name, "event", 5) == 0) {
-			devname = handle->name;
-			break;
-		}
+	devname = dev_name(&cxt->idev->dev);
 	return snprintf(buf, PAGE_SIZE, "%s\n", devname+5);
 }
 /*----------------------------------------------------------------*/
@@ -685,7 +668,7 @@ static long batch_unlocked_ioctl(struct file *fp, unsigned int cmd, unsigned lon
 		#ifdef CONFIG_PM_WAKELOCKS
 			/* __pm_relax(&(batch_context_obj->read_data_wake_lock)); */
 		#else
-			/* wake_unlock(&(batch_context_obj->read_data_wake_lock)); */
+			wake_unlock(&(batch_context_obj->read_data_wake_lock));
 		#endif
 		}
 
@@ -884,7 +867,6 @@ int batch_register_support_info(int handle, int support, int div, int timestamp_
 	}
 	return -1;
 }
-EXPORT_SYMBOL_GPL(batch_register_support_info);
 
 void report_batch_data(struct input_dev *dev, struct hwm_sensor_data *data)
 {

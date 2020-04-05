@@ -157,13 +157,11 @@ enum {
 	DLPT	= 1 << 3,
 	USER_LIMIT = 1 << 4,
 	TIME_PROFILE = 1 << 5,
-	ET_ALGO	= 1 << 6,
 };
 
 enum ppm_policy {
 	PPM_POLICY_PTPOD = 0,		/* highest priority if priority value is the same */
 	PPM_POLICY_UT,
-	PPM_POLICY_FORCE_LIMIT,
 	PPM_POLICY_PWR_THRO,
 	PPM_POLICY_THERMAL,
 	PPM_POLICY_DLPT,
@@ -239,20 +237,10 @@ struct ppm_data {
 	/* status */
 	enum ppm_mode cur_mode;
 	enum ppm_power_state cur_power_state;
-#ifdef PPM_IC_SEGMENT_CHECK
-	enum ppm_power_state fix_state_by_segment;
-#endif
 	bool is_enabled;
 	bool is_in_suspend;
 	int fixed_root_cluster;
 	unsigned int min_power_budget;
-
-#ifdef PPM_VPROC_5A_LIMIT_CHECK
-	/* enable = 0: skip 5A limit check */
-	/* on/off is controlled by thermal */
-	bool is_5A_limit_enable;
-	bool is_5A_limit_on;
-#endif
 
 	/* platform settings */
 	unsigned int cluster_num;
@@ -361,7 +349,6 @@ struct ppm_power_state_data {
 extern struct ppm_data ppm_main_info;
 extern struct ppm_hica_algo_data ppm_hica_algo_data;
 extern struct proc_dir_entry *policy_dir;
-extern struct proc_dir_entry *profile_dir;
 extern unsigned int ppm_func_lv_mask;
 extern unsigned int ppm_debug;
 extern met_set_ppm_state_funcMET g_pSet_PPM_State;
@@ -437,22 +424,6 @@ extern void ppm_task_wakeup(void);
 extern void ppm_main_clear_client_req(struct ppm_client_req *c_req);
 extern int ppm_main_register_policy(struct ppm_policy_data *policy);
 extern void ppm_main_unregister_policy(struct ppm_policy_data *policy);
-
-/* profiling */
-extern int ppm_profile_init(void);
-extern void ppm_profile_exit(void);
-extern void ppm_profile_state_change_notify(enum ppm_power_state old_state, enum ppm_power_state new_state);
-extern void ppm_profile_update_client_exec_time(enum ppm_client client, unsigned long long time);
-
-/* SRAM debugging */
-#ifdef CONFIG_MTK_RAM_CONSOLE
-extern void aee_rr_rec_ppm_cluster_limit(int id, u32 val);
-extern void aee_rr_rec_ppm_step(u8 val);
-extern void aee_rr_rec_ppm_cur_state(u8 val);
-extern void aee_rr_rec_ppm_min_pwr_bgt(u32 val);
-extern void aee_rr_rec_ppm_policy_mask(u32 val);
-extern void aee_rr_rec_ppm_waiting_for_pbm(u8 val);
-#endif
 
 #ifdef __cplusplus
 }

@@ -456,7 +456,8 @@ static inline void asc_rx_indicate_wake(struct asc_rx_handle *rx)
 {
 #ifdef CONFIG_EVDO_DT_VIA_SUPPORT
 	/*if(rx->cfg.gpio_ready >= 0) */
-	c2k_gpio_direction_output(rx->cfg.gpio_ready, rx->cfg.polar);
+	if (((rx->cfg.gpio_ready) & 0xFFFF) >= 0)
+		c2k_gpio_direction_output(rx->cfg.gpio_ready, rx->cfg.polar);
 #else
 	if (rx->cfg.gpio_ready == AP_USING_REGISTER)
 		c2k_ap_ready_indicate(rx->cfg.polar);
@@ -468,7 +469,8 @@ static inline void asc_rx_indicate_sleep(struct asc_rx_handle *rx)
 {
 #ifdef CONFIG_EVDO_DT_VIA_SUPPORT
 	/*if(rx->cfg.gpio_ready >= 0) */
-	c2k_gpio_direction_output(rx->cfg.gpio_ready, !rx->cfg.polar);
+	if (((rx->cfg.gpio_ready) & 0xFFFF) >= 0)
+		c2k_gpio_direction_output(rx->cfg.gpio_ready, !rx->cfg.polar);
 #else
 	if (rx->cfg.gpio_ready == AP_USING_REGISTER)
 		c2k_ap_ready_indicate(!rx->cfg.polar);
@@ -668,26 +670,29 @@ static int asc_rx_handle_init(struct asc_rx_handle *rx)
 	char *name = NULL;
 	struct asc_config *cfg = &rx->cfg;
 
-	asc_rx_indicate_sleep(rx);
+	if (((cfg->gpio_ready) & 0xFFFF) >= 0)
+		asc_rx_indicate_sleep(rx);
 
+	if (((cfg->gpio_wake) & 0xFFFF) >= 0) {
 #if defined(CONFIG_MTK_LEGACY)
-	c2k_gpio_irq_mask(cfg->gpio_wake);
+		c2k_gpio_irq_mask(cfg->gpio_wake);
 #endif
-	c2k_gpio_direction_input_for_irq(cfg->gpio_wake);
-	c2k_gpio_set_irq_type(cfg->gpio_wake,
-			      IRQF_TRIGGER_RISING |
-			      IRQF_TRIGGER_FALLING);
-	ret =
-	    c2k_gpio_request_irq(cfg->gpio_wake, asc_irq_cp_wake_ap,
-				 IRQF_SHARED | IRQF_NO_SUSPEND,
-				 "cp_wake_ap", rx);
+		c2k_gpio_direction_input_for_irq(cfg->gpio_wake);
+		c2k_gpio_set_irq_type(cfg->gpio_wake,
+				      IRQF_TRIGGER_RISING |
+				      IRQF_TRIGGER_FALLING);
+		ret =
+		    c2k_gpio_request_irq(cfg->gpio_wake, asc_irq_cp_wake_ap,
+					 IRQF_SHARED | IRQF_NO_SUSPEND,
+					 "cp_wake_ap", rx);
 #if defined(CONFIG_MTK_LEGACY)
-	c2k_gpio_irq_unmask(cfg->gpio_wake);
+		c2k_gpio_irq_unmask(cfg->gpio_wake);
 #endif
-	if (ret < 0) {
-		ASCPRT("fail to request cp_wake_ap irq for %s\n",
-		       cfg->name);
-		goto err_req_irq_cp_wake_ap;
+		if (ret < 0) {
+			ASCPRT("fail to request cp_wake_ap irq for %s\n",
+			       cfg->name);
+			goto err_req_irq_cp_wake_ap;
+		}
 	}
 
 	rx->table = asc_rx_table;
@@ -717,9 +722,12 @@ static int asc_rx_handle_init(struct asc_rx_handle *rx)
 
 	return 0;
 
+/*err_create_rx_thread:*/
+	kfree(name);
  err_malloc_name:
 	/*if(cfg->gpio_wake >= 0) */
-	free_irq(c2k_gpio_to_irq(cfg->gpio_wake), rx);
+	if (((cfg->gpio_wake) & 0xFFFF) >= 0)
+		free_irq(c2k_gpio_to_irq(cfg->gpio_wake), rx);
  err_req_irq_cp_wake_ap:
 /*err_request_gpio_cp_wake_ap:*/
 /*err_request_gpio_ap_ready:*/
@@ -800,9 +808,8 @@ static int asc_rx_handle_ready(void *data, int event)
 	switch (event) {
 	case AP_RX_EVENT_STOP:
 		atomic_set(&rx->state, AP_RX_ST_IDLE);
-		asc_rx_event_send(rx, AP_RX_EVENT_IDLE_TIMEOUT);
-		/*mod_timer(&rx->timer,
-			  jiffies + msecs_to_jiffies(ASC_RX_WAIT_IDLE_TIME));*/
+		mod_timer(&rx->timer,
+			  jiffies + msecs_to_jiffies(ASC_RX_WAIT_IDLE_TIME));
 		break;
 	default:
 		ASCDPRT("ignore the rx event %d in state(%s)", event,
@@ -866,7 +873,8 @@ static inline void asc_tx_wake_cp(struct asc_tx_handle *tx)
 	unsigned long flags = 0;
 #ifdef CONFIG_EVDO_DT_VIA_SUPPORT
 	/*if(tx->cfg.gpio_wake >= 0) */
-	c2k_gpio_direction_output(tx->cfg.gpio_wake, tx->cfg.polar);
+	if (((tx->cfg.gpio_wake) & 0xFFFF) >= 0)
+		c2k_gpio_direction_output(tx->cfg.gpio_wake, tx->cfg.polar);
 #else
 	if (tx->cfg.gpio_wake == AP_USING_REGISTER) {
 		while (atomic_read(&tx->trigger_cp_sleep)) {
@@ -888,7 +896,8 @@ static inline void asc_tx_sleep_cp(struct asc_tx_handle *tx)
 {
 #ifdef CONFIG_EVDO_DT_VIA_SUPPORT
 	/*if(tx->cfg.gpio_wake >= 0) */
-	c2k_gpio_direction_output(tx->cfg.gpio_wake, !tx->cfg.polar);
+	if (((tx->cfg.gpio_wake) & 0xFFFF) >= 0)
+		c2k_gpio_direction_output(tx->cfg.gpio_wake, !tx->cfg.polar);
 #else
 	if (tx->cfg.gpio_wake == AP_USING_REGISTER) {
 		atomic_set(&tx->trigger_cp_sleep, 1);
@@ -906,8 +915,9 @@ static inline int asc_tx_cp_be_ready(struct asc_tx_handle *tx)
 	int ret = 0;
 
 	/*if(tx->cfg.gpio_ready >= 0) */
-	ret =
-		   ((!!c2k_gpio_get_value(tx->cfg.gpio_ready)) ==
+	if (((tx->cfg.gpio_ready) & 0xFFFF) >= 0)
+		ret =
+		    ((!!c2k_gpio_get_value(tx->cfg.gpio_ready)) ==
 		     (tx->cfg.polar));
 
 	ASCDPRT("asc_tx_cp_be_ready ret %d.\n", ret);
@@ -1155,26 +1165,27 @@ static int asc_tx_handle_init(struct asc_tx_handle *tx)
 
 	spin_lock_init(&tx->ready_slock);
 
+	if (((cfg->gpio_ready) & 0xFFFF) >= 0) {
 #if defined(CONFIG_MTK_LEGACY)
-	c2k_gpio_irq_mask(cfg->gpio_ready);
+		c2k_gpio_irq_mask(cfg->gpio_ready);
 #endif
-	c2k_gpio_direction_input_for_irq(cfg->gpio_ready);
-	c2k_gpio_set_irq_type(cfg->gpio_ready,
-			      IRQF_TRIGGER_RISING |
-			      IRQF_TRIGGER_FALLING);
-	ret =
-	    c2k_gpio_request_irq(cfg->gpio_ready,
-				 asc_irq_cp_indicate_state, IRQF_SHARED,
-				 "cp_indicate_state", tx);
+		c2k_gpio_direction_input_for_irq(cfg->gpio_ready);
+		c2k_gpio_set_irq_type(cfg->gpio_ready,
+				      IRQF_TRIGGER_RISING |
+				      IRQF_TRIGGER_FALLING);
+		ret =
+		    c2k_gpio_request_irq(cfg->gpio_ready,
+					 asc_irq_cp_indicate_state, IRQF_SHARED,
+					 "cp_indicate_state", tx);
 #if defined(CONFIG_MTK_LEGACY)
-	c2k_gpio_irq_unmask(cfg->gpio_ready);
+		c2k_gpio_irq_unmask(cfg->gpio_ready);
 #endif
-	if (ret < 0) {
-		ASCPRT("fail to request irq for %s:cp_ready\n",
-		       cfg->name);
-		goto err_req_irq_cp_indicate_state;
+		if (ret < 0) {
+			ASCPRT("fail to request irq for %s:cp_ready\n",
+			       cfg->name);
+			goto err_req_irq_cp_indicate_state;
+		}
 	}
-
 	atomic_set(&tx->trigger_cp_sleep, 0);
 	setup_timer(&tx->timer_wait_after_cp_sleep, asc_tx_wait_after_cp_sleep,
 		    (unsigned long)tx);
@@ -1214,7 +1225,10 @@ static int asc_tx_handle_init(struct asc_tx_handle *tx)
 	kthread_run(asc_tx_event_thread, tx, "C2K_TX_ASC");
 
 	return 0;
-
+/*err_create_tx_event_thread:*/
+	/*if(cfg->gpio_ready >= 0) */
+	if (((cfg->gpio_ready) & 0xFFFF) >= 0)
+		free_irq(c2k_gpio_to_irq(cfg->gpio_ready), tx);
  err_malloc_name:
 	kfree(name);
  err_req_irq_cp_indicate_state:
@@ -1239,18 +1253,24 @@ static int asc_tx_handle_sleep(void *data, int event)
 		wake_lock(&tx->wlock);
 		asc_tx_wake_cp(tx);
 		/*if(tx->cfg.gpio_ready >= 0) */
-		mod_timer(&tx->timer_wait_ready,
-			  jiffies +
-			  msecs_to_jiffies(ASC_TX_WAIT_READY_TIME));
-		atomic_set(&tx->state, AP_TX_ST_WAIT_READY);
-		if (asc_tx_cp_be_ready(tx)) {
-			mdelay(ASC_TX_DEBOUNCE_TIME);	/*debounce wait, make sure CBP has already be ready */
+		if (((tx->cfg.gpio_ready) & 0xFFFF) >= 0) {
+			mod_timer(&tx->timer_wait_ready,
+				  jiffies +
+				  msecs_to_jiffies(ASC_TX_WAIT_READY_TIME));
+			atomic_set(&tx->state, AP_TX_ST_WAIT_READY);
 			if (asc_tx_cp_be_ready(tx)) {
-				ASCDPRT("Tx:cp %s was ready now.\n",
-					tx->cfg.name);
-				asc_tx_handle_wait_ready(tx,
-							 AP_TX_EVENT_CP_READY);
+				mdelay(ASC_TX_DEBOUNCE_TIME);	/*debounce wait, make sure CBP has already be ready */
+				if (asc_tx_cp_be_ready(tx)) {
+					ASCDPRT("Tx:cp %s was ready now.\n",
+						tx->cfg.name);
+					asc_tx_handle_wait_ready(tx,
+								 AP_TX_EVENT_CP_READY);
+				}
 			}
+		} else {
+			mdelay(ASC_TX_DEBOUNCE_TIME);
+			atomic_set(&tx->state, AP_TX_ST_WAIT_READY);
+			asc_tx_handle_wait_ready(tx, AP_TX_EVENT_CP_READY);
 		}
 		break;
 	default:
@@ -1783,7 +1803,6 @@ int asc_tx_auto_ready(const char *name, int sync)
 	int ret = 0;
 	int try = 1;
 	long timeout = 1;
-	long cur_timeout = 0;
 	struct asc_user *user;
 	struct asc_tx_handle *tx;
 	unsigned long flags = 0;
@@ -1851,12 +1870,10 @@ int asc_tx_auto_ready(const char *name, int sync)
 		if ((AP_TX_ST_READY != atomic_read(&tx->state))
 		    || atomic_read(&tx->sleeping)) {
 			do {
-				cur_timeout = wait_event_interruptible_timeout
+				timeout +=
+				    wait_event_interruptible_timeout
 				    (tx->wait_tx_state, (AP_TX_ST_READY == atomic_read(&tx->state))
 				    && !atomic_read(&tx->sleeping), msecs_to_jiffies(20));
-				if (cur_timeout == 0)
-					cur_timeout = msecs_to_jiffies(20);
-				timeout += cur_timeout;
 /*interruptible_sleep_on(&tx->wait_tx_state);*/
 				if (AP_TX_ST_READY == atomic_read(&tx->state)) {
 					if (timeout >
@@ -1879,6 +1896,8 @@ int asc_tx_auto_ready(const char *name, int sync)
 						break;
 					}
 				} else if (try < ASC_TX_TRY_TIMES) {
+					if (timeout == 0)
+						timeout += msecs_to_jiffies(20);
 					if (timeout <=
 					    msecs_to_jiffies
 					    (ASC_TX_WAIT_READY_TIME)) {
@@ -2134,7 +2153,7 @@ static ssize_t asc_debug_show(struct kobject *kobj, struct kobj_attribute *attr,
 {
 	char *s = buf;
 
-	s += snprintf(s, 32, "%d\n", asc_debug);
+	s += sprintf(s, "%d\n", asc_debug);
 
 	return s - buf;
 }
@@ -2171,11 +2190,13 @@ static ssize_t asc_infor_show(struct kobject *kobj, struct kobj_attribute *attr,
 		cfg = &tx->cfg;
 		val1 = val2 = -1;
 		/*if(cfg->gpio_wake >= 0) */
-		val1 = !!c2k_gpio_get_value(cfg->gpio_wake);
+		if (((cfg->gpio_wake) & 0xFFFF) >= 0)
+			val1 = !!c2k_gpio_get_value(cfg->gpio_wake);
 		/*if(cfg->gpio_ready >= 0) */
-		val2 = !!c2k_gpio_get_value(cfg->gpio_ready);
+		if (((cfg->gpio_ready) & 0xFFFF) >= 0)
+			val2 = !!c2k_gpio_get_value(cfg->gpio_ready);
 
-		s += snprintf(s, 256,
+		s += sprintf(s,
 			     "Tx %s: ref=%d, ap_wake_cp(%d)=%d, cp_ready(%d)=%d, polar=%d, auto_delay=%d mS\n",
 			     cfg->name, asc_tx_refer(tx, NULL), cfg->gpio_wake,
 			     val1, cfg->gpio_ready, val2, cfg->polar,
@@ -2183,28 +2204,30 @@ static ssize_t asc_infor_show(struct kobject *kobj, struct kobj_attribute *attr,
 
 		list_for_each_entry_safe(user, tuser, &tx->user_list, node) {
 			infor = &user->infor;
-			s += snprintf(s, 256, "       user %s: ref=%d\n", infor->name,
+			s += sprintf(s, "       user %s: ref=%d\n", infor->name,
 				     atomic_read(&user->count));
 		}
 	}
 
-	s += snprintf(s, 32, "\n");
+	s += sprintf(s, "\n");
 
 	list_for_each_entry_safe(rx, rtmp, &asc_rx_handle_list, node) {
 		cfg = &rx->cfg;
 		val1 = val2 = -1;
 		/*if(cfg->gpio_wake >= 0) */
-		val1 = !!c2k_gpio_get_value(cfg->gpio_wake);
+		if (((cfg->gpio_wake) & 0xFFFF) >= 0)
+			val1 = !!c2k_gpio_get_value(cfg->gpio_wake);
 		/*if(cfg->gpio_ready >= 0) */
-		val2 = !!c2k_gpio_get_value(cfg->gpio_ready);
+		if (((cfg->gpio_ready) & 0xFFFF) >= 0)
+			val2 = !!c2k_gpio_get_value(cfg->gpio_ready);
 
-		s += snprintf(s, 256,
+		s += sprintf(s,
 			     "Rx %s: ref=%d, cp_wake_ap(%d)=%d, ap_ready(%d)=%d, polar=%d\n",
 			     cfg->name, asc_rx_refer(rx, NULL), cfg->gpio_wake,
 			     val1, cfg->gpio_ready, val2, cfg->polar);
 		list_for_each_entry_safe(user, tuser, &rx->user_list, node) {
 			infor = &user->infor;
-			s += snprintf(s, 256, "       user %s: ref=%d\n", infor->name,
+			s += sprintf(s, "       user %s: ref=%d\n", infor->name,
 				     atomic_read(&user->count));
 		}
 	}
@@ -2237,7 +2260,7 @@ static ssize_t asc_refer_show(struct kobject *kobj, struct kobj_attribute *attr,
 	spin_unlock_irqrestore(&hdlock, flags);
 
 	if (tx) {
-		s += snprintf(s, 32, "%d\n", asc_tx_refer(tx, ASC_TX_SYSFS_USER));
+		s += sprintf(s, "%d\n", asc_tx_refer(tx, ASC_TX_SYSFS_USER));
 		return s - buf;
 	}
 	ASCPRT("%s read error\n", __func__);
@@ -2297,7 +2320,7 @@ static ssize_t asc_state_show(struct kobject *kobj, struct kobj_attribute *attr,
 	spin_unlock_irqrestore(&hdlock, flags);
 
 	if (tx) {
-		s += snprintf(s, ASC_NAME_LEN, "%s\n",
+		s += sprintf(s, "%s\n",
 			     tx->table[atomic_read(&tx->state)].name);
 		return s - buf;
 	}
@@ -2330,7 +2353,7 @@ static ssize_t asc_auto_ready_show(struct kobject *kobj,
 	spin_unlock_irqrestore(&hdlock, flags);
 
 	if (tx) {
-		s += snprintf(s, 32, "%d\n", tx->auto_delay);
+		s += sprintf(s, "%d\n", tx->auto_delay);
 		return s - buf;
 	}
 	ASCPRT("%s read error\n", __func__);
@@ -2396,9 +2419,9 @@ static ssize_t asc_confirm_ready_show(struct kobject *kobj,
 	spin_unlock_irqrestore(&hdlock, flags);
 
 	if (rx)
-		s += snprintf(s, 32, "done\n");
+		s += sprintf(s, "done\n");
 	else
-		s += snprintf(s, 32, "null\n");
+		s += sprintf(s, "null\n");
 
 	return s - buf;
 }
@@ -2524,6 +2547,11 @@ int asc_rx_register_handle(struct asc_config *cfg)
 	if (NULL == cfg)
 		return -EINVAL;
 
+	if (((cfg->gpio_wake) & 0xFFFF) < 0) {
+		ASCPRT("%s: config %s gpio is invalid.\n", __func__, cfg->name);
+		return -EINVAL;
+	}
+
 	rx = asc_rx_handle_lookup(cfg->name);
 	if (rx) {
 		ASCPRT("config %s has already exist.\n", cfg->name);
@@ -2543,15 +2571,15 @@ int asc_rx_register_handle(struct asc_config *cfg)
 
 	ret = asc_rx_handle_init(rx);
 	if (ret < 0) {
-		ASCPRT("fail to init rx handle %s\n", rx->cfg.name);
 		kfree(rx);
+		ASCPRT("fail to init rx handle %s\n", rx->cfg.name);
 		return -EINVAL;
 	}
 
 	rx->kobj = kobject_create_and_add(cfg->name, asc_kobj);
 	if (!rx->kobj) {
-		ASCPRT("fail to create rx handle %s kobject\n", rx->cfg.name);
 		kfree(rx);
+		ASCPRT("fail to create rx handle %s kobject\n", rx->cfg.name);
 		return -ENOMEM;
 	}
 	/*Add the handle to the asc list */
@@ -2589,6 +2617,12 @@ int asc_tx_register_handle(struct asc_config *cfg)
 
 	if (NULL == cfg)
 		return -EINVAL;
+
+	/*by yfu   */
+	if (((cfg->gpio_wake) & 0xFFFF) < 0) {
+		ASCPRT("%s: config %s gpio is invalid.\n", __func__, cfg->name);
+		return -EINVAL;
+	}
 
 	tx = asc_tx_handle_lookup(cfg->name);
 	if (tx) {

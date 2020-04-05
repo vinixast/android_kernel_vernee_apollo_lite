@@ -15,5 +15,7 @@ else
 $(info cam_cal: use common folder)
 obj-y += cam_cal_drv.o
 obj-y += cam_cal_list.o
+obj-y += common/
 endif
 $(info cam_cal: makefile end)
+

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2016 TRUSTONIC LIMITED
+ * Copyright (c) 2013-2015 TRUSTONIC LIMITED
  * All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or
@@ -120,7 +120,6 @@ uint32_t mc_get_new_handle(void)
 	struct mc_buffer *buffer;
 	struct mc_mmu_table *table;
 
-
 	mutex_lock(&ctx.cont_bufs_lock);
 retry:
 	handle = atomic_inc_return(&ctx.handle_counter);
@@ -138,10 +137,10 @@ retry:
 			goto retry;
 	}
 
-	/* here we assume table_lock is already taken. */
+	// here we assume table_lock is already taken.
 	table = find_mmu_table(handle);
 	if (table != NULL)
-		goto retry;
+                goto retry;
 
 	mutex_unlock(&ctx.cont_bufs_lock);
 
@@ -458,10 +457,7 @@ int mc_get_buffer(struct mc_instance *instance,
 	}
 
 	phys = virt_to_phys(addr);
-	/* add table_lock because mc_get_new_handle() calls find_mmu_table() */
-	mutex_lock(&mem_ctx.table_lock);
 	cbuffer->handle = mc_get_new_handle();
-	mutex_unlock(&mem_ctx.table_lock);
 	cbuffer->phys = phys;
 	cbuffer->addr = addr;
 	cbuffer->order = order;
@@ -537,7 +533,6 @@ static phys_addr_t get_mci_base_phys(unsigned int len)
 		ctx.mci_base.order = order;
 		ctx.mci_base.addr =
 			(void *)__get_free_pages(GFP_USER | __GFP_ZERO, order);
-		ctx.mci_base.len = (1 << order) * PAGE_SIZE;
 		if (ctx.mci_base.addr == NULL) {
 			MCDRV_DBG_WARN(mcd, "get_free_pages failed");
 			memset(&ctx.mci_base, 0, sizeof(ctx.mci_base));
@@ -866,9 +861,6 @@ found:
 
 		if (!ctx.mci_base.addr)
 			return -EFAULT;
-
-		if (len != ctx.mci_base.len)
-			return -EINVAL;
 
 		vmarea->vm_flags |= VM_IO;
 		/* Convert kernel address to user address. Kernel address begins
@@ -1733,7 +1725,7 @@ bool mc_sleep_ready(void)
 }
 
 /* Linux Driver Module Macros */
-core_initcall(mobicore_init);
+module_init(mobicore_init);
 module_exit(mobicore_exit);
 MODULE_AUTHOR("Trustonic Limited");
 MODULE_LICENSE("GPL v2");

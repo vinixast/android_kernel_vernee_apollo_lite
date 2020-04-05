@@ -12,13 +12,14 @@
  */
 
 #include "sec_hal.h"
-#include <linux/types.h>
+#include "sec_error.h"
+#include "sec_typedef.h"
 #include "hacc_mach.h"
 
 /******************************************************************************
  * DEBUG
  ******************************************************************************/
-#define SEC_DEBUG                   (false)
+#define SEC_DEBUG                   (FALSE)
 #define SMSG                        DBG_MSG
 #if SEC_DEBUG
 #define DMSG                        DBG_MSG

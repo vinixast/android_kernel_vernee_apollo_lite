@@ -54,10 +54,6 @@
 
 #include "lockdep_internals.h"
 
-#ifdef CONFIG_MTK_LOCK_DEBUG
-#include "sched.h"
-#endif
-
 #define CREATE_TRACE_POINTS
 #include <trace/events/lock.h>
 
@@ -80,17 +76,9 @@ static void lockdep_aee(void)
 {
 #ifdef CONFIG_MTK_LOCK_DEBUG
 	char aee_str[40];
-	int cpu;
-	struct rq *rq;
 
-	cpu = smp_processor_id();
-	rq = cpu_rq(cpu);
-
-	if (!raw_spin_is_locked(&rq->lock)) {
-		snprintf(aee_str, 40, "[%s]LockProve Warning", current->comm);
-		aee_kernel_warning_api(__FILE__, __LINE__, DB_OPT_DUMMY_DUMP | DB_OPT_FTRACE,
-			aee_str, "LockProve Debug\n");
-	}
+	snprintf(aee_str, 40, "[%s]LockProve Warning", current->comm);
+	aee_kernel_warning_api(__FILE__, __LINE__, DB_OPT_DUMMY_DUMP | DB_OPT_FTRACE, aee_str, "LockProve Debug\n");
 #else
 	return;
 #endif
@@ -3163,17 +3151,10 @@ static int __lock_acquire(struct lockdep_map *lock, unsigned int subclass,
 	if (depth) {
 		hlock = curr->held_locks + depth - 1;
 		if (hlock->class_idx == class_idx && nest_lock) {
-			if (hlock->references) {
-				/*
-				 * Check: unsigned int references:12, overflow.
-				 */
-				if (DEBUG_LOCKS_WARN_ON(hlock->references == (1 << 12)-1))
-					return 0;
-
+			if (hlock->references)
 				hlock->references++;
-			} else {
+			else
 				hlock->references = 2;
-			}
 
 			return 1;
 		}

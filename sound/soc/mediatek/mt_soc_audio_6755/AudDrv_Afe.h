@@ -1,19 +1,17 @@
 /*
- * Copyright (C) 2015 MediaTek Inc.
+ * Copyright (C) 2007 The Android Open Source Project
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- * You should have received a copy of the GNU General Public License
- * along with this program
- * If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 /*******************************************************************************
  *
@@ -288,6 +286,16 @@ typedef enum {
 	OUT_MAX
 } ITRCON_OUT_T;
 
+/* IRQ related */
+typedef enum {
+	IRQ1 = 1,
+	IRQ2 = 2,
+	IRQ5 = 3,		/* HDMI */
+	IRQ6 = 4,		/* SPDIF */
+	IRQMAX
+} IRQTYPE_T;
+
+
 /* Side tone filter related */
 typedef enum {
 	I3I4 = 0,
@@ -390,7 +398,7 @@ typedef struct {
 #define AUD_GPIO_MODE39 (0x860)
 #define AUD_DRV_SEL4 (0xB40)
 
-#define APLL_PHYSICAL_BASE (0x1000C000L)
+#define APLL_PHYSICAL_BASE (0x10209000L)
 #define AP_PLL_CON5 (0x0014)
 
 #define AUDIO_CLK_CFG_4 (0x0080)
@@ -400,14 +408,6 @@ typedef struct {
 #define AUDIO_CG_CLR (0x8c)
 #define AUDIO_CG_STATUS (0x94)
 
-#define APLL1_CON0 (0x02A0)
-#define APLL1_CON1 (0x02A4)
-#define APLL1_CON2 (0x02A8)
-#define APLL1_CON3 (0x02AC)
-#define APLL2_CON0 (0x02B4)
-#define APLL2_CON1 (0x02B8)
-#define APLL2_CON2 (0x02BC)
-#define APLL2_CON3 (0x02C0)
 
 
 #ifdef AUDIO_TOP_CON0

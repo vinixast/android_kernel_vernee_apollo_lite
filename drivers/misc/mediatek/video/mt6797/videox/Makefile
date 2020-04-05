@@ -16,6 +16,7 @@
 
 obj-$(CONFIG_MTK_FB) += mtkfb_console.o		\
 			disp_assert_layer.o	\
+			mtkfb.o			\
 			mtkfb_vsync.o		\
 			debug.o			\
 			primary_display.o	\

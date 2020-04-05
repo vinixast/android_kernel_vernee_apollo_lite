@@ -13,15 +13,9 @@
 
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/m4u/$(MTK_PLATFORM)/
-ifeq ($(CONFIG_ARCH_MT8173),y)
-ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
-ccflags-y += -I$(srctree)/drivers/misc/mediatek/base/power/$(MTK_PLATFORM)/
-obj-y += mmdvfs_mgr_8173.o
-endif
 
 obj-y += smi_variant.o
 obj-y += smi_debug.o
 obj-y += smi_variant_config_8173.o
 obj-y += smi_variant_config_8127.o
 obj-y += smi_variant_config_8163.o
-obj-y += smi_variant_config_8167.o

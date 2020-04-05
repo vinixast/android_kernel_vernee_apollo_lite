@@ -122,7 +122,7 @@ int __cpu_up(unsigned int cpu, struct task_struct *idle)
 	 */
 	ret = boot_secondary(cpu, idle);
 
-#ifdef CONFIG_MTK_CPU_HOTPLUG_DEBUG_3
+#ifdef MTK_CPU_HOTPLUG_DEBUG_3
 	TIMESTAMP_REC(hotplug_ts_rec, TIMESTAMP_FILTER,  cpu, 0, 0, 0);
 #endif
 
@@ -149,7 +149,7 @@ int __cpu_up(unsigned int cpu, struct task_struct *idle)
 	} else {
 		pr_err("CPU%u: failed to boot: %d\n", cpu, ret);
 	}
-#ifdef CONFIG_MTK_CPU_HOTPLUG_DEBUG_3
+#ifdef MTK_CPU_HOTPLUG_DEBUG_3
 	TIMESTAMP_REC(hotplug_ts_rec, TIMESTAMP_FILTER,  cpu, 0, 0, 0);
 #endif
 
@@ -180,11 +180,14 @@ asmlinkage void secondary_start_kernel(void)
 	 */
 	atomic_inc(&mm->mm_count);
 	current->active_mm = mm;
+	cpumask_set_cpu(cpu, mm_cpumask(mm));
 
 	aee_rr_rec_hotplug_footprint(cpu, 2);
 
 	set_my_cpu_offset(per_cpu_offset(smp_processor_id()));
-
+#ifndef CONFIG_ARCH_MT6797
+	printk("CPU%u: Booted secondary processor\n", cpu);
+#endif
 	aee_rr_rec_hotplug_footprint(cpu, 3);
 
 	/*
@@ -195,8 +198,7 @@ asmlinkage void secondary_start_kernel(void)
 
 	aee_rr_rec_hotplug_footprint(cpu, 4);
 
-	local_flush_tlb_all();
-	cpu_set_default_tcr_t0sz();
+	flush_tlb_all();
 
 	aee_rr_rec_hotplug_footprint(cpu, 5);
 
@@ -207,13 +209,6 @@ asmlinkage void secondary_start_kernel(void)
 	trace_hardirqs_off();
 
 	aee_rr_rec_hotplug_footprint(cpu, 7);
-
-	/*
-	 * If the system has established the capabilities, make sure
-	 * this CPU ticks all of those. If it doesn't, the CPU will
-	 * fail to come online.
-	 */
-	verify_local_cpu_capabilities();
 
 	if (cpu_ops[cpu]->cpu_postboot)
 		cpu_ops[cpu]->cpu_postboot();
@@ -230,14 +225,14 @@ asmlinkage void secondary_start_kernel(void)
 	/*
 	 * Enable GIC and timers.
 	 */
-#ifdef CONFIG_MTK_CPU_HOTPLUG_DEBUG_3
+#ifdef MTK_CPU_HOTPLUG_DEBUG_3
 	TIMESTAMP_REC(hotplug_ts_rec, TIMESTAMP_FILTER,  cpu, 0, 0, 0);
 #endif
 	notify_cpu_starting(cpu);
 
 	aee_rr_rec_hotplug_footprint(cpu, 10);
 
-#ifdef CONFIG_MTK_CPU_HOTPLUG_DEBUG_3
+#ifdef MTK_CPU_HOTPLUG_DEBUG_3
 	TIMESTAMP_REC(hotplug_ts_rec, TIMESTAMP_FILTER,  cpu, 0, 0, 0);
 #endif
 
@@ -250,8 +245,6 @@ asmlinkage void secondary_start_kernel(void)
 	 * the CPU migration code to notice that the CPU is online
 	 * before we continue.
 	 */
-	pr_info("CPU%u: Booted secondary processor [%08x]\n",
-					 cpu, read_cpuid_id());
 	set_cpu_online(cpu, true);
 
 	aee_rr_rec_hotplug_footprint(cpu, 12);
@@ -329,6 +322,13 @@ int __cpu_disable(void)
 
 	aee_rr_rec_hotplug_footprint(cpu, 73);
 
+	/*
+	 * Remove this CPU from the vm mask set of all processes.
+	 */
+	clear_tasks_mm_cpumask(cpu);
+
+	aee_rr_rec_hotplug_footprint(cpu, 74);
+
 	return 0;
 }
 
@@ -357,9 +357,7 @@ void __cpu_die(unsigned int cpu)
 		pr_crit("CPU%u: cpu didn't die\n", cpu);
 		return;
 	}
-#ifndef CONFIG_ARCH_MT6797
 	pr_notice("CPU%u: shutdown\n", cpu);
-#endif
 
 	/*
 	 * Now that the dying CPU is beyond the point of no return w.r.t.
@@ -368,14 +366,14 @@ void __cpu_die(unsigned int cpu)
 	 * clobbering anything it might still be using.
 	 */
 
-#ifdef CONFIG_MTK_CPU_HOTPLUG_DEBUG_3
+#ifdef MTK_CPU_HOTPLUG_DEBUG_3
 	TIMESTAMP_REC(hotplug_ts_rec, TIMESTAMP_FILTER,  cpu, 0, 0, 0);
 #endif
 
 	if (!op_cpu_kill(cpu))
 		pr_warn("CPU%d may not have shut down cleanly\n", cpu);
 
-#ifdef CONFIG_MTK_CPU_HOTPLUG_DEBUG_3
+#ifdef MTK_CPU_HOTPLUG_DEBUG_3
 	TIMESTAMP_REC(hotplug_ts_rec, TIMESTAMP_FILTER,  cpu, 0, 0, 0);
 #endif
 }
@@ -427,13 +425,11 @@ void __init smp_cpus_done(unsigned int max_cpus)
 	pr_info("SMP: Total of %d processors activated (%lu.%02lu BogoMIPS).\n",
 			num_online_cpus(), bogosum / (500000/HZ),
 			(bogosum / (5000/HZ)) % 100);
-	setup_cpu_features();
 	apply_alternatives_all();
 }
 
 void __init smp_prepare_boot_cpu(void)
 {
-	cpuinfo_store_boot_cpu();
 	set_my_cpu_offset(per_cpu_offset(smp_processor_id()));
 }
 

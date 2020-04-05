@@ -1,15 +1,3 @@
-/*
-* Copyright (C) 2016 MediaTek Inc.
-*
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License version 2 as
-* published by the Free Software Foundation.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-* See http://www.gnu.org/licenses/gpl-2.0.html for more details.
-*/
 #ifndef _MT_GPIO_CORE_H_
 #define _MT_GPIO_CORE_H_
 /*
@@ -34,7 +22,7 @@
 
 #define GPIOTAG                "[GPIO] "
 #define GPIOLOG(fmt, arg...)   pr_debug(GPIOTAG fmt, ##arg)
-#define GPIOMSG(fmt, arg...)   pr_warn(fmt, ##arg)
+#define GPIOMSG(fmt, arg...)   pr_debug(fmt, ##arg)
 #define GPIOERR(fmt, arg...)   pr_err(GPIOTAG "%5d: "fmt, __LINE__, ##arg)
 #define GPIOFUC(fmt, arg...)	/* printk(GPIOTAG "%s\n", __FUNCTION__) */
 /*----------------------------------------------------------------------------*/

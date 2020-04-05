@@ -15,8 +15,7 @@
 #ifdef CONFIG_MTK_CLKMGR
 #include <mach/mt_clkmgr.h>
 #else
-#if defined(CONFIG_ARCH_MT6755) || defined(CONFIG_ARCH_MT6797) || \
-	defined(CONFIG_ARCH_MT6757) || defined(CONFIG_ARCH_ELBRUS)
+#if defined(CONFIG_ARCH_MT6755) || defined(CONFIG_ARCH_MT6797)
 #include <ddp_clkmgr.h>
 #endif
 #endif
@@ -25,22 +24,6 @@
 #include <ddp_path.h>
 #include <ddp_dither.h>
 #include <ddp_drv.h>
-#include <disp_drv_platform.h>
-#if defined(CONFIG_ARCH_MT6755) || defined(CONFIG_ARCH_MT6797) || defined(CONFIG_ARCH_MT6757)
-#include <disp_helper.h>
-#endif
-
-#if defined(CONFIG_ARCH_ELBRUS) || defined(CONFIG_ARCH_MT6757)
-#define DITHER0_BASE_NAMING (DISPSYS_DITHER0_BASE)
-#define DITHER0_MODULE_NAMING (DISP_MODULE_DITHER0)
-#else
-#define DITHER0_BASE_NAMING (DISPSYS_DITHER_BASE)
-#define DITHER0_MODULE_NAMING (DISP_MODULE_DITHER)
-#endif
-
-#if defined(CONFIG_ARCH_MT6797) || defined(CONFIG_ARCH_MT6757)
-#define DITHER_SUPPORT_PARTIAL_UPDATE
-#endif
 
 int dither_dbg_en = 0;
 #define DITHER_ERR(fmt, arg...) pr_err("[DITHER] " fmt "\n", ##arg)
@@ -52,7 +35,7 @@ int dither_dbg_en = 0;
 void disp_dither_init(disp_dither_id_t id, int width, int height,
 			     unsigned int dither_bpp, void *cmdq)
 {
-	unsigned long reg_base = DITHER0_BASE_NAMING;
+	unsigned long reg_base = DISPSYS_DITHER_BASE;
 	unsigned int enable;
 
 	DISP_REG_MASK(cmdq, DITHER_REG(reg_base, 5), 0x00000000, ~0);
@@ -83,7 +66,7 @@ void disp_dither_init(disp_dither_id_t id, int width, int height,
 		DITHER_DBG("High depth LCM (bpp = %d), no dither\n", dither_bpp);
 		enable = 1;
 	} else {
-		DITHER_DBG("Invalid dither bpp = %d\n", dither_bpp);
+		DITHER_DBG("invalid dither bpp = %d\n", dither_bpp);
 		/* Bypass dither */
 		DISP_REG_MASK(cmdq, DITHER_REG(reg_base, 0), 0x00000000, ~0);
 		enable = 0;
@@ -92,27 +75,10 @@ void disp_dither_init(disp_dither_id_t id, int width, int height,
 	DISP_REG_MASK(cmdq, DISP_REG_DITHER_EN, enable, 0x1);
 	DISP_REG_MASK(cmdq, DISP_REG_DITHER_CFG, enable << 1, 1 << 1);
 	/* Disable dither MODULE_STALL / SUB_MODULE_STALL  */
-#if defined(CONFIG_ARCH_MT6755) || defined(CONFIG_ARCH_MT6797) || defined(CONFIG_ARCH_MT6757)
+#if defined(CONFIG_ARCH_MT6755) || defined(CONFIG_ARCH_MT6797)
 	DISP_REG_MASK(cmdq, DISP_REG_DITHER_CFG, 0 << 8, 1 << 8);
 #endif
 	DISP_REG_SET(cmdq, DISP_REG_DITHER_SIZE, (width << 16) | height);
-
-#ifdef DISP_PLATFORM_HAS_SHADOW_REG
-	if (disp_helper_get_option(DISP_OPT_SHADOW_REGISTER)) {
-		if (disp_helper_get_option(DISP_OPT_SHADOW_MODE) == 0) {
-			/* full shadow mode*/
-			DISP_REG_MASK(cmdq, DISP_REG_DITHER_0, 0x0, 0x7);
-		} else if (disp_helper_get_option(DISP_OPT_SHADOW_MODE) == 1) {
-			/* force commit */
-			DISP_REG_MASK(cmdq, DISP_REG_DITHER_0, 0x1 << 1, 0x7);
-		} else if (disp_helper_get_option(DISP_OPT_SHADOW_MODE) == 2) {
-			/* bypass shadow */
-			DISP_REG_MASK(cmdq, DISP_REG_DITHER_0, 0x1, 0x7);
-		}
-	}
-#endif
-
-	DITHER_DBG("disp_dither_init bpp = %d, width = %d height = %d", dither_bpp, width, height);
 }
 
 
@@ -148,7 +114,7 @@ static int disp_dither_power_on(DISP_MODULE_ENUM module, void *handle)
 	/* dither is DCM , do nothing */
 #else
 #ifdef ENABLE_CLK_MGR
-	if (module == DITHER0_MODULE_NAMING) {
+	if (module == DISP_MODULE_DITHER) {
 #ifdef CONFIG_MTK_CLKMGR
 		enable_clock(MT_CG_DISP0_DISP_DITHER, "DITHER");
 #else
@@ -166,7 +132,7 @@ static int disp_dither_power_off(DISP_MODULE_ENUM module, void *handle)
 	/* dither is DCM , do nothing */
 #else
 #ifdef ENABLE_CLK_MGR
-	if (module == DITHER0_MODULE_NAMING) {
+	if (module == DISP_MODULE_DITHER) {
 #ifdef CONFIG_MTK_CLKMGR
 		disable_clock(MT_CG_DISP0_DISP_DITHER, "DITHER");
 #else
@@ -178,7 +144,7 @@ static int disp_dither_power_off(DISP_MODULE_ENUM module, void *handle)
 	return 0;
 }
 
-#ifdef DITHER_SUPPORT_PARTIAL_UPDATE
+#if defined(CONFIG_ARCH_MT6797)
 static int _dither_partial_update(DISP_MODULE_ENUM module, void *arg, void *cmdq)
 {
 	struct disp_rect *roi = (struct disp_rect *) arg;
@@ -209,7 +175,7 @@ DDP_MODULE_DRIVER ddp_driver_dither = {
 	.deinit = disp_dither_power_off,
 	.power_on = disp_dither_power_on,
 	.power_off = disp_dither_power_off,
-#ifdef DITHER_SUPPORT_PARTIAL_UPDATE
+#if defined(CONFIG_ARCH_MT6797)
 	.ioctl = dither_ioctl,
 #endif
 };
@@ -217,7 +183,7 @@ DDP_MODULE_DRIVER ddp_driver_dither = {
 
 void disp_dither_select(unsigned int dither_bpp, void *cmdq)
 {
-	unsigned long reg_base = DITHER0_BASE_NAMING;
+	unsigned long reg_base = DISPSYS_DITHER_BASE;
 	unsigned int enable;
 
 	DISP_REG_MASK(cmdq, DITHER_REG(reg_base, 5), 0x00000000, ~0);
@@ -246,10 +212,10 @@ void disp_dither_select(unsigned int dither_bpp, void *cmdq)
 		DISP_REG_MASK(cmdq, DITHER_REG(reg_base, 16), 0x20202020, ~0);
 		DISP_REG_MASK(cmdq, DITHER_REG(reg_base, 0), 0x00000001, ~0);
 	} else if (dither_bpp > 24) {
-		DITHER_DBG("High depth LCM (bpp = %d), no dither\n", dither_bpp);
+		DITHER_DBG("[DITHER] High depth LCM (bpp = %d), no dither\n", dither_bpp);
 		enable = 1;
 	} else {
-		DITHER_DBG("Invalid dither bpp = %d\n", dither_bpp);
+		DITHER_DBG("[DITHER] invalid dither bpp = %d\n", dither_bpp);
 		/* Bypass dither */
 		DISP_REG_MASK(cmdq, DISP_REG_DITHER_0, 1 << 4, 1 << 4);
 		DISP_REG_MASK(cmdq, DITHER_REG(reg_base, 0), 0x00000000, ~0);
@@ -269,26 +235,22 @@ void disp_dither_dump(void)
 void dither_test(const char *cmd, char *debug_output)
 {
 	debug_output[0] = '\0';
-	DITHER_DBG("dither_test(%s)", cmd);
+	DITHER_DBG("[DITHER]dither_test(%s)", cmd);
 
-	if (strncmp(cmd, "log:", 4) == 0) {
-		dither_dbg_en = (int)cmd[4];
-		DITHER_DBG("dither dbg: %d", dither_dbg_en);
-	} else if (strncmp(cmd, "sel:", 4) == 0) {
+	if (strncmp(cmd, "sel:", 4) == 0) {
 		if (cmd[4] == '0') {
 			disp_dither_select(0, NULL);
-			DITHER_DBG("bbp=0");
+			DITHER_DBG("[DITHER] bbp=0");
 		} else if (cmd[4] == '1') {
 			disp_dither_select(16, NULL);
-			DITHER_DBG("bbp=16");
+			DITHER_DBG("[DITHER] bbp=16");
 		} else if (cmd[4] == '2') {
 			disp_dither_select(18, NULL);
-			DITHER_DBG("bbp=18");
+			DITHER_DBG("[DITHER] bbp=18");
 		} else if (cmd[4] == '3') {
 			disp_dither_select(24, NULL);
-			DITHER_DBG("bbp=24");
+			DITHER_DBG("[DITHER] bbp=24");
 		} else {
-			DITHER_DBG("Unknown bbp");
 		}
 	}
 }

@@ -1,19 +1,17 @@
 /*
- * Copyright (C) 2015 MediaTek Inc.
+ * Copyright (C) 2007 The Android Open Source Project
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- * You should have received a copy of the GNU General Public License
- * along with this program
- * If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 /*******************************************************************************
  *
@@ -86,7 +84,7 @@ static void StopAudioBtDaiHardware(struct snd_pcm_substream *substream)
 	pr_warn("StopAudioBtDaiHardware\n");
 
 	/* here to set interrupt */
-	irq_remove_user(substream, Soc_Aud_IRQ_MCU_MODE_IRQ2_MCU_MODE);
+	SetIrqEnable(Soc_Aud_IRQ_MCU_MODE_IRQ2_MCU_MODE, false);
 
 	/* here to turn off digital part */
 	SetConnection(Soc_Aud_InterCon_DisConnect, Soc_Aud_InterConnectionInput_I02,
@@ -125,10 +123,9 @@ static void StartAudioBtDaiHardware(struct snd_pcm_substream *substream)
 	       (unsigned int)(substream->runtime->period_size));
 
 	/* here to set interrupt */
-	irq_add_user(substream,
-		     Soc_Aud_IRQ_MCU_MODE_IRQ2_MCU_MODE,
-		     substream->runtime->rate,
-		     substream->runtime->period_size);
+	SetIrqMcuCounter(Soc_Aud_IRQ_MCU_MODE_IRQ2_MCU_MODE, substream->runtime->period_size >> 1);
+	SetIrqMcuSampleRate(Soc_Aud_IRQ_MCU_MODE_IRQ2_MCU_MODE, substream->runtime->rate);
+	SetIrqEnable(Soc_Aud_IRQ_MCU_MODE_IRQ2_MCU_MODE, true);
 
 	SetSampleRate(Soc_Aud_Digital_Block_MEM_DAI, substream->runtime->rate);
 	SetMemoryPathEnable(Soc_Aud_Digital_Block_MEM_DAI, true);
@@ -172,16 +169,44 @@ static int mtk_bt_dai_alsa_stop(struct snd_pcm_substream *substream)
 	return 0;
 }
 
+static kal_int32 Previous_Hw_cur;
 static snd_pcm_uframes_t mtk_bt_dai_pcm_pointer(struct snd_pcm_substream *substream)
 {
+	kal_int32 HW_memory_index = 0;
+	kal_int32 HW_Cur_ReadIdx = 0;
 	AFE_BLOCK_T *Dai_Block = &(Bt_Dai_Control_context->rBlock);
 	kal_uint32 Frameidx = 0;
+	snd_pcm_uframes_t returnframe = 0;
 
 	PRINTK_AUD_DAI("mtk_bt_dai_pcm_pointer Dai_Block->u4DMAReadIdx;= 0x%x\n",
 		       Dai_Block->u4WriteIdx);
 	/* get total bytes to copy */
 	Frameidx = audio_bytes_to_frame(substream, Dai_Block->u4WriteIdx);
 	return Frameidx;
+
+	if (Bt_Dai_Control_context->interruptTrigger == 1) {
+		/* get total bytes to copy */
+		Frameidx = audio_bytes_to_frame(substream, Dai_Block->u4DMAReadIdx);
+		return Frameidx;
+#if 0				/* modi Rainier no */
+		HW_Cur_ReadIdx = Afe_Get_Reg(AFE_DAI_CUR);
+#else
+		pr_warn("[Auddrv] mtk_bt_dai_pcm_pointer Rainier no BT dai\n");
+#endif
+		if (HW_Cur_ReadIdx == 0) {
+			pr_warn("[Auddrv] mtk_bt_dai_pcm_pointer  HW_Cur_ReadIdx ==0\n");
+			HW_Cur_ReadIdx = Dai_Block->pucPhysBufAddr;
+		}
+		HW_memory_index = (HW_Cur_ReadIdx - Dai_Block->pucPhysBufAddr);
+		Previous_Hw_cur = HW_memory_index;
+		pr_warn("[Auddrv] mtk_bt_dai_pcm_pointer =0x%x HW_memory_index = 0x%x\n",
+		       HW_Cur_ReadIdx, HW_memory_index);
+		Bt_Dai_Control_context->interruptTrigger = 0;
+		returnframe = (HW_memory_index / substream->runtime->channels);
+		return returnframe;
+	}
+	returnframe = (Previous_Hw_cur / substream->runtime->channels);
+	return returnframe;
 }
 
 

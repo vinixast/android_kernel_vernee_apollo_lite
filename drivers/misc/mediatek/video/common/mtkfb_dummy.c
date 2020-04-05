@@ -37,6 +37,7 @@
 #include "mtkfb_info.h"
 #include <linux/bug.h>
 /* #include <linux/earlysuspend.h> */
+/* #include <linux/rtpm_prio.h> */
 /* #include "disp_assert_layer.h" */
 /* #include <linux/xlog.h> */
 /* #include <linux/leds-mt65xx.h> */

@@ -14,6 +14,8 @@
 #include "cmdq_mmp.h"
 
 static CMDQ_MMP_Events_t CMDQ_MMP_Events;
+/* extern void MMProfileEnable(int enable); */
+/* extern void MMProfileStart(int start); */
 
 CMDQ_MMP_Events_t *cmdq_mmp_get_event(void)
 {
@@ -22,7 +24,7 @@ CMDQ_MMP_Events_t *cmdq_mmp_get_event(void)
 
 void cmdq_mmp_init(void)
 {
-#ifdef CMDQ_PROFILE_MMP
+#if CMDQ_PROFILE_MMP
 	MMProfileEnable(1);
 	if (CMDQ_MMP_Events.CMDQ == 0) {
 		CMDQ_MMP_Events.CMDQ = MMProfileRegisterEvent(MMP_RootEvent, "CMDQ");

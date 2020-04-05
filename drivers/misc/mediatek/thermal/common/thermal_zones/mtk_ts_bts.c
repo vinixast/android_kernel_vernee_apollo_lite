@@ -27,6 +27,7 @@
 #include <linux/writeback.h>
 #include <asm/uaccess.h>
 #include "mt-plat/mtk_thermal_monitor.h"
+#include "mtk_thermal_typedefs.h"
 #include "mach/mt_thermal.h"
 #include "mt-plat/mtk_thermal_platform.h"
 #include <linux/uidgid.h>
@@ -116,8 +117,8 @@ static int my_open(char *fname, int flag)
 }
 */
 typedef struct {
-	__s32 BTS_Temp;
-	__s32 TemperatureR;
+	INT32 BTS_Temp;
+	INT32 TemperatureR;
 } BTS_TEMPERATURE;
 
 #define AUX_IN0_NTC (0)		/* NTC6301 */
@@ -469,12 +470,12 @@ BTS_TEMPERATURE BTS_Temperature_Table7[] = {
 
 
 /* convert register to temperature  */
-static __s16 mtkts_bts_thermistor_conver_temp(__s32 Res)
+static INT16 mtkts_bts_thermistor_conver_temp(INT32 Res)
 {
 	int i = 0;
 	int asize = 0;
-	__s32 RES1 = 0, RES2 = 0;
-	__s32 TAP_Value = -200, TMP1 = 0, TMP2 = 0;
+	INT32 RES1 = 0, RES2 = 0;
+	INT32 TAP_Value = -200, TMP1 = 0, TMP2 = 0;
 
 	asize = (sizeof(BTS_Temperature_Table) / sizeof(BTS_TEMPERATURE));
 	/* mtkts_bts_dprintk("mtkts_bts_thermistor_conver_temp() : asize = %d, Res = %d\n",asize,Res); */
@@ -516,11 +517,11 @@ static __s16 mtkts_bts_thermistor_conver_temp(__s32 Res)
 
 /* convert ADC_AP_temp_volt to register */
 /*Volt to Temp formula same with 6589*/
-static __s16 mtk_ts_bts_volt_to_temp(__u32 dwVolt)
+static INT16 mtk_ts_bts_volt_to_temp(UINT32 dwVolt)
 {
-	__s32 TRes;
-	__s32 dwVCriAP = 0;
-	__s32 BTS_TMP = -100;
+	INT32 TRes;
+	INT32 dwVCriAP = 0;
+	INT32 BTS_TMP = -100;
 
 	/* SW workaround----------------------------------------------------- */
 	/* dwVCriAP = (TAP_OVER_CRITICAL_LOW * 1800) / (TAP_OVER_CRITICAL_LOW + 39000); */
@@ -587,7 +588,6 @@ int ts_AP_at_boot_time = 0;
 int mtkts_bts_get_hw_temp(void)
 {
 	int t_ret = 0;
-	int t_ret2 = 0;
 
 	mutex_lock(&BTS_lock);
 
@@ -600,10 +600,7 @@ int mtkts_bts_get_hw_temp(void)
 
 
 	if (tsatm_thermal_get_catm_type() == 2)
-		t_ret2 = wakeup_ta_algo(TA_CATMPLUS_TTJ);
-
-	if (t_ret2)
-		pr_err("wakeup_ta_algo out of memory\n");
+		wakeup_ta_algo(TA_CATMPLUS_TTJ);
 
 	bts_cur_temp = t_ret;
 
@@ -824,7 +821,7 @@ static ssize_t mtkts_bts_write(struct file *file, const char __user *buffer, siz
 
 	if (sscanf
 	    (ptr_mtktsbts_data->desc,
-	     "%d %d %d %19s %d %d %19s %d %d %19s %d %d %19s %d %d %19s %d %d %19s %d %d %19s %d %d %19s %d %d %19s %d %d %19s %d",
+	     "%d %d %d %s %d %d %s %d %d %s %d %d %s %d %d %s %d %d %s %d %d %s %d %d %s %d %d %s %d %d %s %d",
 		&num_trip,
 		&ptr_mtktsbts_data->trip[0], &ptr_mtktsbts_data->t_type[0], ptr_mtktsbts_data->bind0,
 		&ptr_mtktsbts_data->trip[1], &ptr_mtktsbts_data->t_type[1], ptr_mtktsbts_data->bind1,
@@ -1018,7 +1015,7 @@ static ssize_t mtkts_bts_param_write(struct file *file, const char __user *buffe
 	mtkts_bts_dprintk("[mtkts_bts_write]\n");
 
 	if (sscanf
-	    (ptr_mtktsbts_parm_data->desc, "%9s %d %9s %d %15s %d %9s %d %d",
+	    (ptr_mtktsbts_parm_data->desc, "%s %d %s %d %s %d %s %d %d",
 		ptr_mtktsbts_parm_data->pull_R, &ptr_mtktsbts_parm_data->valR,
 		ptr_mtktsbts_parm_data->pull_V, &ptr_mtktsbts_parm_data->valV,
 		ptr_mtktsbts_parm_data->overcrilow, &ptr_mtktsbts_parm_data->over_cri_low,

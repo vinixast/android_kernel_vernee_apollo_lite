@@ -571,8 +571,6 @@ typedef struct {
 	unsigned int rg_bic;
 	unsigned int rg_bp;
 	unsigned int PLL_CLOCK;
-	unsigned int PLL_CK_VDO;
-	unsigned int PLL_CK_CMD;
 	unsigned int dsi_clock;
 	unsigned int ssc_disable;
 	unsigned int ssc_range;
@@ -638,10 +636,8 @@ typedef struct {
 	LCM_DBI_PARAMS dbi;
 	LCM_DPI_PARAMS dpi;
 	LCM_DSI_PARAMS dsi;
-	unsigned int physical_width;	/* length: mm, for legacy use */
-	unsigned int physical_height;	/* length: mm, for legacy use */
-	unsigned int physical_width_um;	/* length: um, for more precise precision */
-	unsigned int physical_height_um;	/* length: um, for more precise precision */
+	unsigned int physical_width;
+	unsigned int physical_height;
 	unsigned int od_table_size;
 	void *od_table;
 } LCM_PARAMS;
@@ -784,7 +780,6 @@ typedef struct {
 	int (*set_gpio_dir)(unsigned int pin, unsigned int dir);
 	int (*set_gpio_pull_enable)(unsigned int pin, unsigned char pull_en);
 	long (*set_gpio_lcd_enp_bias)(unsigned int value);
-	long (*set_gpio_lcd_enp_bias_ByName)(bool bOn, char *pinName);
 	void (*dsi_set_cmdq_V11)(void *cmdq, unsigned int *pdata, unsigned int queue_size,
 				  unsigned char force_update);
 	void (*dsi_set_cmdq_V22)(void *cmdq, unsigned cmd, unsigned char count,
@@ -853,9 +848,7 @@ typedef struct {
 #if	defined(CONFIG_ARCH_MT6735) ||\
 	defined(CONFIG_ARCH_MT6735M) ||\
 	defined(CONFIG_ARCH_MT6753) ||\
-	defined(CONFIG_ARCH_MT6570) ||\
-	defined(CONFIG_ARCH_MT6580) ||\
-	defined(CONFIG_ARCH_MT8167)
+	defined(CONFIG_ARCH_MT6580)
 extern LCM_DRIVER *lcm_driver_list[];
 extern unsigned int lcm_count;
 #endif

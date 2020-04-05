@@ -1,21 +1,51 @@
 /*
- * Copyright (C) 2016 MediaTek Inc.
+ * Copyright (C) 2015 MediaTek Inc.
  *
- * This program is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- * See http://www.gnu.org/licenses/gpl-2.0.html for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
  */
 
+#include <linux/bug.h>
+#include <linux/kallsyms.h>
 #include <linux/ptrace.h>
 #include <asm/stacktrace.h>
 #include <asm/system_misc.h>
 #include <asm/traps.h>
 #include "mrdump_private.h"
+
+static void mrdump_dump_backtrace(struct pt_regs *regs)
+{
+	struct stackframe frame;
+	int count = 0;
+
+	if (regs == NULL)
+		return;
+
+	frame.fp = regs->regs[29];
+	frame.sp = regs->sp;
+	frame.pc = regs->pc;
+	pr_notice("Call trace:\n");
+	while (count++ < 32) {
+		unsigned long where = frame.pc;
+		int ret;
+
+		ret = unwind_frame(&frame);
+		if (ret < 0)
+			break;
+		print_ip_sym(where);
+#if 0
+		if (in_exception_text(where))
+			dump_mem("", "Exception stack", frame.sp,
+				 frame.sp + sizeof(struct pt_regs));
+#endif
+	}
+}
 
 void mrdump_save_current_backtrace(struct pt_regs *regs)
 {
@@ -35,19 +65,15 @@ void mrdump_save_current_backtrace(struct pt_regs *regs)
 		      "stp x26, x27, [%0, #208]\n\t"
 		      "stp x28, x29, [%0, #224]\n\t"
 		      "str x30, [%0, #240]\n\t" : : "r" (&regs->user_regs) : "memory");
-	asm volatile ("mrs x8, currentel\n\t"
-		      "mrs x9, daif\n\t"
-		      "orr x8, x8, x9\n\t"
-		      "mrs x9, nzcv\n\t"
-		      "orr x8, x8, x9\n\t"
-		      "mrs x9, spsel\n\t"
-		      "orr x8, x8, x9\n\t"
-		      "str x8, [%2]\n\t"
-		      "mov x8, sp\n\t"
+	asm volatile ("mov x8, sp\n\t"
 		      "str x8, [%0]\n\t"
 		      "1:\n\t"
 		      "adr x8, 1b\n\t"
-		      "str x8, [%1]\n\t"
-		      : : "r" (&regs->user_regs.sp), "r"(&regs->user_regs.pc),
-		      "r"(&regs->user_regs.pstate)  : "x8", "x9", "memory");
+		      "str x8, [%1]\n\t" : : "r" (&regs->user_regs.sp), "r"(&regs->user_regs.pc) : "x8", "memory");
+}
+
+void mrdump_print_crash(struct pt_regs *regs)
+{
+	__show_regs(regs);
+	mrdump_dump_backtrace(regs);
 }

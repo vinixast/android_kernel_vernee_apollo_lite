@@ -1,15 +1,3 @@
-/*
-* Copyright (C) 2016 MediaTek Inc.
-*
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License version 2 as
-* published by the Free Software Foundation.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-* See http://www.gnu.org/licenses/gpl-2.0.html for more details.
-*/
 #ifndef _MT_GPIO_H_
 #define _MT_GPIO_H_
 
@@ -36,14 +24,6 @@ typedef enum {
 	GPIO_MODE_05 = 5,
 	GPIO_MODE_06 = 6,
 	GPIO_MODE_07 = 7,
-	GPIO_MODE_08 = 8,
-	GPIO_MODE_09 = 9,
-	GPIO_MODE_10 = 10,
-	GPIO_MODE_11 = 11,
-	GPIO_MODE_12 = 12,
-	GPIO_MODE_13 = 13,
-	GPIO_MODE_14 = 14,
-	GPIO_MODE_15 = 15,
 	GPIO_MODE_MAX,
 	GPIO_MODE_DEFAULT = GPIO_MODE_01,
 } GPIO_MODE;
@@ -183,10 +163,6 @@ int mt_get_gpio_in(unsigned long pin);
 /*mode control*/
 int mt_set_gpio_mode(unsigned long pin, unsigned long mode);
 int mt_get_gpio_mode(unsigned long pin);
-
-/*driving control*/
-int mt_set_gpio_driving(unsigned long pin, unsigned long strength);
-int mt_get_gpio_driving(unsigned long pin);
 
 /*misc functions for protect GPIO*/
 /* void mt_gpio_dump(GPIO_REGS *regs,GPIOEXT_REGS *regs_ext); */

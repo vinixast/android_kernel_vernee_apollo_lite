@@ -59,14 +59,14 @@ static const struct soc_enum Audio_I2S0dl1_Enum[] = {
 static int Audio_I2S0dl1_hdoutput_Get(struct snd_kcontrol *kcontrol,
 				      struct snd_ctl_elem_value *ucontrol)
 {
-	PRINTK_AUDDRV("%s not suppprt\n", __func__);
+	pr_debug("%s not suppprt\n", __func__);
 	return 0;
 }
 
 static int Audio_I2S0dl1_hdoutput_Set(struct snd_kcontrol *kcontrol,
 				      struct snd_ctl_elem_value *ucontrol)
 {
-	PRINTK_AUDDRV("%s not suppprt\n", __func__);
+	pr_debug("%s not suppprt\n", __func__);
 
 	return 0;
 }
@@ -204,7 +204,7 @@ static int mtk_pcm_I2S0dl1_hw_params(struct snd_pcm_substream *substream,
 	int ret = 0;
 
 	substream->runtime->dma_bytes = params_buffer_bytes(hw_params);
-	/* PRINTK_AUDDRV("mtk_pcm_hw_params dma_bytes = %d\n",substream->runtime->dma_bytes); */
+	/* pr_debug("mtk_pcm_hw_params dma_bytes = %d\n",substream->runtime->dma_bytes); */
 #if 1
 	if (mPlaybackSramState == SRAM_STATE_PLAYBACKFULL) {
 		/* substream->runtime->dma_bytes = AFE_INTERNAL_SRAM_SIZE; */
@@ -288,9 +288,9 @@ static int mtk_pcm_I2S0dl1_open(struct snd_pcm_substream *substream)
 		pr_warn("snd_pcm_hw_constraint_integer failed\n");
 
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
-		PRINTK_AUDDRV("SNDRV_PCM_STREAM_PLAYBACK mtkalsa_I2S0dl1_playback_constraints\n");
+		pr_debug("SNDRV_PCM_STREAM_PLAYBACK mtkalsa_I2S0dl1_playback_constraints\n");
 	else
-		PRINTK_AUDDRV("SNDRV_PCM_STREAM_CAPTURE mtkalsa_I2S0dl1_playback_constraints\n");
+		pr_debug("SNDRV_PCM_STREAM_CAPTURE mtkalsa_I2S0dl1_playback_constraints\n");
 
 	if (ret < 0) {
 		pr_warn("ret < 0 mtk_pcm_I2S0dl1_close\n");
@@ -298,7 +298,7 @@ static int mtk_pcm_I2S0dl1_open(struct snd_pcm_substream *substream)
 		return ret;
 	}
 
-	/* PRINTK_AUDDRV("mtk_pcm_I2S0dl1_open return\n"); */
+	/* pr_debug("mtk_pcm_I2S0dl1_open return\n"); */
 	return 0;
 }
 
@@ -345,8 +345,8 @@ static int mtk_pcm_I2S0dl1_prepare(struct snd_pcm_substream *substream)
 	bool mI2SWLen;
 
 	if (mPrepareDone == false) {
-		pr_debug("%s format = %d rate= %u channels= %u period_size= %lu\n",
-			__func__, runtime->format, runtime->rate, runtime->channels, runtime->period_size);
+		pr_debug("%s format = %d SNDRV_PCM_FORMAT_S32_LE = %d SNDRV_PCM_FORMAT_U32_LE = %d\n",
+		       __func__, runtime->format, SNDRV_PCM_FORMAT_S32_LE, SNDRV_PCM_FORMAT_U32_LE);
 		set_memif_substream(Soc_Aud_Digital_Block_MEM_DL1, substream);
 
 		if (runtime->format == SNDRV_PCM_FORMAT_S32_LE
@@ -592,7 +592,7 @@ static int mtk_pcm_I2S0dl1_copy(struct snd_pcm_substream *substream,
 static int mtk_pcm_I2S0dl1_silence(struct snd_pcm_substream *substream,
 				   int channel, snd_pcm_uframes_t pos, snd_pcm_uframes_t count)
 {
-	PRINTK_AUDDRV("%s\n", __func__);
+	pr_debug("%s\n", __func__);
 	/* do nothing */
 	return 0;
 }
@@ -601,7 +601,7 @@ static void *dummy_page[2];
 
 static struct page *mtk_I2S0dl1_pcm_page(struct snd_pcm_substream *substream, unsigned long offset)
 {
-	PRINTK_AUDDRV("%s\n", __func__);
+	pr_debug("%s\n", __func__);
 	return virt_to_page(dummy_page[substream->stream]);	/* the same page */
 }
 
@@ -639,7 +639,7 @@ static int mtk_I2S0dl1_probe(struct platform_device *pdev)
 	if (pdev->dev.of_node)
 		dev_set_name(&pdev->dev, "%s", MT_SOC_I2S0DL1_PCM);
 
-	PRINTK_AUDDRV("%s: dev name %s\n", __func__, dev_name(&pdev->dev));
+	pr_debug("%s: dev name %s\n", __func__, dev_name(&pdev->dev));
 
 	mDev = &pdev->dev;
 
@@ -650,7 +650,7 @@ static int mtk_asoc_pcm_I2S0dl1_new(struct snd_soc_pcm_runtime *rtd)
 {
 	int ret = 0;
 
-	PRINTK_AUDDRV("%s\n", __func__);
+	pr_debug("%s\n", __func__);
 	return ret;
 }
 
@@ -729,7 +729,7 @@ module_init(mtk_I2S0dl1_soc_platform_init);
 
 static void __exit mtk_I2S0dl1_soc_platform_exit(void)
 {
-	PRINTK_AUDDRV("%s\n", __func__);
+	pr_debug("%s\n", __func__);
 
 	platform_driver_unregister(&mtk_I2S0dl1_driver);
 }

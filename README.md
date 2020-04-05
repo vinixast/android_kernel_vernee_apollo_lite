@@ -1,1 +1,1 @@
-# android_kernel_vernee_apollo_lite
+# android_kernel_vernee_apollo_x

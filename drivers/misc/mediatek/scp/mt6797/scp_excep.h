@@ -26,7 +26,6 @@ extern void scp_aed(scp_excep_id type);
 extern void scp_aed_reset(scp_excep_id type);
 extern void scp_aed_reset_inplace(scp_excep_id type);
 extern void scp_get_log(int save);
-extern char *scp_get_last_log(void);
 extern void scp_dump_regs(void);
 extern uint32_t scp_dump_pc(void);
 extern uint32_t scp_dump_lr(void);
@@ -71,37 +70,36 @@ typedef struct TaskContextType {
 #define EM_ARM 40
 static inline void elf_setup_eident(unsigned char e_ident[EI_NIDENT], unsigned char elfclasz)
 {
-	memcpy(e_ident, ELFMAG, SELFMAG);
-	e_ident[EI_CLASS] = elfclasz;
-	e_ident[EI_DATA] = ELFDATA2LSB;
-	e_ident[EI_VERSION] = EV_CURRENT;
-	e_ident[EI_OSABI] = ELFOSABI_NONE;
-	memset(e_ident+EI_PAD, 0, EI_NIDENT-EI_PAD);
+    memcpy(e_ident, ELFMAG, SELFMAG);
+    e_ident[EI_CLASS] = elfclasz;
+    e_ident[EI_DATA] = ELFDATA2LSB;
+    e_ident[EI_VERSION] = EV_CURRENT;
+    e_ident[EI_OSABI] = ELFOSABI_NONE;
+    memset(e_ident+EI_PAD, 0, EI_NIDENT-EI_PAD);
 }
 
-#define elf_setup_elfhdr(elfp, machid, elfhdr_t, elfphdr_t) \
-	do { \
-		elfp->e_type = ET_CORE;				 \
-		elfp->e_machine = machid;                            \
-		elfp->e_version = EV_CURRENT;			 \
-		elfp->e_entry = 0;                                   \
-		elfp->e_phoff = sizeof(elfhdr_t);                    \
-		elfp->e_shoff = 0;                                   \
-		elfp->e_flags = ELF_CORE_EFLAGS;                     \
-		elfp->e_ehsize = sizeof(elfhdr_t);                   \
-		elfp->e_phentsize = sizeof(elfphdr_t);		 \
-		elfp->e_phnum = 2;                                   \
-		elfp->e_shentsize = 0;				 \
-		elfp->e_shnum = 0;                                   \
-		elfp->e_shstrndx = 0;				 \
-	} while (0)
+#define elf_setup_elfhdr(elfp, machid, elfhdr_t, elfphdr_t)	 \
+    elfp->e_type = ET_CORE;				 \
+    elfp->e_machine = machid;                            \
+    elfp->e_version = EV_CURRENT;			 \
+    elfp->e_entry = 0;                                   \
+    elfp->e_phoff = sizeof(elfhdr_t);                    \
+    elfp->e_shoff = 0;                                   \
+    elfp->e_flags = ELF_CORE_EFLAGS;                     \
+    elfp->e_ehsize = sizeof(elfhdr_t);                   \
+    elfp->e_phentsize = sizeof(elfphdr_t);		 \
+    elfp->e_phnum = 2;                                   \
+    elfp->e_shentsize = 0;				 \
+    elfp->e_shnum = 0;                                   \
+    elfp->e_shstrndx = 0;				 \
 
-struct elf_siginfo {
+
+struct elf_siginfo
+{
 	int	si_signo;
 	int	si_code;
 	int	si_errno;
 };
-
 typedef struct elf32_note_t {
 	Elf32_Word   n_namesz;       /* Name size */
 	Elf32_Word   n_descsz;       /* Content size */
@@ -112,8 +110,8 @@ struct elf32_timeval {
 	int32_t tv_sec;
 	int32_t tv_usec;
 };
-
-struct elf32_prstatus {
+struct elf32_prstatus
+{
 	struct elf_siginfo pr_info;
 	short pr_cursig;
 	uint32_t pr_sigpend;
@@ -134,7 +132,8 @@ struct elf32_prstatus {
 	int32_t pr_fpvalid;
 };
 
-struct elf32_prpsinfo {
+struct elf32_prpsinfo
+{
 	char pr_state;
 	char pr_sname;
 	char pr_zomb;
@@ -152,16 +151,14 @@ struct elf32_prpsinfo {
 	char pr_fname[16];
 	char pr_psargs[ELF_PRARGSZ];
 };
-
 typedef struct MemoryDumpType {
 	struct elf32_hdr elf;
 	struct elf32_phdr nhdr;
 	struct elf32_phdr phdr;
-	char notes[CRASH_MEMORY_HEADER_SIZE
-		-sizeof(struct elf32_hdr)
-		-sizeof(struct elf32_phdr)
-		-sizeof(struct elf32_phdr)];
+	char notes[CRASH_MEMORY_HEADER_SIZE-sizeof(struct elf32_hdr)-sizeof(struct elf32_phdr)-sizeof(struct elf32_phdr)];
 	/*ram dump total header size (elf+nhdr+phdr) must be fixed at CRASH_MEMORY_HEADER_SIZE */
 	char memory[CRASH_MEMORY_LENGTH];
 } MemoryDump;
+
+
 #endif
