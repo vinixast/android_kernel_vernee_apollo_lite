@@ -262,8 +262,8 @@ static int do_read_inode(struct inode *inode)
 	if (!need_inode_block_update(sbi, inode->i_ino))
 		fi->last_disk_size = inode->i_size;
 
-	/*if (fi->i_flags & FS_PROJINHERIT_FL)
-		set_inode_flag(inode, FI_PROJ_INHERIT);*/
+	if (fi->i_flags & FS_PROJINHERIT_FL)
+		set_inode_flag(inode, FI_PROJ_INHERIT);
 
 	if (f2fs_has_extra_attr(inode) && f2fs_sb_has_project_quota(sbi->sb) &&
 			F2FS_FITS_IN_INODE(ri, fi->i_extra_isize, i_projid))

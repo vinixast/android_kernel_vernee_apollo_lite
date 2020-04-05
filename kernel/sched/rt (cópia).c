@@ -969,8 +969,7 @@ static int do_sched_rt_period_timer(struct rt_bandwidth *rt_b, int overrun)
 		if (rt_rq->rt_time) {
 			u64 runtime;
 			/* sched:get runtime*/
-			u64 runtime_pre = 0;
-			u64 rt_time_pre = 0;
+			u64 runtime_pre, rt_time_pre;
 
 			raw_spin_lock(&rt_rq->rt_runtime_lock);
 			per_cpu(old_rt_time, i) = rt_rq->rt_time;
