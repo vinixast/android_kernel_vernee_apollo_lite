@@ -211,7 +211,7 @@ static int proc_pid_cmdline(struct seq_file *m, struct pid_namespace *ns,
 static int proc_pid_auxv(struct seq_file *m, struct pid_namespace *ns,
 			 struct pid *pid, struct task_struct *task)
 {
-	struct mm_struct *mm = mm_access(task, PTRACE_MODE_READ_FSCREDS);
+	struct mm_struct *mm = mm_access(task, PTRACE_MODE_READ);
 	if (mm && !IS_ERR(mm)) {
 		unsigned int nwords = 0;
 		do {
@@ -239,7 +239,7 @@ static int proc_pid_wchan(struct seq_file *m, struct pid_namespace *ns,
 	wchan = get_wchan(task);
 
 	if (lookup_symbol_name(wchan, symname) < 0)
-		if (!ptrace_may_access(task, PTRACE_MODE_READ_FSCREDS))
+		if (!ptrace_may_access(task, PTRACE_MODE_READ))
 			return 0;
 		else
 			return seq_printf(m, "%lu", wchan);
@@ -253,7 +253,7 @@ static int lock_trace(struct task_struct *task)
 	int err = mutex_lock_killable(&task->signal->cred_guard_mutex);
 	if (err)
 		return err;
-	if (!ptrace_may_access(task, PTRACE_MODE_ATTACH_FSCREDS)) {
+	if (!ptrace_may_access(task, PTRACE_MODE_ATTACH)) {
 		mutex_unlock(&task->signal->cred_guard_mutex);
 		return -EPERM;
 	}
@@ -496,7 +496,7 @@ static int proc_fd_access_allowed(struct inode *inode)
 	 */
 	task = get_proc_task(inode);
 	if (task) {
-		allowed = ptrace_may_access(task, PTRACE_MODE_READ_FSCREDS);
+		allowed = ptrace_may_access(task, PTRACE_MODE_READ);
 		put_task_struct(task);
 	}
 	return allowed;
@@ -531,7 +531,7 @@ static bool has_pid_permissions(struct pid_namespace *pid,
 		return true;
 	if (in_group_p(pid->pid_gid))
 		return true;
-	return ptrace_may_access(task, PTRACE_MODE_READ_FSCREDS);
+	return ptrace_may_access(task, PTRACE_MODE_READ);
 }
 
 
@@ -608,7 +608,7 @@ struct mm_struct *proc_mem_open(struct inode *inode, unsigned int mode)
 	struct mm_struct *mm = ERR_PTR(-ESRCH);
 
 	if (task) {
-		mm = mm_access(task, mode | PTRACE_MODE_FSCREDS);
+		mm = mm_access(task, mode);
 		put_task_struct(task);
 
 		if (!IS_ERR_OR_NULL(mm)) {
@@ -752,8 +752,7 @@ static ssize_t environ_read(struct file *file, char __user *buf,
 	int ret = 0;
 	struct mm_struct *mm = file->private_data;
 
-	/* Ensure the process spawned far enough to have an environment. */
-	if (!mm || !mm->env_end)
+	if (!mm)
 		return 0;
 
 	page = (char *)__get_free_page(GFP_TEMPORARY);
@@ -1670,7 +1669,7 @@ static int map_files_d_revalidate(struct dentry *dentry, unsigned int flags)
 	if (!task)
 		goto out_notask;
 
-	mm = mm_access(task, PTRACE_MODE_READ_FSCREDS);
+	mm = mm_access(task, PTRACE_MODE_READ);
 	if (IS_ERR_OR_NULL(mm))
 		goto out;
 
@@ -1802,7 +1801,7 @@ static struct dentry *proc_map_files_lookup(struct inode *dir,
 		goto out;
 
 	result = -EACCES;
-	if (!ptrace_may_access(task, PTRACE_MODE_READ_FSCREDS))
+	if (!ptrace_may_access(task, PTRACE_MODE_READ))
 		goto out_put_task;
 
 	result = -ENOENT;
@@ -1859,7 +1858,7 @@ proc_map_files_readdir(struct file *file, struct dir_context *ctx)
 		goto out;
 
 	ret = -EACCES;
-	if (!ptrace_may_access(task, PTRACE_MODE_READ_FSCREDS))
+	if (!ptrace_may_access(task, PTRACE_MODE_READ))
 		goto out_put_task;
 
 	ret = 0;
@@ -2338,7 +2337,7 @@ static int do_io_accounting(struct task_struct *task, struct seq_file *m, int wh
 	if (result)
 		return result;
 
-	if (!ptrace_may_access(task, PTRACE_MODE_READ_FSCREDS)) {
+	if (!ptrace_may_access(task, PTRACE_MODE_READ)) {
 		result = -EACCES;
 		goto out_unlock;
 	}
@@ -2882,44 +2881,6 @@ int proc_pid_readdir(struct file *file, struct dir_context *ctx)
 }
 
 /*
- * proc_tid_comm_permission is a special permission function exclusively
- * used for the node /proc/<pid>/task/<tid>/comm.
- * It bypasses generic permission checks in the case where a task of the same
- * task group attempts to access the node.
- * The rational behind this is that glibc and bionic access this node for
- * cross thread naming (pthread_set/getname_np(!self)). However, if
- * PR_SET_DUMPABLE gets set to 0 this node among others becomes uid=0 gid=0,
- * which locks out the cross thread naming implementation.
- * This function makes sure that the node is always accessible for members of
- * same thread group.
- */
-static int proc_tid_comm_permission(struct inode *inode, int mask)
-{
-	bool is_same_tgroup;
-	struct task_struct *task;
-
-	task = get_proc_task(inode);
-	if (!task)
-		return -ESRCH;
-	is_same_tgroup = same_thread_group(current, task);
-	put_task_struct(task);
-
-	if (likely(is_same_tgroup && !(mask & MAY_EXEC))) {
-		/* This file (/proc/<pid>/task/<tid>/comm) can always be
-		 * read or written by the members of the corresponding
-		 * thread group.
-		 */
-		return 0;
-	}
-
-	return generic_permission(inode, mask);
-}
-
-static const struct inode_operations proc_tid_comm_inode_operations = {
-		.permission = proc_tid_comm_permission,
-};
-
-/*
  * Tasks
  */
 static const struct pid_entry tid_base_stuff[] = {
@@ -2937,9 +2898,7 @@ static const struct pid_entry tid_base_stuff[] = {
 #ifdef CONFIG_SCHED_DEBUG
 	REG("sched",     S_IRUGO|S_IWUSR, proc_pid_sched_operations),
 #endif
-	NOD("comm",      S_IFREG|S_IRUGO|S_IWUSR,
-			 &proc_tid_comm_inode_operations,
-			 &proc_pid_set_comm_operations, {}),
+	REG("comm",      S_IRUGO|S_IWUSR, proc_pid_set_comm_operations),
 #ifdef CONFIG_HAVE_ARCH_TRACEHOOK
 	ONE("syscall",   S_IRUSR, proc_pid_syscall),
 #endif

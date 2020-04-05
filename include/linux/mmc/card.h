@@ -116,9 +116,6 @@ struct mmc_ext_csd {
 	u8			raw_pwr_cl_ddr_200_360;	/* 253 */
 	u8			raw_bkops_status;	/* 246 */
 	u8			raw_sectors[4];		/* 212 - 4 bytes */
-	u8			pre_eol_info;		/* 267 */
-	u8			device_life_time_est_typ_a;	/* 268 */
-	u8			device_life_time_est_typ_b;	/* 269 */
 
 #ifdef CONFIG_MTK_EMMC_CQ_SUPPORT
 	#define MMC_CMDQ_MODE_EN	(1)
@@ -350,8 +347,6 @@ struct mmc_card {
 #ifdef CONFIG_MTK_EMMC_CACHE
 #define MMC_QUIRK_DISABLE_CACHE     (1<<12) /* eMMC cache feature */
 #endif
-/* disable sleep notifation, this may cause card busy long time on some eMMC*/
-#define MMC_QUIRK_DISABLE_SNO       (1<<13)
 
 	unsigned int		erase_size;	/* erase size in sectors */
  	unsigned int		erase_shift;	/* if erase unit is power 2 */

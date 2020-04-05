@@ -95,7 +95,7 @@ void tcp_time_wait(struct sock *sk, int state, int timeo);
 				 * 15 is ~13-30min depending on RTO.
 				 */
 
-#define TCP_SYN_RETRIES	 6	/* This is how many retries are done
+#define TCP_SYN_RETRIES	 9	/* This is how many retries are done
 				 * when active opening a connection.
 				 * RFC1122 says the minimum retry MUST
 				 * be at least 180secs.  Nevertheless
@@ -1436,8 +1436,6 @@ static inline void tcp_check_send_head(struct sock *sk, struct sk_buff *skb_unli
 {
 	if (sk->sk_send_head == skb_unlinked)
 		sk->sk_send_head = NULL;
-	if (tcp_sk(sk)->highest_sack == skb_unlinked)
-		tcp_sk(sk)->highest_sack = NULL;
 }
 
 static inline void tcp_init_send_head(struct sock *sk)
@@ -1619,6 +1617,8 @@ static inline bool tcp_stream_memory_free(const struct sock *sk)
 /* MTK_NET_CHANGES */
 extern void tcp_v4_reset_connections_by_uid(struct uid_err uid_e);
 extern void tcp_v4_handle_retrans_time_by_uid(struct uid_err uid_e);
+
+extern int tcp_nuke_addr(struct net *net, struct sockaddr *addr);
 
 #ifdef CONFIG_PROC_FS
 int tcp4_proc_init(void);

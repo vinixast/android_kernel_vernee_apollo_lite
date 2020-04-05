@@ -18,7 +18,6 @@ struct ipv6_devconf {
 	__s32		dad_transmits;
 	__s32		rtr_solicits;
 	__s32		rtr_solicit_interval;
-	__s32		rtr_solicit_max_interval;
 	__s32		rtr_solicit_delay;
 	__s32		force_mld_version;
 	__s32		mldv1_unsolicited_report_interval;
@@ -31,11 +30,12 @@ struct ipv6_devconf {
 	__s32		max_addresses;
 	__s32		accept_ra_defrtr;
 	__s32		accept_ra_pinfo;
+	    /* MTK_DHCPV6C_WIFI	*/
+	__s32		ra_info_flag;
 #ifdef CONFIG_IPV6_ROUTER_PREF
 	__s32		accept_ra_rtr_pref;
 	__s32		rtr_probe_interval;
 #ifdef CONFIG_IPV6_ROUTE_INFO
-	__s32		accept_ra_rt_info_min_plen;
 	__s32		accept_ra_rt_info_max_plen;
 #endif
 #endif
@@ -55,10 +55,6 @@ struct ipv6_devconf {
 	__s32		force_tllao;
 	__s32           ndisc_notify;
 	__s32		suppress_frag_ndisc;
-	struct ipv6_stable_secret {
-		bool initialized;
-		struct in6_addr secret;
-	} stable_secret;
 	__s32		use_oif_addrs_only;
 	void		*sysctl;
 };
@@ -221,7 +217,7 @@ struct ipv6_pinfo {
 	struct ipv6_ac_socklist	*ipv6_ac_list;
 	struct ipv6_fl_socklist __rcu *ipv6_fl_list;
 
-	struct ipv6_txoptions __rcu	*opt;
+	struct ipv6_txoptions	*opt;
 	struct sk_buff		*pktoptions;
 	struct sk_buff		*rxpmtu;
 	struct {
@@ -262,9 +258,9 @@ struct tcp6_timewait_sock {
 };
 
 #if IS_ENABLED(CONFIG_IPV6)
-static inline struct ipv6_pinfo *inet6_sk(const struct sock *__sk)
+static inline struct ipv6_pinfo * inet6_sk(const struct sock *__sk)
 {
-	return sk_fullsock(__sk) ? inet_sk(__sk)->pinet6 : NULL;
+	return inet_sk(__sk)->pinet6;
 }
 
 static inline struct raw6_sock *raw6_sk(const struct sock *sk)

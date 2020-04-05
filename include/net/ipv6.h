@@ -207,7 +207,6 @@ extern rwlock_t ip6_ra_lock;
  */
 
 struct ipv6_txoptions {
-	atomic_t		refcnt;
 	/* Length of this structure */
 	int			tot_len;
 
@@ -220,7 +219,7 @@ struct ipv6_txoptions {
 	struct ipv6_opt_hdr	*dst0opt;
 	struct ipv6_rt_hdr	*srcrt;	/* Routing Header */
 	struct ipv6_opt_hdr	*dst1opt;
-	struct rcu_head		rcu;
+
 	/* Option buffer, as read by IPV6_PKTOPTIONS, starts here. */
 };
 
@@ -252,24 +251,6 @@ struct ipv6_fl_socklist {
 	struct ip6_flowlabel		*fl;
 	struct rcu_head			rcu;
 };
-
-static inline struct ipv6_txoptions *txopt_get(const struct ipv6_pinfo *np)
-{
-	struct ipv6_txoptions *opt;
-
-	rcu_read_lock();
-	opt = rcu_dereference(np->opt);
-	if (opt && !atomic_inc_not_zero(&opt->refcnt))
-		opt = NULL;
-	rcu_read_unlock();
-	return opt;
-}
-
-static inline void txopt_put(struct ipv6_txoptions *opt)
-{
-	if (opt && atomic_dec_and_test(&opt->refcnt))
-		kfree_rcu(opt, rcu);
-}
 
 struct ip6_flowlabel *fl6_sock_lookup(struct sock *sk, __be32 label);
 struct ipv6_txoptions *fl6_merge_options(struct ipv6_txoptions *opt_space,
@@ -432,10 +413,17 @@ static inline void ipv6_addr_set(struct in6_addr *addr,
 static inline bool ipv6_addr_equal(const struct in6_addr *a1,
 				   const struct in6_addr *a2)
 {
+#if defined(CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS) && BITS_PER_LONG == 64
+	const unsigned long *ul1 = (const unsigned long *)a1;
+	const unsigned long *ul2 = (const unsigned long *)a2;
+
+	return ((ul1[0] ^ ul2[0]) | (ul1[1] ^ ul2[1])) == 0UL;
+#else
 	return ((a1->s6_addr32[0] ^ a2->s6_addr32[0]) |
 		(a1->s6_addr32[1] ^ a2->s6_addr32[1]) |
 		(a1->s6_addr32[2] ^ a2->s6_addr32[2]) |
 		(a1->s6_addr32[3] ^ a2->s6_addr32[3])) == 0;
+#endif
 }
 
 #if defined(CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS) && BITS_PER_LONG == 64
@@ -502,7 +490,6 @@ struct ip6_create_arg {
 	u32 user;
 	const struct in6_addr *src;
 	const struct in6_addr *dst;
-	int iif;
 	u8 ecn;
 };
 
@@ -891,7 +878,6 @@ int inet6_hash_connect(struct inet_timewait_death_row *death_row,
  */
 extern const struct proto_ops inet6_stream_ops;
 extern const struct proto_ops inet6_dgram_ops;
-extern const struct proto_ops inet6_sockraw_ops;
 
 struct group_source_req;
 struct group_filter;

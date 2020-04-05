@@ -76,22 +76,18 @@ static int __ip6_datagram_connect(struct sock *sk, struct sockaddr *uaddr, int a
 		}
 	}
 
-	if (ipv6_addr_any(&usin->sin6_addr)) {
+	addr_type = ipv6_addr_type(&usin->sin6_addr);
+
+	if (addr_type == IPV6_ADDR_ANY) {
 		/*
 		 *	connect to self
 		 */
-		if (ipv6_addr_v4mapped(&sk->sk_v6_rcv_saddr))
-			ipv6_addr_set_v4mapped(htonl(INADDR_LOOPBACK),
-					       &usin->sin6_addr);
-		else
-			usin->sin6_addr = in6addr_loopback;
+		usin->sin6_addr.s6_addr[15] = 0x01;
 	}
-
-	addr_type = ipv6_addr_type(&usin->sin6_addr);
 
 	daddr = &usin->sin6_addr;
 
-	if (addr_type & IPV6_ADDR_MAPPED) {
+	if (addr_type == IPV6_ADDR_MAPPED) {
 		struct sockaddr_in sin;
 
 		if (__ipv6_only_sock(sk)) {
@@ -165,17 +161,15 @@ ipv4_connected:
 	fl6.flowi6_mark = sk->sk_mark;
 	fl6.fl6_dport = inet->inet_dport;
 	fl6.fl6_sport = inet->inet_sport;
-	fl6.flowi6_uid = sk->sk_uid;
+	fl6.flowi6_uid = sock_i_uid(sk);
 
 	if (!fl6.flowi6_oif && (addr_type&IPV6_ADDR_MULTICAST))
 		fl6.flowi6_oif = np->mcast_oif;
 
 	security_sk_classify_flow(sk, flowi6_to_flowi(&fl6));
 
-	rcu_read_lock();
-	opt = flowlabel ? flowlabel->opt : rcu_dereference(np->opt);
+	opt = flowlabel ? flowlabel->opt : np->opt;
 	final_p = fl6_update_dst(&fl6, opt, &final);
-	rcu_read_unlock();
 
 	dst = ip6_dst_lookup_flow(sk, &fl6, final_p);
 	err = 0;

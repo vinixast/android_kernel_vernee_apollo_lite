@@ -59,6 +59,8 @@ int smp_call_function_single_async(int cpu, struct call_single_data *csd);
 #include <asm/smp.h>
 #include <linux/spinlock.h>
 
+#define CONFIG_PROFILE_CPU
+#define MTK_CPU_HOTPLUG_DEBUG_3
 #ifdef CONFIG_PROFILE_CPU
 struct profile_cpu_stats {
 	u64 hotplug_up_time;
@@ -76,7 +78,7 @@ extern struct profile_cpu_stats *cpu_stats;
 
 
 /* for Hotplug timestamp profiling */
-#ifdef CONFIG_MTK_CPU_HOTPLUG_DEBUG_3
+#ifdef MTK_CPU_HOTPLUG_DEBUG_3
 #define TIMESTAMP_REC_SIZE 300
 #define TIMESTAMP_FILTER 1
 struct timestamp_rec {
@@ -174,17 +176,6 @@ do { \
 
 #endif
 
-#ifdef CONFIG_MTK_RAM_CONSOLE
-extern void aee_rr_rec_cpu_caller(u32 val);
-extern void aee_rr_rec_cpu_callee(u32 val);
-extern void aee_rr_rec_cpu_up_prepare_ktime(u64 val);
-extern void aee_rr_rec_cpu_starting_ktime(u64 val);
-extern void aee_rr_rec_cpu_online_ktime(u64 val);
-extern void aee_rr_rec_cpu_down_prepare_ktime(u64 val);
-extern void aee_rr_rec_cpu_dying_ktime(u64 val);
-extern void aee_rr_rec_cpu_dead_ktime(u64 val);
-extern void aee_rr_rec_cpu_post_dead_ktime(u64 val);
-#endif
 
 /*
  * main cross-CPU interfaces, handles INIT, TLB flush, STOP, etc.
