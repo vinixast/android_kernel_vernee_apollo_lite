@@ -401,10 +401,10 @@ KBUILD_CPPFLAGS := -D__KERNEL__
 KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -fno-strict-aliasing -fno-common \
 		   -Wmaybe-uninitialized \
-		   -Werror
+		   -Werror \
 		   -Wno-format-security \
 		   -std=gnu89\
-		   #-Werror-implicit-function-declaration \
+		   -Werror-implicit-function-declaration
 
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=
