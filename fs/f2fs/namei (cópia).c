@@ -30,6 +30,7 @@ static struct inode *f2fs_new_inode(struct inode *dir, umode_t mode)
 	nid_t ino;
 	struct inode *inode;
 	bool nid_free = false;
+	int xattr_size = 0;
 	int err;
 
 	inode = new_inode(dir->i_sb);
@@ -44,32 +45,97 @@ static struct inode *f2fs_new_inode(struct inode *dir, umode_t mode)
 	}
 	f2fs_unlock_op(sbi);
 
+	nid_free = true;
+
 	inode_init_owner(inode, dir, mode);
 
 	inode->i_ino = ino;
 	inode->i_blocks = 0;
-	inode->i_mtime = inode->i_atime = inode->i_ctime = CURRENT_TIME;
+	inode->i_mtime = inode->i_atime = inode->i_ctime = current_time(inode);
 	inode->i_generation = sbi->s_next_generation++;
 
 	err = insert_inode_locked(inode);
 	if (err) {
 		err = -EINVAL;
-		nid_free = true;
-		goto out;
+		goto fail;
 	}
+
+	if (f2fs_sb_has_project_quota(sbi->sb) &&
+		(F2FS_I(dir)->i_flags & FS_PROJINHERIT_FL))
+		F2FS_I(inode)->i_projid = F2FS_I(dir)->i_projid;
+	else
+		F2FS_I(inode)->i_projid = make_kprojid(&init_user_ns,
+							F2FS_DEF_PROJID);
+	dquot_initialize(inode);
+
+	err = dquot_alloc_inode(inode);
+	if (err)
+		goto fail_drop;
+
+	/* If the directory encrypted, then we should encrypt the inode. */
+	if (f2fs_encrypted_inode(dir) && f2fs_may_encrypt(inode))
+		f2fs_set_encrypted_inode(inode);
+
+	set_inode_flag(inode, FI_NEW_INODE);
+
+	if (f2fs_sb_has_extra_attr(sbi->sb)) {
+		set_inode_flag(inode, FI_EXTRA_ATTR);
+		F2FS_I(inode)->i_extra_isize = F2FS_TOTAL_EXTRA_ATTR_SIZE;
+	}
+
+	if (test_opt(sbi, INLINE_XATTR))
+		set_inode_flag(inode, FI_INLINE_XATTR);
+
+	if (test_opt(sbi, INLINE_DATA) && f2fs_may_inline_data(inode))
+		set_inode_flag(inode, FI_INLINE_DATA);
+	if (f2fs_may_inline_dentry(inode))
+		set_inode_flag(inode, FI_INLINE_DENTRY);
+
+	if (f2fs_sb_has_flexible_inline_xattr(sbi->sb)) {
+		f2fs_bug_on(sbi, !f2fs_has_extra_attr(inode));
+		if (f2fs_has_inline_xattr(inode))
+			xattr_size = sbi->inline_xattr_size;
+		/* Otherwise, will be 0 */
+	} else if (f2fs_has_inline_xattr(inode) ||
+				f2fs_has_inline_dentry(inode)) {
+		xattr_size = DEFAULT_INLINE_XATTR_ADDRS;
+	}
+	F2FS_I(inode)->i_inline_xattr_size = xattr_size;
+
+	f2fs_init_extent_tree(inode, NULL);
+
+	stat_inc_inline_xattr(inode);
+	stat_inc_inline_inode(inode);
+	stat_inc_inline_dir(inode);
+
+	F2FS_I(inode)->i_flags =
+		f2fs_mask_flags(mode, F2FS_I(dir)->i_flags & F2FS_FL_INHERITED);
+
+	if (S_ISDIR(inode->i_mode))
+		F2FS_I(inode)->i_flags |= FS_INDEX_FL;
+
+	if (F2FS_I(inode)->i_flags & FS_PROJINHERIT_FL)
+		set_inode_flag(inode, FI_PROJ_INHERIT);
+
 	trace_f2fs_new_inode(inode, 0);
-	mark_inode_dirty(inode);
 	return inode;
 
-out:
-	clear_nlink(inode);
-	unlock_new_inode(inode);
 fail:
 	trace_f2fs_new_inode(inode, err);
 	make_bad_inode(inode);
-	iput(inode);
 	if (nid_free)
-		alloc_nid_failed(sbi, ino);
+		set_inode_flag(inode, FI_FREE_NID);
+	iput(inode);
+	return ERR_PTR(err);
+fail_drop:
+	trace_f2fs_new_inode(inode, err);
+	dquot_drop(inode);
+	inode->i_flags |= S_NOQUOTA;
+	if (nid_free)
+		set_inode_flag(inode, FI_FREE_NID);
+	clear_nlink(inode);
+	unlock_new_inode(inode);
+	iput(inode);
 	return ERR_PTR(err);
 }
 
@@ -276,24 +342,83 @@ static struct dentry *f2fs_lookup(struct inode *dir, struct dentry *dentry,
 	struct inode *inode = NULL;
 	struct f2fs_dir_entry *de;
 	struct page *page;
+	struct dentry *new;
+	nid_t ino = -1;
+	int err = 0;
+	unsigned int root_ino = F2FS_ROOT_INO(F2FS_I_SB(dir));
 
-	if (dentry->d_name.len > F2FS_NAME_LEN)
-		return ERR_PTR(-ENAMETOOLONG);
+	trace_f2fs_lookup_start(dir, dentry, flags);
 
-	de = f2fs_find_entry(dir, &dentry->d_name, &page);
-	if (de) {
-		nid_t ino = le32_to_cpu(de->ino);
-		kunmap(page);
-		f2fs_put_page(page, 0);
+	if (f2fs_encrypted_inode(dir)) {
+		err = fscrypt_get_encryption_info(dir);
 
-		inode = f2fs_iget(dir->i_sb, ino);
-		if (IS_ERR(inode))
-			return ERR_CAST(inode);
-
-		stat_inc_inline_inode(inode);
+		/*
+		 * DCACHE_ENCRYPTED_WITH_KEY is set if the dentry is
+		 * created while the directory was encrypted and we
+		 * don't have access to the key.
+		 */
+		if (fscrypt_has_encryption_key(dir))
+			fscrypt_set_encrypted_dentry(dentry);
+		fscrypt_set_d_op(dentry);
+		if (err && err != -ENOKEY)
+			goto out;
 	}
 
-	return d_splice_alias(inode, dentry);
+	if (dentry->d_name.len > F2FS_NAME_LEN) {
+		err = -ENAMETOOLONG;
+		goto out;
+	}
+
+	de = f2fs_find_entry(dir, &dentry->d_name, &page);
+	if (!de) {
+		if (IS_ERR(page)) {
+			err = PTR_ERR(page);
+			goto out;
+		}
+		goto out_splice;
+	}
+
+	ino = le32_to_cpu(de->ino);
+	f2fs_dentry_kunmap(dir, page);
+	f2fs_put_page(page, 0);
+
+	inode = f2fs_iget(dir->i_sb, ino);
+	if (IS_ERR(inode)) {
+		err = PTR_ERR(inode);
+		goto out;
+	}
+
+	if ((dir->i_ino == root_ino) && f2fs_has_inline_dots(dir)) {
+		err = __recover_dot_dentries(dir, root_ino);
+		if (err)
+			goto out_iput;
+	}
+
+	if (f2fs_has_inline_dots(inode)) {
+		err = __recover_dot_dentries(inode, dir->i_ino);
+		if (err)
+			goto out_iput;
+	}
+	if (f2fs_encrypted_inode(dir) &&
+	    (S_ISDIR(inode->i_mode) || S_ISLNK(inode->i_mode)) &&
+	    !fscrypt_has_permitted_context(dir, inode)) {
+		f2fs_msg(inode->i_sb, KERN_WARNING,
+			 "Inconsistent encryption contexts: %lu/%lu",
+			 dir->i_ino, inode->i_ino);
+		err = -EPERM;
+		goto out_iput;
+	}
+out_splice:
+	new = d_splice_alias(inode, dentry);
+	if (IS_ERR(new))
+		err = PTR_ERR(new);
+	trace_f2fs_lookup_end(dir, dentry, ino, err);
+	return new;
+out_iput:
+	iput(inode);
+out:
+	trace_f2fs_lookup_end(dir, dentry, ino, err);
+	return ERR_PTR(err);
 }
 
 static int f2fs_unlink(struct inode *dir, struct dentry *dentry)

@@ -407,7 +407,9 @@ KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -Wno-format-security \
 		   -std=gnu89\
 		   -Werror-implicit-function-declaration \
-		   -Werror=format -Werror=int-to-pointer-cast -Werror=pointer-to-int-cast
+		   -Werror=format -Werror=int-to-pointer-cast -Werror=pointer-to-int-cast \
+		   -Werror=declaration-after-statement
+			
 
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=

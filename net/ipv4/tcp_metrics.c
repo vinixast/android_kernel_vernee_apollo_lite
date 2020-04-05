@@ -969,13 +969,14 @@ static int tcp_metrics_nl_cmd_get(struct sk_buff *skb, struct genl_info *info)
 {
 	struct tcp_metrics_block *tm;
 	struct inetpeer_addr saddr, daddr;
-	saddr.family = 0;
 	unsigned int hash;
 	struct sk_buff *msg;
 	struct net *net = genl_info_net(info);
 	void *reply;
 	int ret;
 	bool src = true;
+
+	saddr.family = 0;
 
 	ret = parse_nl_addr(info, &daddr, &hash, 0);
 	if (ret < 0)
