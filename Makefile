@@ -400,6 +400,7 @@ KBUILD_CPPFLAGS := -D__KERNEL__
 
 KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -fno-strict-aliasing -fno-common \
+		   -Wno-error \
 		   -Wmaybe-uninitialized \
 		   -Werror \
 		   -Wno-format-security \
