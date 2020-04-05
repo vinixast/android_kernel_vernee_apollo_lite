@@ -1,15 +1,16 @@
 /*
- * Copyright (C) 2016 MediaTek Inc.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- * See http://www.gnu.org/licenses/gpl-2.0.html for more details.
- */
+* Copyright (C) 2016 MediaTek Inc.
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License version 2 as
+* published by the Free Software Foundation.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+* See http://www.gnu.org/licenses/gpl-2.0.html for more details.
+*/
+
 /**
 * @file    mt_hotplug_strategy_algo.c
 * @brief   hotplug strategy(hps) - algo
@@ -131,9 +132,8 @@ static int hps_algo_heavytsk_det(void)
 		}
 		if (i == hps_sys.cluster_num - 1)
 			hps_sys.cluster_info[i].target_core_num =
-			    max3(hps_sys.cluster_info[i].target_core_num,
-				hvy_tmp,
-				hps_sys.cluster_info[i].hvyTsk_value);
+			    max(hps_sys.cluster_info[i].target_core_num,
+				hvy_tmp) + hps_sys.cluster_info[i].hvyTsk_value;
 		else
 			hps_sys.cluster_info[i].target_core_num =
 			    max(hps_sys.cluster_info[i].target_core_num,
@@ -141,6 +141,7 @@ static int hps_algo_heavytsk_det(void)
 		if (hps_sys.cluster_info[i].target_core_num > hps_sys.cluster_info[i].limit_value)
 			hps_sys.cluster_info[i].target_core_num =
 			    hps_sys.cluster_info[i].limit_value;
+
 		sys_cores += hps_sys.cluster_info[i].target_core_num;
 	}
 #if 1
@@ -363,6 +364,11 @@ void hps_set_funct_ctrl(void)
 		hps_ctxt.hps_func_control &= ~(1 << HPS_FUNC_CTRL_HVY_TSK);
 	else
 		hps_ctxt.hps_func_control |= (1 << HPS_FUNC_CTRL_HVY_TSK);
+
+	if (!hps_ctxt.heavy_task_enabled_EXT)
+		hps_ctxt.hps_func_control &= ~(1 << HPS_FUNC_CTRL_HVY_TSK_EXT);
+	else
+		hps_ctxt.hps_func_control |= (1 << HPS_FUNC_CTRL_HVY_TSK_EXT);
 }
 
 void hps_algo_main(void)
@@ -453,10 +459,11 @@ void hps_algo_main(void)
 			}
 		}
 	}
-	if ((get_efuse_status() != 0) && (hps_ctxt.heavy_task_enabled)) {
+	if ((get_efuse_status() != 0) && (hps_ctxt.heavy_task_enabled) && (hps_ctxt.heavy_task_enabled_EXT)) {
 		if (hps_algo_heavytsk_det())
 			hps_sys.action_id = 0xE1;
 	}
+
 	/*
 	 * algo - end
 	 */

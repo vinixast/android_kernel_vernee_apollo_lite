@@ -15,7 +15,6 @@ Aka.jiang    2013-12-14    Init    aka.jiang@hotmail.com
 #include <linux/of_irq.h>
 #include <linux/gpio.h>
 #include <linux/of_gpio.h>
-#include <linux/input/hall_enabler.h>
 
 
 #define HALL_NAME "cover"
@@ -26,7 +25,7 @@ Aka.jiang    2013-12-14    Init    aka.jiang@hotmail.com
 #define HALL_DEBUG_MASK_SYS (1 << 1)
 
 
-//#define HALL_DEBUG_ON
+#define HALL_DEBUG_ON
 
 #ifdef HALL_DEBUG_ON
     #define HALL_DEBUG_TAG                  "[HALL] "
@@ -56,21 +55,8 @@ static void hall_work(struct work_struct *work)
 {
     struct hall_info *info = container_of(work, struct hall_info, work);
     int state;
-    int temp;
 
-    if (hall_enable() == 1)
-    {
-        temp = !!gpio_get_value(info->irq_gpio);
-    } else {
-        temp = 1;
-    }
-
-    if (temp == 1)
-    {
-        state = 0;
-    } else {
-        state = 1;
-    }
+    state = !!gpio_get_value(info->irq_gpio);
 
     HALL_DEBUG_LOG("state = %d", state);
     input_report_switch(info->idev, info->sw_code, state);
@@ -279,3 +265,4 @@ module_exit(hall_exit);
 MODULE_DESCRIPTION("Prowave Hall driver");
 MODULE_AUTHOR("Aka.Jiang <aka.jiang@hotmail.com>");
 MODULE_LICENSE("GPL");
+

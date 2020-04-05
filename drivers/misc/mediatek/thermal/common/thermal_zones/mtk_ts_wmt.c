@@ -1163,6 +1163,9 @@ ssize_t wmt_wifi_algo_write(struct file *filp, const char __user *buf, size_t le
 
 	len = (len < (sizeof(desc) - 1)) ? len : (sizeof(desc) - 1);
 
+	if (len >= MAX_LEN-1)
+		len = MAX_LEN-1;
+
 	/* write data to the buffer */
 	if (copy_from_user(desc, buf, len))
 		return -EFAULT;
@@ -1236,7 +1239,9 @@ ssize_t wmt_tm_wfd_write(struct file *filp, const char __user *buf, size_t len, 
 	int ret = 0;
 	char tmp[MAX_LEN] = { 0 };
 
+
 	len = (len < (MAX_LEN - 1)) ? len : (MAX_LEN - 1);
+
 	/* write data to the buffer */
 	if (copy_from_user(tmp, buf, len))
 		return -EFAULT;
@@ -1276,7 +1281,10 @@ ssize_t wmt_wifi_in_soc_write(struct file *filp, const char __user *buf, size_t 
 	int ret = 0;
 	char tmp[MAX_LEN] = { 0 };
 
+
 	len = (len < (MAX_LEN - 1)) ? len : (MAX_LEN - 1);
+
+
 	/* write data to the buffer */
 	if (copy_from_user(tmp, buf, len))
 		return -EFAULT;
@@ -1343,7 +1351,9 @@ ssize_t wmt_tm_pid_write(struct file *filp, const char __user *buf, size_t len, 
 	int ret = 0;
 	char tmp[MAX_LEN] = { 0 };
 
+
 	len = (len < (MAX_LEN - 1)) ? len : (MAX_LEN - 1);
+
 	/* write data to the buffer */
 	if (copy_from_user(tmp, buf, len))
 		return -EFAULT;

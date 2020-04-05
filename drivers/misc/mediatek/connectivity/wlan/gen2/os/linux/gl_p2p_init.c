@@ -41,6 +41,7 @@
 */
 
 #define P2P_MODE_INF_NAME "p2p%d"
+#if CFG_TC1_FEATURE
 #define AP_MODE_INF_NAME "wlan%d"
 #else
 #define AP_MODE_INF_NAME "ap%d"

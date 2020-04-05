@@ -2432,6 +2432,7 @@ void console_unlock(void)
 	int ret = 0;
 #endif
 #endif
+
 	if (console_suspended) {
 		up_console_sem();
 		return;

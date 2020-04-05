@@ -251,6 +251,8 @@ int xt_check_match(struct xt_mtchk_param *, unsigned int size, u_int8_t proto,
 		   bool inv_proto);
 int xt_check_target(struct xt_tgchk_param *, unsigned int size, u_int8_t proto,
 		    bool inv_proto);
+void *xt_copy_counters_from_user(const void __user *user, unsigned int len,
+				 struct xt_counters_info *info, bool compat);
 
 void *xt_copy_counters_from_user(const void __user *user, unsigned int len,
 				 struct xt_counters_info *info, bool compat);
@@ -448,4 +450,3 @@ int xt_compat_check_entry_offsets(const void *base, const char *elems,
 
 #endif /* CONFIG_COMPAT */
 #endif /* _X_TABLES_H */
-

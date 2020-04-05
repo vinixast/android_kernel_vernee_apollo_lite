@@ -216,14 +216,12 @@ struct clk * __init mtk_clk_register_composite(const struct mtk_composite *mc,
 		mc->flags);
 
 	if (IS_ERR(clk)) {
-		ret = PTR_ERR(clk);
-		goto err_out;
+		kfree(gate);
+		kfree(mux);
 	}
 
 	return clk;
 err_out:
-	kfree(div);
-	kfree(gate);
 	kfree(mux);
 
 	return ERR_PTR(ret);

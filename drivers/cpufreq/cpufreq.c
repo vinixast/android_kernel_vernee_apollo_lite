@@ -31,7 +31,7 @@
 #include <trace/events/power.h>
 
 #ifdef CONFIG_ARCH_MT6797
-#include <../../drivers/misc/mediatek/base/power/mt6797/mt_cpufreq.h>
+#include <../misc/mediatek/base/power/mt6797/mt_cpufreq.h>
 #endif
 
 /**
@@ -1616,6 +1616,9 @@ static unsigned int __cpufreq_get(unsigned int cpu)
 		return ret_freq;
 
 	ret_freq = cpufreq_driver->get(cpu);
+
+	if (!policy)
+		return ret_freq;
 
 	if (ret_freq && policy->cur &&
 		!(cpufreq_driver->flags & CPUFREQ_CONST_LOOPS)) {
