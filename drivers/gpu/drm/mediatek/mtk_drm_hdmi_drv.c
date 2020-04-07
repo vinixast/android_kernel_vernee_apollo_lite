@@ -24,12 +24,10 @@
 #include <linux/of.h>
 #include <linux/of_gpio.h>
 #include <linux/of_graph.h>
-#include <linux/phy/phy.h>
 #include <linux/platform_device.h>
 #include "mtk_cec.h"
 #include "mtk_hdmi.h"
 #include "mtk_hdmi_hw.h"
-#include "mtk_hdmi_phy.h"
 
 static const char * const mtk_hdmi_clk_names[MTK_HDMI_CLK_COUNT] = {
 	[MTK_HDMI_CLK_HDMI_PIXEL] = "pixel",
@@ -250,7 +248,6 @@ static void mtk_hdmi_bridge_disable(struct drm_bridge *bridge)
 {
 	struct mtk_hdmi *hdmi = hdmi_ctx_from_bridge(bridge);
 
-	phy_power_off(hdmi->phy);
 	clk_disable_unprepare(hdmi->clk[MTK_HDMI_CLK_HDMI_PIXEL]);
 	clk_disable_unprepare(hdmi->clk[MTK_HDMI_CLK_HDMI_PLL]);
 }
@@ -298,7 +295,6 @@ static void mtk_hdmi_bridge_enable(struct drm_bridge *bridge)
 	mtk_hdmi_output_set_display_mode(hdmi, &hdmi->mode);
 	clk_prepare_enable(hdmi->clk[MTK_HDMI_CLK_HDMI_PLL]);
 	clk_prepare_enable(hdmi->clk[MTK_HDMI_CLK_HDMI_PIXEL]);
-	phy_power_on(hdmi->phy);
 }
 
 static const struct drm_bridge_funcs mtk_hdmi_bridge_funcs = {
@@ -324,9 +320,8 @@ static int mtk_hdmi_dt_parse_pdata(struct mtk_hdmi *hdmi,
 
 	hdmi->flt_n_5v_gpio = of_get_named_gpio(np, "flt_n_5v-gpios", 0);
 	if (hdmi->flt_n_5v_gpio < 0) {
-		dev_err(dev, "Failed to get flt_n_5v gpio: %d\n",
+		dev_warn(dev, "Failed to get flt_n_5v gpio: %d\n",
 			hdmi->flt_n_5v_gpio);
-		return hdmi->flt_n_5v_gpio;
 	}
 
 	ret = mtk_hdmi_get_all_clk(hdmi, np);
@@ -335,9 +330,7 @@ static int mtk_hdmi_dt_parse_pdata(struct mtk_hdmi *hdmi,
 		return ret;
 	}
 
-	/* The CEC module handles HDMI hotplug detection */
-	cec_np = of_find_compatible_node(np->parent, NULL,
-					 "mediatek,mt8173-cec");
+	cec_np = of_parse_phandle(np, "cec", 0);
 	if (!cec_np) {
 		dev_err(dev, "Failed to find CEC node\n");
 		return -EINVAL;
@@ -379,46 +372,49 @@ static int mtk_hdmi_dt_parse_pdata(struct mtk_hdmi *hdmi,
 	}
 
 	port = of_graph_get_port_by_id(np, 1);
-	if (!port) {
-		dev_err(dev, "Missing output port node\n");
-		return -EINVAL;
-	}
-
-	ep = of_get_child_by_name(port, "endpoint");
-	if (!ep) {
-		dev_err(dev, "Missing endpoint node in port %s\n",
-			port->full_name);
+	if (port) {
+		ep = of_get_child_by_name(port, "endpoint");
+		if (!ep) {
+			dev_err(dev, "Missing endpoint node in port %s\n",
+				port->full_name);
+			of_node_put(port);
+			return -EINVAL;
+		}
 		of_node_put(port);
-		return -EINVAL;
-	}
-	of_node_put(port);
 
-	remote = of_graph_get_remote_port_parent(ep);
-	if (!remote) {
-		dev_err(dev, "Missing connector/bridge node for endpoint %s\n",
-			ep->full_name);
+		remote = of_graph_get_remote_port_parent(ep);
+		if (!remote) {
+			dev_err(dev, "Missing connector/bridge node for endpoint %s\n",
+				ep->full_name);
+			of_node_put(ep);
+			return -EINVAL;
+		}
 		of_node_put(ep);
-		return -EINVAL;
-	}
-	of_node_put(ep);
 
-	if (!of_device_is_compatible(remote, "hdmi-connector")) {
-		hdmi->bridge.next = of_drm_find_bridge(remote);
-		if (!hdmi->bridge.next) {
-			dev_err(dev, "Waiting for external bridge\n");
+		if (!of_device_is_compatible(remote, "hdmi-connector")) {
+			hdmi->bridge.next = of_drm_find_bridge(remote);
+			if (!hdmi->bridge.next) {
+				dev_err(dev, "Waiting for external bridge\n");
+				of_node_put(remote);
+				return -EPROBE_DEFER;
+			}
+		}
+
+		i2c_np = of_parse_phandle(remote, "ddc-i2c-bus", 0);
+		if (!i2c_np) {
+			dev_err(dev, "Failed to find ddc-i2c-bus node in %s\n",
+				remote->full_name);
 			of_node_put(remote);
-			return -EPROBE_DEFER;
+			return -EINVAL;
+		}
+		of_node_put(remote);
+	} else {
+		i2c_np = of_parse_phandle(np, "ddc-i2c-bus", 0);
+		if (!i2c_np) {
+			dev_err(dev, "Failed to find ddc-i2c-bus node\n");
+			return -EINVAL;
 		}
 	}
-
-	i2c_np = of_parse_phandle(remote, "ddc-i2c-bus", 0);
-	if (!i2c_np) {
-		dev_err(dev, "Failed to find ddc-i2c-bus node in %s\n",
-			remote->full_name);
-		of_node_put(remote);
-		return -EINVAL;
-	}
-	of_node_put(remote);
 
 	hdmi->ddc_adpt = of_find_i2c_adapter_by_node(i2c_np);
 	if (!hdmi->ddc_adpt) {
@@ -452,33 +448,26 @@ static int mtk_drm_hdmi_probe(struct platform_device *pdev)
 	hdmi->dev = dev;
 
 	ret = mtk_hdmi_dt_parse_pdata(hdmi, pdev);
-	if (ret) {
-		dev_err(dev, "mtk_hdmi_dt_parse_pdata failed!!\n");
+	if (ret)
 		return ret;
-	}
 
-	hdmi->flt_n_5v_irq = gpio_to_irq(hdmi->flt_n_5v_gpio);
-	if (hdmi->flt_n_5v_irq < 0) {
-		dev_err(dev, "hdmi->flt_n_5v_irq = %d\n",
-			hdmi->flt_n_5v_irq);
-		return hdmi->flt_n_5v_irq;
-	}
+	if (hdmi->flt_n_5v_gpio > 0) {
+		hdmi->flt_n_5v_irq = gpio_to_irq(hdmi->flt_n_5v_gpio);
+		if (hdmi->flt_n_5v_irq < 0) {
+			dev_err(dev, "hdmi->flt_n_5v_irq = %d\n",
+				hdmi->flt_n_5v_irq);
+			return hdmi->flt_n_5v_irq;
+		}
 
-	ret = devm_request_threaded_irq(dev, hdmi->flt_n_5v_irq,
-					NULL, hdmi_flt_n_5v_irq_thread,
-					IRQF_TRIGGER_RISING |
-					IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
-					"hdmi flt_n_5v", hdmi);
-	if (ret) {
-		dev_err(dev, "Failed to register hdmi flt_n_5v interrupt\n");
-		return ret;
-	}
-
-	hdmi->phy = devm_phy_get(dev, "hdmi");
-	if (IS_ERR(hdmi->phy)) {
-		ret = PTR_ERR(hdmi->phy);
-		dev_err(dev, "Failed to get HDMI PHY: %d\n", ret);
-		return ret;
+		ret = devm_request_threaded_irq(dev, hdmi->flt_n_5v_irq,
+						NULL, hdmi_flt_n_5v_irq_thread,
+						IRQF_TRIGGER_RISING |
+						IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
+						"hdmi flt_n_5v", hdmi);
+		if (ret) {
+			dev_err(dev, "Failed to register hdmi flt_n_5v interrupt\n");
+			return ret;
+		}
 	}
 
 	platform_set_drvdata(pdev, hdmi);
@@ -513,8 +502,7 @@ static int mtk_drm_hdmi_probe(struct platform_device *pdev)
 	audio_pdev_info.size_data = sizeof(audio_data);
 	hdmi->audio_pdev = platform_device_register_full(&audio_pdev_info);
 	if (IS_ERR(hdmi->audio_pdev))
-		dev_err(dev, "Failed to register audio device: %ld\n",
-			PTR_ERR(hdmi->audio_pdev));
+		dev_err(dev, "Failed to register audio device: %ld\n", PTR_ERR(hdmi->audio_pdev));
 
 	hdmi->bridge.funcs = &mtk_hdmi_bridge_funcs;
 	hdmi->bridge.of_node = pdev->dev.of_node;
@@ -585,6 +573,7 @@ static SIMPLE_DEV_PM_OPS(mtk_hdmi_pm_ops,
 
 static const struct of_device_id mtk_drm_hdmi_of_ids[] = {
 	{ .compatible = "mediatek,mt8173-hdmi", },
+	{ .compatible = "mediatek,mt2701-hdmi", },
 	{}
 };
 
@@ -599,7 +588,6 @@ static struct platform_driver mtk_hdmi_driver = {
 };
 
 static struct platform_driver * const mtk_hdmi_drivers[] = {
-	&mtk_hdmi_phy_driver,
 	&mtk_hdmi_ddc_driver,
 	&mtk_cec_driver,
 	&mtk_hdmi_driver,

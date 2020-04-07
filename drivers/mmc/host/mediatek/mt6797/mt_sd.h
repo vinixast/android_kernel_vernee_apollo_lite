@@ -27,6 +27,12 @@
 #include <mt-plat/sync_write.h>
 
 /* MSDC_SWITCH_MODE_WHEN_ERROR */
+#ifndef CONFIG_MTK_EMMC_CQ_SUPPORT
+/* reset pin will clear WP status */
+#define EMMC_REINIT_WHEN_TMO
+/* #define EMMC_RESET_WHEN_TMO */
+#endif
+
 #define TUNE_NONE                (0)        /* No need tune */
 #define TUNE_ASYNC_CMD           (0x1 << 0) /* async transfer cmd crc */
 #define TUNE_ASYNC_DATA_WRITE    (0x1 << 1) /* async transfer data crc */
@@ -36,7 +42,7 @@
 #define TUNE_LEGACY_DATA_READ    (0x1 << 5) /* legacy transfer data crc */
 #define TUNE_AUTOK_PASS          (0x1 << 6) /* autok pass flag */
 
-#define MSDC_DMA_ADDR_DEBUG
+//#define MSDC_DMA_ADDR_DEBUG
 /*#define MSDC_HQA*/
 
 #define MSDC_STRIPE_DT
@@ -469,6 +475,7 @@ struct msdc_host {
 	u64                     starttime;
 	struct timer_list       timer;
 	u32                     write_timeout_ms;  /* data write busy timeout ms */
+	u32                     cmdq_timeout_ms;  /* data write busy timeout ms */
 	u8                      autocmd;
 	u32                     sw_timeout;
 	/* msdc autok */
@@ -492,6 +499,7 @@ struct msdc_host {
 	struct wakeup_source	trans_lock;
 	bool                    block_bad_card;
 	struct delayed_work	write_timeout;       /* check if write busy timeout */
+	struct delayed_work	cmdq_timeout;       /* check cmdq data timeout */
 #ifdef SDIO_ERROR_BYPASS
 	int                     sdio_error;     /* sdio error can't recovery */
 #endif
@@ -807,5 +815,7 @@ u64 msdc_get_user_capacity(struct msdc_host *host);
 u32 msdc_get_other_capacity(struct msdc_host *host, char *name);
 int msdc_cache_ctrl(struct msdc_host *host, unsigned int enable,
 	u32 *status);
+int msdc_check_otp_ops(unsigned int opcode, unsigned long long start_addr,
+	unsigned int size);
 
 #endif /* end of  MT_SD_H */

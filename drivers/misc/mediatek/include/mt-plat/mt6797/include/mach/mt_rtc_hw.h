@@ -268,6 +268,7 @@
 #define RTC_VBAT_LPSTA_RAW        (1U << 0)
 #define RTC_EOSC32_LPEN            (1U << 1)
 #define RTC_XOSC32_LPEN            (1U << 2)
+#define RTC_CON_LPEN            (RTC_XOSC32_LPEN | RTC_EOSC32_LPEN)
 #define RTC_CON_LPRST            (1U << 3)
 #define RTC_CON_CDBO            (1U << 4)
 #define RTC_CON_F32KOB            (1U << 5)    /* 0: RTC_GPIO exports 32K */
@@ -281,6 +282,10 @@
 #define RTC_CON_GE8            (1U << 13)
 #define RTC_CON_GPI            (1U << 14)
 #define RTC_CON_LPSTA_RAW        (1U << 15)    /* 32K was stopped */
+
+#define RTC_INT_CNT            (RTC_BASE + 0x0202)
+#define RTC_INT_CNT_MASK        0x7FF
+#define RTC_INT_CNT_SHIFT       0
 
 /* power on alarm time setting */
 

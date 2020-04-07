@@ -70,6 +70,7 @@ typedef struct DISP_EXEC_COMMAND {
 #define CCORR_COEF_CNT 4 /* ccorr feature */
 #define S_GAIN_BY_Y_CONTROL_CNT 5
 #define S_GAIN_BY_Y_HUE_PHASE_CNT 20
+#define LSP_CONTROL_CNT 8
 
 typedef struct {
 	unsigned int u4SHPGain;	/* 0 : min , 9 : max. */
@@ -113,41 +114,38 @@ typedef struct {
 } MDP_TDSHP_REG;
 
 typedef struct {
-
-	unsigned short GLOBAL_SAT[GLOBAL_SAT_SIZE];
-	unsigned short CONTRAST[CONTRAST_SIZE];
-	unsigned short BRIGHTNESS[BRIGHTNESS_SIZE];
-	unsigned char PARTIAL_Y[PARTIAL_Y_INDEX][PARTIAL_Y_SIZE];
-	unsigned char PURP_TONE_S[COLOR_TUNING_INDEX][PQ_PARTIALS_CONTROL][PURP_TONE_SIZE];
-	unsigned char SKIN_TONE_S[COLOR_TUNING_INDEX][PQ_PARTIALS_CONTROL][SKIN_TONE_SIZE];
-	unsigned char GRASS_TONE_S[COLOR_TUNING_INDEX][PQ_PARTIALS_CONTROL][GRASS_TONE_SIZE];
-	unsigned char SKY_TONE_S[COLOR_TUNING_INDEX][PQ_PARTIALS_CONTROL][SKY_TONE_SIZE];
-	unsigned char PURP_TONE_H[COLOR_TUNING_INDEX][PURP_TONE_SIZE];
-	unsigned char SKIN_TONE_H[COLOR_TUNING_INDEX][SKIN_TONE_SIZE];
-	unsigned char GRASS_TONE_H[COLOR_TUNING_INDEX][GRASS_TONE_SIZE];
-	unsigned char SKY_TONE_H[COLOR_TUNING_INDEX][SKY_TONE_SIZE];
-	unsigned int  CCORR_COEF[CCORR_COEF_CNT][3][3];
-	unsigned char S_GAIN_BY_Y[S_GAIN_BY_Y_CONTROL_CNT][S_GAIN_BY_Y_HUE_PHASE_CNT];
-	unsigned char S_GAIN_BY_Y_EN;
-	unsigned char LSP_EN;
+	unsigned int GLOBAL_SAT[GLOBAL_SAT_SIZE];
+	unsigned int CONTRAST[CONTRAST_SIZE];
+	unsigned int BRIGHTNESS[BRIGHTNESS_SIZE];
+	unsigned int PARTIAL_Y[PARTIAL_Y_INDEX][PARTIAL_Y_SIZE];
+	unsigned int PURP_TONE_S[COLOR_TUNING_INDEX][PQ_PARTIALS_CONTROL][PURP_TONE_SIZE];
+	unsigned int SKIN_TONE_S[COLOR_TUNING_INDEX][PQ_PARTIALS_CONTROL][SKIN_TONE_SIZE];
+	unsigned int GRASS_TONE_S[COLOR_TUNING_INDEX][PQ_PARTIALS_CONTROL][GRASS_TONE_SIZE];
+	unsigned int SKY_TONE_S[COLOR_TUNING_INDEX][PQ_PARTIALS_CONTROL][SKY_TONE_SIZE];
+	unsigned int PURP_TONE_H[COLOR_TUNING_INDEX][PURP_TONE_SIZE];
+	unsigned int SKIN_TONE_H[COLOR_TUNING_INDEX][SKIN_TONE_SIZE];
+	unsigned int GRASS_TONE_H[COLOR_TUNING_INDEX][GRASS_TONE_SIZE];
+	unsigned int SKY_TONE_H[COLOR_TUNING_INDEX][SKY_TONE_SIZE];
+	unsigned int CCORR_COEF[CCORR_COEF_CNT][3][3];
+	unsigned int S_GAIN_BY_Y[S_GAIN_BY_Y_CONTROL_CNT][S_GAIN_BY_Y_HUE_PHASE_CNT];
+	unsigned int S_GAIN_BY_Y_EN;
+	unsigned int LSP_EN;
+	unsigned int LSP[LSP_CONTROL_CNT];
 } DISPLAY_PQ_T;
 
 typedef struct {
-	unsigned short GLOBAL_SAT;
-	unsigned short CONTRAST;
-	unsigned short BRIGHTNESS;
-	unsigned char PARTIAL_Y[PARTIAL_Y_SIZE];
-	unsigned char PURP_TONE_S[PQ_PARTIALS_CONTROL][PURP_TONE_SIZE];
-	unsigned char SKIN_TONE_S[PQ_PARTIALS_CONTROL][SKIN_TONE_SIZE];
-	unsigned char GRASS_TONE_S[PQ_PARTIALS_CONTROL][GRASS_TONE_SIZE];
-	unsigned char SKY_TONE_S[PQ_PARTIALS_CONTROL][SKY_TONE_SIZE];
-	unsigned char PURP_TONE_H[PURP_TONE_SIZE];
-	unsigned char SKIN_TONE_H[SKIN_TONE_SIZE];
-	unsigned char GRASS_TONE_H[GRASS_TONE_SIZE];
-	unsigned char SKY_TONE_H[SKY_TONE_SIZE];
-	unsigned char S_GAIN_BY_Y[S_GAIN_BY_Y_CONTROL_CNT][S_GAIN_BY_Y_HUE_PHASE_CNT];
-	unsigned char S_GAIN_BY_Y_EN;
-	unsigned char LSP_EN;
+	unsigned int GLOBAL_SAT;
+	unsigned int CONTRAST;
+	unsigned int BRIGHTNESS;
+	unsigned int PARTIAL_Y[PARTIAL_Y_SIZE];
+	unsigned int PURP_TONE_S[PQ_PARTIALS_CONTROL][PURP_TONE_SIZE];
+	unsigned int SKIN_TONE_S[PQ_PARTIALS_CONTROL][SKIN_TONE_SIZE];
+	unsigned int GRASS_TONE_S[PQ_PARTIALS_CONTROL][GRASS_TONE_SIZE];
+	unsigned int SKY_TONE_S[PQ_PARTIALS_CONTROL][SKY_TONE_SIZE];
+	unsigned int PURP_TONE_H[PURP_TONE_SIZE];
+	unsigned int SKIN_TONE_H[SKIN_TONE_SIZE];
+	unsigned int GRASS_TONE_H[GRASS_TONE_SIZE];
+	unsigned int SKY_TONE_H[SKY_TONE_SIZE];
 } DISPLAY_COLOR_REG_T;
 
 typedef struct {
@@ -266,6 +264,7 @@ struct device *disp_get_device(void);
 
 #define DISP_IOCTL_MAGIC        'x'
 
+#define DISP_IOCTL_WRITE_REG       _IOW(DISP_IOCTL_MAGIC, 1, DISP_WRITE_REG)	/* also defined in atci_pq_cmd.h */
 #define DISP_IOCTL_READ_REG        _IOWR(DISP_IOCTL_MAGIC, 2, DISP_READ_REG)	/* also defined in atci_pq_cmd.h */
 /* #define DISP_IOCTL_WAIT_IRQ        _IOR     (DISP_IOCTL_MAGIC, 3, disp_wait_irq_struct) */
 #define DISP_IOCTL_DUMP_REG        _IOR(DISP_IOCTL_MAGIC, 4, int)

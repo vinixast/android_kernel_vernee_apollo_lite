@@ -345,12 +345,6 @@ irqreturn_t disp_irq_handler(int irq, void *dev_id)
 					    DISP_RDMA_INDEX_OFFSET * index),
 			       DISP_REG_GET(DISP_REG_RDMA_OUT_LINE_CNT +
 					    DISP_RDMA_INDEX_OFFSET * index));
-			DDPMSG("ovl1_2l,(0x240:0x%x, 0x244:0x%x, 0x24C:0x%x, 0x250:0x%x)\n",
-				DISP_REG_GET(DISP_REG_OVL_FLOW_CTRL_DBG + DDP_REG_BASE_DISP_OVL1_2L),
-				DISP_REG_GET(DISP_REG_OVL_ADDCON_DBG + DDP_REG_BASE_DISP_OVL1_2L),
-				DISP_REG_GET(DISP_REG_OVL_RDMA0_DBG + DDP_REG_BASE_DISP_OVL1_2L),
-				DISP_REG_GET(DISP_REG_OVL_RDMA1_DBG + DDP_REG_BASE_DISP_OVL1_2L));
-
 			DDPERR("IRQ: RDMA%d underflow! cnt=%d\n", index,
 			       cnt_rdma_underflow[index]++);
 			if (disp_helper_get_option(DISP_OPT_RDMA_UNDERFLOW_AEE))

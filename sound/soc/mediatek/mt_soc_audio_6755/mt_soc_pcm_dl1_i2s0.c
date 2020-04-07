@@ -1,17 +1,19 @@
 /*
- * Copyright (C) 2007 The Android Open Source Project
+ * Copyright (C) 2015 MediaTek Inc.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * along with this program
+ * If not, see <http://www.gnu.org/licenses/>.
  */
 /*******************************************************************************
  *
@@ -70,7 +72,7 @@ static int mtk_i2s0_probe(struct platform_device *pdev);
 static int mtk_pcm_i2s0_close(struct snd_pcm_substream *substream);
 static int mtk_asoc_pcm_i2s0_new(struct snd_soc_pcm_runtime *rtd);
 static int mtk_afe_i2s0_probe(struct snd_soc_platform *platform);
-
+int mtk_soc_always_hd = 0;
 static int mi2s0_sidegen_control;
 static int mi2s0_hdoutput_control;
 static int mi2s0_extcodec_echoref_control;
@@ -92,11 +94,10 @@ static int Audio_i2s0_SideGen_Get(struct snd_kcontrol *kcontrol,
 	ucontrol->value.integer.value[0] = mi2s0_sidegen_control;
 	return 0;
 }
+static int samplerate;
 
 static int Audio_i2s0_SideGen_Set(struct snd_kcontrol *kcontrol, struct snd_ctl_elem_value *ucontrol)
 {
-	uint32 samplerate = 0;
-
 	if (ucontrol->value.enumerated.item[0] > ARRAY_SIZE(i2s0_SIDEGEN)) {
 		pr_err("return -EINVAL\n");
 		return -EINVAL;
@@ -143,6 +144,9 @@ static int Audio_i2s0_SideGen_Set(struct snd_kcontrol *kcontrol, struct snd_ctl_
 			Soc_Aud_InterConnectionInput_I09, Soc_Aud_InterConnectionOutput_O00);
 		SetConnection(Soc_Aud_InterCon_DisConnect,
 			Soc_Aud_InterConnectionInput_I09, Soc_Aud_InterConnectionOutput_O01);
+	} else {
+		samplerate = 48000;
+		pr_err("Wrong sidegen_control input\n");
 	}
 
 	if (mi2s0_extcodec_echoref_control == true) {
@@ -170,7 +174,8 @@ static int Audio_i2s0_SideGen_Set(struct snd_kcontrol *kcontrol, struct snd_ctl_
 	}
 
 	if (mi2s0_sidegen_control != 0) {
-		EnableALLbySampleRate(samplerate);
+		if (!mtk_soc_always_hd)
+			EnableALLbySampleRate(samplerate);
 
 		/* FM disabled || phone call established */
 		if (GetMemoryPathEnable(Soc_Aud_Digital_Block_I2S_IN_2) == false ||
@@ -182,10 +187,32 @@ static int Audio_i2s0_SideGen_Set(struct snd_kcontrol *kcontrol, struct snd_ctl_
 		if (GetMemoryPathEnable(Soc_Aud_Digital_Block_I2S_4PIN_IN_OUT) == true)
 			Enable4pin_I2S0_I2S3(false, mi2s0_hdoutput_control, samplerate);
 
-		DisableALLbySampleRate(samplerate);
+		if (!mtk_soc_always_hd)
+			DisableALLbySampleRate(samplerate);
 	}
 
 	AudDrv_Clk_Off();
+	return 0;
+}
+
+static int audio_always_hd_get(struct snd_kcontrol *kcontrol,
+				   struct snd_ctl_elem_value *ucontrol)
+{
+	pr_debug("%s(), mtk_soc_always_hd %d\n", __func__, mtk_soc_always_hd);
+	ucontrol->value.integer.value[0] = mtk_soc_always_hd;
+	return 0;
+}
+
+static int audio_always_hd_set(struct snd_kcontrol *kcontrol,
+				   struct snd_ctl_elem_value *ucontrol)
+{
+	pr_debug("%s(), mtk_soc_always_hd %d\n", __func__, mtk_soc_always_hd);
+	if (ucontrol->value.enumerated.item[0] > ARRAY_SIZE(i2s0_HD_output)) {
+		pr_err("return -EINVAL\n");
+		return -EINVAL;
+	}
+
+	mtk_soc_always_hd = ucontrol->value.integer.value[0];
 	return 0;
 }
 
@@ -205,7 +232,7 @@ static int Audio_i2s0_hdoutput_Set(struct snd_kcontrol *kcontrol,
 		pr_err("return -EINVAL\n");
 		return -EINVAL;
 	}
-
+#if 0
 	AudDrv_Clk_On();
 
 	if ((ucontrol->value.integer.value[0] == true) && (mi2s0_hdoutput_control == false)) {
@@ -229,9 +256,11 @@ static int Audio_i2s0_hdoutput_Set(struct snd_kcontrol *kcontrol,
 		AudDrv_APLL1Tuner_Clk_Off();
 		AudDrv_APLL2Tuner_Clk_Off();
 	}
-	mi2s0_hdoutput_control = ucontrol->value.integer.value[0];
+
 
 	AudDrv_Clk_Off();
+#endif
+	mi2s0_hdoutput_control = ucontrol->value.integer.value[0];
 	PRINTK_AUD_DL1("-%s(), mi2s0_hdoutput_control=%d\n", __func__, mi2s0_hdoutput_control);
 	return 0;
 }
@@ -260,6 +289,8 @@ static const struct snd_kcontrol_new Audio_snd_i2s0_controls[] = {
 		     Audio_i2s0_Enum[0], Audio_i2s0_SideGen_Get, Audio_i2s0_SideGen_Set),
 	SOC_ENUM_EXT("Audio_i2s0_hd_Switch",
 		     Audio_i2s0_Enum[1], Audio_i2s0_hdoutput_Get, Audio_i2s0_hdoutput_Set),
+	SOC_ENUM_EXT("Audio_always_hd_Switch",
+		     Audio_i2s0_Enum[1], audio_always_hd_get, audio_always_hd_set),
 	SOC_ENUM_EXT("Audio_ExtCodec_EchoRef_Switch",
 		     Audio_i2s0_Enum[2], Audio_i2s0_ExtCodec_EchoRef_Get,
 		     Audio_i2s0_ExtCodec_EchoRef_Set),
@@ -288,7 +319,7 @@ static int mtk_pcm_i2s0_stop(struct snd_pcm_substream *substream)
 	AFE_BLOCK_T *Afe_Block = &(pI2s0MemControl->rBlock);
 
 	pr_debug("mtk_pcm_i2s0_stop\n");
-	SetIrqEnable(Soc_Aud_IRQ_MCU_MODE_IRQ1_MCU_MODE, false);
+	irq_remove_user(substream, Soc_Aud_IRQ_MCU_MODE_IRQ1_MCU_MODE);
 
 	/* here start digital part */
 	SetConnection(Soc_Aud_InterCon_DisConnect, Soc_Aud_InterConnectionInput_I05,
@@ -503,9 +534,10 @@ static int mtk_pcm_i2s0_start(struct snd_pcm_substream *substream)
 	SetMemoryPathEnable(Soc_Aud_Digital_Block_MEM_DL1, true);
 
 	/* here to set interrupt */
-	SetIrqMcuCounter(Soc_Aud_IRQ_MCU_MODE_IRQ1_MCU_MODE, runtime->period_size);
-	SetIrqMcuSampleRate(Soc_Aud_IRQ_MCU_MODE_IRQ1_MCU_MODE, runtime->rate);
-	SetIrqEnable(Soc_Aud_IRQ_MCU_MODE_IRQ1_MCU_MODE, true);
+	irq_add_user(substream,
+		     Soc_Aud_IRQ_MCU_MODE_IRQ1_MCU_MODE,
+		     substream->runtime->rate,
+		     substream->runtime->period_size);
 
 	EnableAfe(true);
 

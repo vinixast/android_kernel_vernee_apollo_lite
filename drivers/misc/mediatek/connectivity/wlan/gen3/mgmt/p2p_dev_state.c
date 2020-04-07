@@ -1,3 +1,17 @@
+/*
+* Copyright (C) 2016 MediaTek Inc.
+*
+* This program is free software: you can redistribute it and/or modify it under the terms of the
+* GNU General Public License version 2 as published by the Free Software Foundation.
+*
+* This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+* without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+* See the GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License along with this program.
+* If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #include "precomp.h"
 
 BOOLEAN
@@ -152,7 +166,7 @@ p2pDevStateAbort_CHNL_ON_HAND(IN P_ADAPTER_T prAdapter,
 		prP2pBssInfo->eBand = prChnlReqInfo->eOriBand;
 		prP2pBssInfo->eBssSCO = prChnlReqInfo->eOriChnlSco;
 
-		DBGLOG(P2P, INFO, "p2p state trans abort chann on hand, eListenExted: %d, eNextState: %d\n",
+		DBGLOG(P2P, TRACE, "p2p state trans abort chann on hand, eListenExted: %d, eNextState: %d\n",
 			prP2pDevFsmInfo->eListenExted, eNextState);
 		if (prP2pDevFsmInfo->eListenExted != P2P_DEV_EXT_LISTEN_ING ||
 			eNextState != P2P_DEV_STATE_CHNL_ON_HAND) {

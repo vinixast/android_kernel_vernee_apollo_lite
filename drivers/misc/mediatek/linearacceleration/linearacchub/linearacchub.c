@@ -117,8 +117,8 @@ static int linearacc_get_data(int *x, int *y, int *z, int *status)
 	*y = data.accelerometer_t.y;
 	*z = data.accelerometer_t.z;
 	*status = data.accelerometer_t.status;
-	/* LNACC_LOG("recv ipi: timestamp: %lld, timestamp_gpt: %lld, x: %d, y: %d, z: %d!\n", time_stamp, time_stamp_gpt,
-		*x, *y, *z); */
+	/* LNACC_LOG("recv ipi: timestamp: %lld, timestamp_gpt: %lld, x: %d, y: %d, z: %d!\n",
+			time_stamp, time_stamp_gpt, *x, *y, *z); */
 	return 0;
 }
 static int linearacc_open_report_data(int open)

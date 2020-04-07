@@ -2,6 +2,7 @@ config ARM64
 	def_bool y
 	select ARCH_BINFMT_ELF_RANDOMIZE_PIE
 	select ARCH_HAS_ATOMIC64_DEC_IF_POSITIVE
+	select ARCH_HAS_FORTIFY_SOURCE
 	select ARCH_HAS_SG_CHAIN
 	select ARCH_HAS_TICK_BROADCAST if GENERIC_CLOCKEVENTS_BROADCAST
 	select ARCH_USE_CMPXCHG_LOCKREF
@@ -21,7 +22,7 @@ config ARM64
 	select DCACHE_WORD_ACCESS
 	select GENERIC_ALLOCATOR
 	select GENERIC_CLOCKEVENTS
-	select GENERIC_CLOCKEVENTS_BROADCAST if SMP
+	select GENERIC_CLOCKEVENTS_BROADCAST
 	select GENERIC_CPU_AUTOPROBE
 	select GENERIC_EARLY_IOREMAP
 	select GENERIC_IOMAP
@@ -35,6 +36,7 @@ config ARM64
 	select HANDLE_DOMAIN_IRQ
 	select HARDIRQS_SW_RESEND
 	select HAVE_ARCH_AUDITSYSCALL
+	select HAVE_ARCH_HARDENED_USERCOPY
 	select HAVE_ARCH_JUMP_LABEL
 	select HAVE_ARCH_KGDB
 	select HAVE_ARCH_MMAP_RND_BITS
@@ -46,7 +48,6 @@ config ARM64
 	select HAVE_CC_STACKPROTECTOR
 	select HAVE_DEBUG_BUGVERBOSE
 	select HAVE_DEBUG_KMEMLEAK
-	select HAVE_DMA_API_DEBUG
 	select HAVE_DMA_ATTRS
 	select HAVE_DMA_CONTIGUOUS
 	select HAVE_DYNAMIC_FTRACE
@@ -89,29 +90,39 @@ config ARCH_PHYS_ADDR_T_64BIT
 config MMU
 	def_bool y
 
+config ARCH_MMAP_RND_BITS_MIN
+       default 14 if ARM64_64K_PAGES
+       default 16 if ARM64_16K_PAGES
+       default 18
+
+# max bits determined by the following formula:
+#  VA_BITS - PAGE_SHIFT - 3
+config ARCH_MMAP_RND_BITS_MAX
+       default 19 if ARM64_VA_BITS=36
+       default 24 if ARM64_VA_BITS=39
+       default 27 if ARM64_VA_BITS=42
+       default 30 if ARM64_VA_BITS=47
+       default 29 if ARM64_VA_BITS=48 && ARM64_64K_PAGES
+       default 31 if ARM64_VA_BITS=48 && ARM64_16K_PAGES
+       default 33 if ARM64_VA_BITS=48
+       default 14 if ARM64_64K_PAGES
+       default 16 if ARM64_16K_PAGES
+       default 18
+
+config ARCH_MMAP_RND_COMPAT_BITS_MIN
+       default 7 if ARM64_64K_PAGES
+       default 9 if ARM64_16K_PAGES
+       default 11
+
+config ARCH_MMAP_RND_COMPAT_BITS_MAX
+       default 16
+
 config NO_IOPORT_MAP
 	def_bool y if !PCI
 
 config ILLEGAL_POINTER_VALUE
 	hex
 	default 0xdead000000000000
-
-config ARCH_MMAP_RND_BITS_MIN
-       default 14 if ARM64_64K_PAGES
-       default 18
-
-# max bits determined by the following formula:
-#  VA_BITS - PAGE_SHIFT - 3
-#  VA_BITS is always 39
-config ARCH_MMAP_RND_BITS_MAX
-       default 20 if ARM64_64K_PAGES
-       default 24
-
-config ARCH_MMAP_RND_COMPAT_BITS_MIN
-       default 11
-
-config ARCH_MMAP_RND_COMPAT_BITS_MAX
-       default 16
 
 config STACKTRACE_SUPPORT
 	def_bool y
@@ -153,6 +164,9 @@ config NEED_DMA_MAP_STATE
 config NEED_SG_DMA_LENGTH
 	def_bool y
 
+config SMP
+	def_bool y
+
 config SWIOTLB
 	def_bool y
 
@@ -188,9 +202,20 @@ config ARM64_ERRATUM_836870
 
 
 config ARM64_ERRATUM_843419
-	bool "Cortex-A53: 843419"
-	default n
-         
+	bool "Cortex-A53: 843419: A load or store might access an incorrect address"
+	default y
+	help
+	  This option builds kernel modules using the large memory model in
+	  order to avoid the use of the ADRP instruction, which can cause
+	  a subsequent memory access to use an incorrect address on Cortex-A53
+	  parts up to r0p4.
+
+	  Note that the kernel itself must be linked with a version of ld
+	  which fixes potentially affected ADRP instructions through the
+	  use of veneers.
+
+	  If unsure, say Y.
+
 config ARM64_ERRATUM_845719
 	bool "Cortex-A53: 845719: a load might read incorrect data"
 	depends on COMPAT
@@ -209,6 +234,24 @@ config ARM64_ERRATUM_845719
 	  the kernel if an affected CPU is detected.
 
 	  If unsure, say Y.
+
+config ARM64_ERRATUM_855873
+	bool "Cortex-A53: 855873: An eviction might overtake a cache clean operation"
+	default y
+	help
+	  This option adds an alternative code sequence to work around ARM
+	  erratum 855873 on Cortex-A53 parts up to r0p4.
+	  Because of this erratum, the processor might issue an eviction and
+	  an L2 cache clean operation to the interconnect in the wrong order.
+
+	  If unsure, say Y.
+
+config PGTABLE_LEVELS
+	int
+	default 2 if ARM64_64K_PAGES && ARM64_VA_BITS_42
+	default 3 if ARM64_64K_PAGES && ARM64_VA_BITS_48
+	default 3 if ARM64_4K_PAGES && ARM64_VA_BITS_39
+	default 4 if ARM64_4K_PAGES && ARM64_VA_BITS_48
 
 source "init/Kconfig"
 
@@ -241,7 +284,6 @@ config ARCH_MEDIATEK
 	select HAVE_SMP
 	select NEED_MACH_MEMORY_H
 	select IRQ_DOMAIN
-	select IRQ_DOMAIN_DEBUG
 	select GENERIC_SCHED_CLOCK
 	select ARMV7_COMPAT
 	select ARMV7_COMPAT_CPUINFO
@@ -259,7 +301,6 @@ config ARCH_MT6735
 	select HAVE_SMP
 	select NEED_MACH_MEMORY_H
 	select IRQ_DOMAIN
-	select IRQ_DOMAIN_DEBUG
 	select GENERIC_SCHED_CLOCK
 	select MTK_SYSTRACKER
 	select MTK_SYS_CIRQ
@@ -272,6 +313,7 @@ config ARCH_MT6735
 	select MFD_SYSCON
 	select MTK_BASE_POWER
 	select MTK_GIC
+	select ARM64_ERRATUM_843419
 	select ARM64_ERRATUM_845719
 	select ARM64_ERRATUM_836870
 	select MTK_IRQ_NEW_DESIGN
@@ -291,7 +333,6 @@ config ARCH_MT6753
 	select HAVE_SMP
 	select NEED_MACH_MEMORY_H
 	select IRQ_DOMAIN
-	select IRQ_DOMAIN_DEBUG
 	select GENERIC_SCHED_CLOCK
 	select MTK_SYSTRACKER
 	select MTK_SYS_CIRQ
@@ -305,6 +346,7 @@ config ARCH_MT6753
 	select PINCTRL
 	select PINCTRL_MT6735
 	select MFD_SYSCON
+	select ARM64_ERRATUM_843419
 	select ARM64_ERRATUM_845719
 	select ARM64_ERRATUM_836870
 	select MTK_IRQ_NEW_DESIGN
@@ -327,7 +369,6 @@ config ARCH_MT6755
 	select HAVE_SMP
 	select NEED_MACH_MEMORY_H
 	select IRQ_DOMAIN
-	select IRQ_DOMAIN_DEBUG
 	select GENERIC_SCHED_CLOCK
 	select MTK_SYS_CIRQ
 	select MTK_EIC
@@ -339,8 +380,10 @@ config ARCH_MT6755
 	select MFD_SYSCON
 	select MTK_BASE_POWER
 	select MTK_GIC
+	select ARM64_ERRATUM_843419
 	select ARM64_ERRATUM_845719
 	select ARM64_ERRATUM_836870
+	select ARM64_ERRATUM_855873
 	select MTK_POWER_GS
 	select MTK_SYSTRACKER_V2
 	select MTK_LM_MODE if !MTK_GMO_RAM_OPTIMIZE
@@ -348,11 +391,53 @@ config ARCH_MT6755
 	select MTK_IRQ_NEW_DESIGN_DEBUG
 	select MTK_USB2JTAG_SUPPORT
 	select MTK_SEC_DEINT_SUPPORT
+	select MTK_TIMER
 	help
 	  This enables support for MediaTek MT6755
 	  Support for aarch64/aarch32 Architecture
 	  Support for evb6755 related projects
 	  Support for k55 related projects
+
+config ARCH_MT6755_TURBO
+	bool "MediaTek MT6755 Turbo"
+	help
+	  This enables support for MediaTek MT6755 turbo mode
+	  Support for k55tv1 related projects
+	  CPU: 1.25 + 2.15 GHZ
+	  GPU: 800 HMZ
+
+config ARCH_MT6757
+	bool "MediaTek MT6757"
+	select GENERIC_TIME
+	select GENERIC_CLOCKEVENTS
+	select ARCH_HAS_CPUFREQ
+	select ARM_AMBA
+	select CPU_V7
+	select HAVE_SMP
+	select NEED_MACH_MEMORY_H
+	select IRQ_DOMAIN
+	select GENERIC_SCHED_CLOCK
+	select MTK_SYS_CIRQ
+	select ARMV7_COMPAT
+	select ARMV7_COMPAT_CPUINFO
+	select CPU_IDLE
+	select PINCTRL
+	select PINCTRL_MT6757
+	select MFD_SYSCON
+	select MTK_BASE_POWER
+	select ARM64_ERRATUM_843419
+	select MTK_SYSTRACKER_V2
+	select MTK_GIC_V3_EXT
+	select MTK_CPU_STRESS
+	select MTK_LM_MODE if !MTK_GMO_RAM_OPTIMIZE
+	select MTK_EIC_HISTORY_DUMP
+	select MTK_TIMER
+	help
+	  This enables support for MediaTek MT6757
+	  Support for aarch64/aarch32 Architecture
+	  Support for fpga6757_64 related projects
+	  Support for evb6757_64 related projects
+	  Support for k57_64 related projects
 
 config ARCH_MT6797
 	bool "MediaTek MT6797"
@@ -364,7 +449,6 @@ config ARCH_MT6797
 	select HAVE_SMP
 	select NEED_MACH_MEMORY_H
 	select IRQ_DOMAIN
-	select IRQ_DOMAIN_DEBUG
 	select GENERIC_SCHED_CLOCK
 	select MTK_SYS_CIRQ
 	select MTK_EIC
@@ -393,6 +477,23 @@ config ARCH_MT6797
 	  Support for evb6797_64 related projects
 	  Support for k97_64 related projects
 
+config ARCH_ELBRUS
+        bool "MediaTek ELBRUS"
+        select PINCTRL
+		select PINCTRL_ELBRUS
+		select MFD_SYSCON
+        select MTK_FPGA
+        select FPGA_EARLY_PORTING
+        select MTK_EIC
+        select MTK_SYSTRACKER_V2
+        select CPU_IDLE
+        select MTK_BASE_POWER
+        select MTK_TIMER
+	select MTK_GIC_V3_EXT
+
+        help
+          This enables support for MediaTek Elbrus
+
 config ARCH_MT8163
 	bool "MediaTek MT8163"
 	select ARCH_MEDIATEK
@@ -403,6 +504,20 @@ config ARCH_MT8163
 	help
 	  This enable support for MediaTek MT8163. If you need support
 	  for MediaTek MT8163, say Y here.
+	  Please note this also select ARCH_MEDIATEK, so driver depends
+	  on it can be selected.
+
+config ARCH_MT8167
+	bool "MediaTek MT8167"
+	select ARCH_MEDIATEK
+	select MTK_BASE_POWER
+	select MTK_SYS_CIRQ
+	select MTK_GIC_EXT
+	select MTK_SYSTRACKER
+	select MTK_TIMER
+	help
+	  This enable support for MediaTek MT8167. If you need support
+	  for MediaTek MT8167, say Y here.
 	  Please note this also select ARCH_MEDIATEK, so driver depends
 	  on it can be selected.
 
@@ -428,7 +543,6 @@ config ARCH_MT6735M
 	select HAVE_SMP
 	select NEED_MACH_MEMORY_H
 	select IRQ_DOMAIN
-	select IRQ_DOMAIN_DEBUG
 	select GENERIC_SCHED_CLOCK
 	select MTK_SYSTRACKER
 	select MTK_SYS_CIRQ
@@ -443,6 +557,7 @@ config ARCH_MT6735M
 	select PINCTRL
 	select PINCTRL_MT6735
 	select MFD_SYSCON
+	select ARM64_ERRATUM_843419
 	select MTK_BASE_POWER
 	select MTK_POWER_GS
 	select MTK_CPU_STRESS
@@ -669,34 +784,13 @@ config ARM64_VA_BITS
 	default 42 if ARM64_VA_BITS_42
 	default 48 if ARM64_VA_BITS_48
 
-config ARM64_PGTABLE_LEVELS
-	int
-	default 2 if ARM64_64K_PAGES && ARM64_VA_BITS_42
-	default 3 if ARM64_64K_PAGES && ARM64_VA_BITS_48
-	default 3 if ARM64_4K_PAGES && ARM64_VA_BITS_39
-	default 4 if ARM64_4K_PAGES && ARM64_VA_BITS_48
-
 config CPU_BIG_ENDIAN
 	bool "Build big-endian kernel"
 	help
 	  Say Y if you plan on running a kernel in big-endian mode.
 
-config SMP
-	bool "Symmetric Multi-Processing"
-	help
-	  This enables support for systems with more than one CPU.  If
-	  you say N here, the kernel will run on single and
-	  multiprocessor machines, but will use only one CPU of a
-	  multiprocessor machine. If you say Y here, the kernel will run
-	  on many, but not all, single processor machines. On a single
-	  processor machine, the kernel will run faster if you say N
-	  here.
-
-	  If you don't know what to do here, say N.
-
 config SCHED_MC
 	bool "Multi-core scheduler support"
-	depends on SMP
 	help
 	  Multi-core scheduler support improves the CPU scheduler's decision
 	  making when dealing with multi-core CPU chips at a cost of slightly
@@ -704,7 +798,6 @@ config SCHED_MC
 
 config SCHED_SMT
 	bool "SMT scheduler support"
-	depends on SMP
 	help
 	  Improves the CPU scheduler's decision making when dealing with
 	  MultiThreading at a cost of slightly increased overhead in some
@@ -712,23 +805,18 @@ config SCHED_SMT
 
 config NR_CPUS
 	int "Maximum number of CPUs (2-64)"
-	range 2 64
-	depends on SMP
 	# These have to remain sorted largest to smallest
 	default "64"
 
 config HOTPLUG_CPU
 	bool "Support for hot-pluggable CPUs"
-	depends on SMP
 	help
 	  Say Y here to experiment with turning CPUs off and on.  CPUs
 	  can be controlled through /sys/devices/system/cpu.
 
 source kernel/Kconfig.preempt
 
-config HZ
-	int
-	default 100
+source kernel/Kconfig.hz
 
 config ARCH_HAS_HOLES_MEMORYMODEL
 	def_bool y if SPARSEMEM
@@ -868,6 +956,53 @@ config SETEND_EMULATION
 
 endif
 
+config ARM64_SW_TTBR0_PAN
+	bool "Emulate Privileged Access Never using TTBR0_EL1 switching"
+	help
+	  Enabling this option prevents the kernel from accessing
+	  user-space memory directly by pointing TTBR0_EL1 to a reserved
+	  zeroed area and reserved ASID. The user access routines
+	  restore the valid TTBR0_EL1 temporarily.
+
+menu "ARMv8.1 architectural features"
+
+config ARM64_PAN
+	bool "Enable support for Privileged Access Never (PAN)"
+	default y
+	help
+	 Privileged Access Never (PAN; part of the ARMv8.1 Extensions)
+	 prevents the kernel or hypervisor from accessing user-space (EL0)
+	 memory directly.
+
+	 Choosing this option will cause any unprotected (not using
+	 copy_to_user et al) memory access to fail with a permission fault.
+
+	 The feature is detected at runtime, and will remain as a 'nop'
+	 instruction if the cpu does not implement the feature.
+
+endmenu
+
+config ARM64_UAO
+	bool "Enable support for User Access Override (UAO)"
+	default y
+	help
+	  User Access Override (UAO; part of the ARMv8.2 Extensions)
+	  causes the 'unprivileged' variant of the load/store instructions to
+	  be overriden to be privileged.
+
+	  This option changes get_user() and friends to use the 'unprivileged'
+	  variant of the load/store instructions. This ensures that user-space
+	  really did have access to the supplied memory. When addr_limit is
+	  set to kernel memory the UAO bit will be set, allowing privileged
+	  access to kernel memory.
+
+	  Choosing this option will cause copy_to_user() et al to use user-space
+	  memory permissions.
+
+	  The feature is detected at runtime, the kernel will use the
+	  regular load/store instructions if the cpu does not implement the
+	  feature.
+
 endmenu
 
 menu "Boot options"
@@ -1001,22 +1136,6 @@ menu "CPU Power Management"
 source "drivers/cpuidle/Kconfig"
 
 source "drivers/cpufreq/Kconfig"
-
-config ARM64_ERRATUM_843419
-	bool "Cortex-A53: 843419: A load or store might access an incorrect address"
-	depends on MODULES
-	default y
-	help
-	  This option builds kernel modules using the large memory model in
-	  order to avoid the use of the ADRP instruction, which can cause
-	  a subsequent memory access to use an incorrect address on Cortex-A53
-	  parts up to r0p4.
-
-	  Note that the kernel itself must be linked with a version of ld
-	  which fixes potentially affected ADRP instructions through the
-	  use of veneers.
-
-	  If unsure, say Y.
 
 endmenu
 

@@ -28,9 +28,10 @@
 #include "mt_spm.h"
 #include "mt_spm_sleep.h"
 #include "mt_spm_idle.h"
-#if defined(CONFIG_ARCH_MT6797)
+#if defined(CONFIG_ARCH_MT6797) || defined(CONFIG_ARCH_MT6757)
 #include "mt_clkmgr.h"
 #endif
+
 #include "mt_spm_mtcmos.h"
 #include "mt_spm_misc.h"
 #ifdef CONFIG_MT_SND_SOC_6755
@@ -40,6 +41,7 @@
 /**************************************
  * only for internal debug
  **************************************/
+#if !defined(CONFIG_FPGA_EARLY_PORTING)
 #ifdef CONFIG_MTK_LDVT
 #define SLP_SLEEP_DPIDLE_EN         1
 #define SLP_REPLACE_DEF_WAKESRC     1
@@ -48,6 +50,11 @@
 #define SLP_SLEEP_DPIDLE_EN         1
 #define SLP_REPLACE_DEF_WAKESRC     0
 #define SLP_SUSPEND_LOG_EN          1
+#endif
+#else
+#define SLP_SLEEP_DPIDLE_EN         0
+#define SLP_REPLACE_DEF_WAKESRC     0
+#define SLP_SUSPEND_LOG_EN          0
 #endif
 
 /**************************************
@@ -86,6 +93,7 @@ static bool slp_dump_regs = 1;
 static bool slp_check_mtcmos_pll = 1;
 
 static u32 slp_spm_flags = {
+#if !defined(CONFIG_FPGA_EARLY_PORTING)
 #if 0
 	SPM_FLAG_DIS_CPU_PDN  |
 	SPM_FLAG_DIS_INFRA_PDN |
@@ -107,7 +115,20 @@ static u32 slp_spm_flags = {
 	#endif
 	SPM_FLAG_DIS_DPD
 #endif
+#else
+	SPM_FLAG_DIS_CPU_PDN  |
+	SPM_FLAG_DIS_INFRA_PDN |
+	SPM_FLAG_DIS_DDRPHY_PDN |
+	SPM_FLAG_DIS_VCORE_DVS |
+	SPM_FLAG_DIS_VCORE_DFS |
+	SPM_FLAG_DIS_DPD |
+	SPM_FLAG_DIS_BUS_CLOCK_OFF |
+	SPM_FLAG_DIS_MD_INFRA_PDN |
+	SPM_FLAG_DIS_VPROC_VSRAM_DVS |
+	SPM_FLAG_DIS_SYSRAM_SLEEP
+#endif
 };
+
 #if SLP_SLEEP_DPIDLE_EN
 /* sync with mt_idle.c spm_deepidle_flags setting */
 static u32 slp_spm_deepidle_flags = {
@@ -120,6 +141,7 @@ static u32 slp_spm_deepidle_flags = {
 	#endif
 };
 #endif
+
 /* static u32 slp_spm_data = 0; */
 u32 slp_spm_data = 0;
 
@@ -222,6 +244,28 @@ bool __attribute__ ((weak)) ConditionEnterSuspend(void)
 	return true;
 }
 
+void __attribute__((weak)) subsys_if_on(void)
+{
+	/* temporarily fix build fail */
+}
+
+void __attribute__((weak)) pll_if_on(void)
+{
+	/* temporarily fix build fail */
+}
+
+bool __attribute__((weak)) spm_cpusys0_can_power_down(void)
+{
+	/* temporarily fix build fail */
+	return false;
+}
+
+bool __attribute__((weak)) spm_cpusys1_can_power_down(void)
+{
+	/* temporarily fix build fail */
+	return false;
+}
+
 #ifdef CONFIG_MTK_SYSTRACKER
 void __attribute__ ((weak)) systracker_enable(void)
 {
@@ -252,7 +296,7 @@ static int slp_suspend_ops_enter(suspend_state_t state)
 	int ret = 0;
 
 #if SLP_SLEEP_DPIDLE_EN
-#if defined(CONFIG_MT_SND_SOC_6755) || defined(CONFIG_MT_SND_SOC_6797)
+#if defined(CONFIG_MT_SND_SOC_6755) /*|| defined(CONFIG_MT_SND_SOC_6757)*/ || defined(CONFIG_MT_SND_SOC_6797)
 	int fm_radio_is_playing = 0;
 
 	if (ConditionEnterSuspend() == true)
@@ -276,20 +320,25 @@ static int slp_suspend_ops_enter(suspend_state_t state)
 		slp_dump_pm_regs();
 #endif
 #if defined(CONFIG_ARCH_MT6755)
+#if !defined(CONFIG_FPGA_EARLY_PORTING)
 	pll_if_on();
 	subsys_if_on();
 #endif
-#if defined(CONFIG_ARCH_MT6797)
+#endif
+#if defined(CONFIG_ARCH_MT6797) || defined(CONFIG_ARCH_MT6757)
+#if !defined(CONFIG_FPGA_EARLY_PORTING)
 	if (slp_check_mtcmos_pll)
 		slp_check_pm_mtcmos_pll();
 #endif
-#ifndef CONFIG_MTK_FPGA
+#endif
+#if !defined(CONFIG_FPGA_EARLY_PORTING)
 #if 0
 	if (slp_check_mtcmos_pll)
 		slp_check_pm_mtcmos_pll();
 #endif
 
-#if defined(CONFIG_ARCH_MT6755)
+#if defined(CONFIG_ARCH_MT6755) || defined(CONFIG_ARCH_MT6757)
+#if !defined(CONFIG_FPGA_EARLY_PORTING)
 	if (!(spm_cpusys0_can_power_down() || spm_cpusys1_can_power_down())) {
 		slp_error("CANNOT SLEEP DUE TO CPUx PON, PWR_STATUS = 0x%x, PWR_STATUS_2ND = 0x%x\n",
 		     slp_read(PWR_STATUS), slp_read(PWR_STATUS_2ND));
@@ -299,6 +348,7 @@ static int slp_suspend_ops_enter(suspend_state_t state)
 	}
 #endif
 #endif
+#endif
 
 	if (is_infra_pdn(slp_spm_flags) && !is_cpu_pdn(slp_spm_flags)) {
 		slp_error("CANNOT SLEEP DUE TO INFRA PDN BUT CPU PON\n");
@@ -306,13 +356,16 @@ static int slp_suspend_ops_enter(suspend_state_t state)
 		goto LEAVE_SLEEP;
 	}
 
+#if !defined(CONFIG_FPGA_EARLY_PORTING)
 	if (!spm_load_firmware_status()) {
 		slp_error("SPM FIRMWARE IS NOT READY\n");
 		ret = -EPERM;
 		goto LEAVE_SLEEP;
 	}
+#endif
+
 #if SLP_SLEEP_DPIDLE_EN
-#if defined(CONFIG_MT_SND_SOC_6755) || defined(CONFIG_MT_SND_SOC_6797)
+#if defined(CONFIG_MT_SND_SOC_6755) /*|| defined(CONFIG_MT_SND_SOC_6757)*/ || defined(CONFIG_MT_SND_SOC_6797)
 	if (slp_ck26m_on | fm_radio_is_playing)
 #else
 	if (slp_ck26m_on)
@@ -322,13 +375,14 @@ static int slp_suspend_ops_enter(suspend_state_t state)
 #endif
 		slp_wake_reason = spm_go_to_sleep(slp_spm_flags, slp_spm_data);
 
+
 LEAVE_SLEEP:
 #ifdef CONFIG_MTKPASR
 	/* PASR SW operations */
 	leave_pasrdpd();
 #endif
 
-#ifndef CONFIG_MTK_FPGA
+#if !defined(CONFIG_FPGA_EARLY_PORTING)
 #ifdef CONFIG_MTK_SYSTRACKER
 	systracker_enable();
 #endif
@@ -428,7 +482,7 @@ void slp_module_init(void)
 	console_suspend_enabled = 0;
 #endif
 
-#ifndef CONFIG_MTK_FPGA
+#if !defined(CONFIG_FPGA_EARLY_PORTING)
 	spm_set_suspned_pcm_init_flag(&slp_spm_flags);
 #endif
 }

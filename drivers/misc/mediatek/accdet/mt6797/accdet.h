@@ -1,3 +1,16 @@
+/*
+ * Copyright (C) 2015 MediaTek Inc.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ */
+
 #ifndef _ACCDEH_H_
 #define _ACCDEH_H_
 #include <linux/kernel.h>
@@ -33,7 +46,7 @@
 #include <linux/time.h>
 
 #include <linux/string.h>
-#include <reg_accdet.h>
+#include "reg_accdet.h"
 
 /*----------------------------------------------------------------------
 IOCTL
@@ -72,6 +85,9 @@ void mt_accdet_pm_restore_noirq(void);
 long mt_accdet_unlocked_ioctl(unsigned int cmd, unsigned long arg);
 int mt_accdet_probe(struct platform_device *dev);
 int accdet_get_cable_type(void);
+/* just be called by audio module */
+int accdet_read_audio_res(unsigned int res_value);
+
 
 /****************************************************
 globle ACCDET variables
@@ -82,6 +98,7 @@ enum accdet_report_state {
 	HEADSET_MIC = 1,
 	HEADSET_NO_MIC = 2,
 	HEADSET_FIVE_POLE = 3,
+	LINE_OUT_DEVICE = (1<<5),
 	/*HEADSET_ILEGAL = 3,*/
 	/*DOUBLE_CHECK_TV = 4*/
 };
@@ -91,6 +108,7 @@ enum accdet_status {
 	MIC_BIAS = 1,
 	/*DOUBLE_CHECK = 2,*/
 	HOOK_SWITCH = 2,
+	LINE_OUT = 3,
 	/*MIC_BIAS_ILLEGAL =3,*/
 	/*TV_OUT = 5,*/
 	STAND_BY = 4

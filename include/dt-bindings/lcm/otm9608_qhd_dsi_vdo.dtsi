@@ -101,7 +101,7 @@
 
 		lcm_params-dsi-vertical_sync_active = <3>;
 		lcm_params-dsi-vertical_backporch = <12>;
-		lcm_params-dsi-vertical_frontporch = <10>;
+		lcm_params-dsi-vertical_frontporch = <20>;
 		lcm_params-dsi-vertical_frontporch_for_low_power;
 		lcm_params-dsi-vertical_active_line = <960>;
 		lcm_params-dsi-horizontal_sync_active = <10>;
@@ -144,7 +144,7 @@
 		lcm_params-dsi-rg_bir;
 		lcm_params-dsi-rg_bic;
 		lcm_params-dsi-rg_bp;
-		lcm_params-dsi-pll_clock = <252>;
+		lcm_params-dsi-pll_clock = <260>;
 		lcm_params-dsi-dsi_clock;
 		lcm_params-dsi-ssc_disable;
 		lcm_params-dsi-ssc_range;
@@ -156,7 +156,7 @@
 		/* compress_ratio, lr_mode_en, vlc_disable, vlc_config */
 		lcm_params-dsi-edp_panel;
 
-		lcm_params-dsi-customization_esd_check_enable = <0>;
+		lcm_params-dsi-customization_esd_check_enable = <1>;
 		lcm_params-dsi-esd_check_enable = <1>;
 
 		lcm_params-dsi-lcm_int_te_monitor;
@@ -183,6 +183,8 @@
 		lcm_params-dsi-vertical_vfp_lp;
 		lcm_params-physical_width;
 		lcm_params-physical_height;
+		lcm_params-physical_width_um;
+		lcm_params-physical_height_um;
 		lcm_params-od_table_size;
 		lcm_params-od_table;
 	};

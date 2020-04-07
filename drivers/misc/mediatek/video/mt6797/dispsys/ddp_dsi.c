@@ -483,7 +483,6 @@ static DSI_STATUS DSI_SetVdoFrmMode(DISP_MODULE_ENUM module, cmdqRecHandle cmdq,
 
 	return DSI_STATUS_OK;
 }
-#endif
 
 static DSI_STATUS DSI_SetSwitchMode(DISP_MODULE_ENUM module, cmdqRecHandle cmdq, unsigned int mode)
 {
@@ -502,7 +501,6 @@ static DSI_STATUS DSI_SetSwitchMode(DISP_MODULE_ENUM module, cmdqRecHandle cmdq,
 	return DSI_STATUS_OK;
 }
 
-#if 0 /* defined but not used */
 static DSI_STATUS DSI_SetBypassRack(DISP_MODULE_ENUM module, cmdqRecHandle cmdq,
 				    unsigned int bypass)
 {
@@ -3414,6 +3412,16 @@ int ddp_dsi_stop(DISP_MODULE_ENUM module, void *cmdq_handle)
 	return 0;
 }
 
+/*TUI will use the api*/
+int dsi_enable_irq(DISP_MODULE_ENUM module, void *handle, unsigned int enable)
+{
+	if (module == DISP_MODULE_DSI0 || module == DISP_MODULE_DSIDUAL)
+		DSI_OUTREGBIT(handle, DSI_INT_ENABLE_REG, DSI_REG[0]->DSI_INTEN, FRAME_DONE_INT_EN, enable);
+
+	return 0;
+}
+
+#if 0
 int ddp_dsi_switch_lcm_mode(DISP_MODULE_ENUM module, void *params)
 {
 	int i = 0;
@@ -3444,12 +3452,16 @@ int ddp_dsi_switch_lcm_mode(DISP_MODULE_ENUM module, void *params)
 	}
 	return 0;
 }
+#endif
 
 int ddp_dsi_switch_mode(DISP_MODULE_ENUM module, void *cmdq_handle, void *params)
 {
 	int i = 0;
 	LCM_DSI_MODE_SWITCH_CMD lcm_cmd = *((LCM_DSI_MODE_SWITCH_CMD *) (params));
+	LCM_DSI_PARAMS *dsi_params = &_dsi_context[0].dsi_params;
 	int mode = (int)(lcm_cmd.mode);
+	int wait_count = 100;
+
 	if (dsi_currect_mode == mode) {
 		DDPMSG
 		    ("[ddp_dsi_switch_mode] not need switch mode, current mode = %d, switch to %d\n",
@@ -3462,37 +3474,217 @@ int ddp_dsi_switch_mode(DISP_MODULE_ENUM module, void *cmdq_handle, void *params
 		i = 1;
 	else {
 		DDPMSG("dsi switch not support this cmd IF:%d\n", lcm_cmd.cmd_if);
-		return -1;
+		/* return -1; */
 	}
 
 	if (mode == 0) {	/* V2C */
+		DISPMSG("[C2V]v2c switch begin\n");
+#if 0
+		/* 1. enable dsi auto rack */
+		DSI_SetBypassRack(module, cmdq_handle, 1);
 
-		DSI_SetSwitchMode(module, cmdq_handle, 0);	/*  */
-		DSI_OUTREG32(cmdq_handle, (unsigned long)(DSI_REG[i]) + 0x130,
-			0x00001539 | (lcm_cmd.addr << 16) | (lcm_cmd.val[1] << 24));	/* DM = 0 */
+		/* 2. DDIC GRAM ON */
+		DSI_OUTREG32(cmdq_handle, &DSI_REG[i]->DSI_VM_CMD_CON,
+			0x00001521|(lcm_cmd.addr << 16)|(lcm_cmd.val[0] << 24)); /* RM = 1 */
 		DSI_OUTREGBIT(cmdq_handle, DSI_START_REG, DSI_REG[i]->DSI_START, VM_CMD_START, 0);
 		DSI_OUTREGBIT(cmdq_handle, DSI_START_REG, DSI_REG[i]->DSI_START, VM_CMD_START, 1);
-		DSI_MASKREG32(cmdq_handle, 0xF4020028, 0x1, 0x1);	/* reset mutex for V2C */
-		DSI_MASKREG32(cmdq_handle, 0xF4020028, 0x1, 0x0);	/*  */
-		DSI_MASKREG32(cmdq_handle, 0xF4020030, 0x1, 0x0);	/* mutext to cmd  mode */
-		cmdqRecFlush(cmdq_handle);
-		cmdqRecReset(cmdq_handle);
-		cmdqRecWaitNoClear(cmdq_handle, CMDQ_SYNC_TOKEN_STREAM_EOF);
-		DSI_SetMode(module, NULL, 0);
-	} else {		/* C2V */
+		/* may clear by cpu */
+		DSI_POLLREG32(cmdq_handle, &DSI_REG[i]->DSI_INTSTA, 0x00000020, 0x20);
 
-		DSI_SetMode(module, cmdq_handle, mode);
-		DSI_SetSwitchMode(module, cmdq_handle, 1);	/* EXT TE could not use C2V */
-		DSI_MASKREG32(cmdq_handle, 0xF4020030, 0x1, 0x1);	/* mutext to video mode */
-		DSI_OUTREG32(cmdq_handle, (unsigned long)(DSI_REG[i]) + 0x200 + 0,
-			     0x00001500 | (lcm_cmd.addr << 16) | (lcm_cmd.val[0] << 24));
-		DSI_OUTREG32(cmdq_handle, (unsigned long)(DSI_REG[i]) + 0x200 + 4, 0x00000020);
-		DSI_OUTREG32(cmdq_handle, (unsigned long)(DSI_REG[i]) + 0x60, 2);
-		DSI_Start(module, cmdq_handle);	/* ???????????????????????????????? */
-		DSI_MASKREG32(NULL, 0xF4020020, 0x1, 0x1);	/* release mutex for video mode */
+		/* 3. enable dsi frame mode */
+		DSI_SetVdoFrmMode(module, cmdq_handle, 1);
+		DSI_POLLREG32(cmdq_handle, &DSI_REG[i]->DSI_INTSTA, 0x80000000, 0x0);
+
+		/* 4. flush another frame to DDIC, useless? */
+		DSI_OUTREG32(cmdq_handle, &DSI_REG[i]->DSI_CMDQ_SIZE, 0);
+		DSI_Start(module, cmdq_handle);
+		DSI_POLLREG32(cmdq_handle, &DSI_REG[i]->DSI_INTSTA, 0x00000008, 0x8);
+
+		/* 5. v2c switch on */
+		DSI_SetSwitchMode(module, cmdq_handle, 0);
+
+		DSI_OUTREG32(cmdq_handle, &DSI_REG[i]->DSI_VM_CMD_CON,
+				0x00001539|(lcm_cmd.addr << 16)|(lcm_cmd.val[1] << 24)); /* DM = 0 */
+		DSI_OUTREGBIT(cmdq_handle, DSI_START_REG, DSI_REG[i]->DSI_START, VM_CMD_START, 0);
+		DSI_OUTREGBIT(cmdq_handle, DSI_START_REG, DSI_REG[i]->DSI_START, VM_CMD_START, 1);
+		DSI_Start(module, cmdq_handle);
+
+		/* 6. polling dsi idle -- vdo mode over */
+		DSI_SetMode(module, cmdq_handle, 0);
+		DSI_POLLREG32(cmdq_handle, &DSI_REG[i]->DSI_INTSTA, 0x80000000, 0x0);
+
+		/* 7. mutex setting -- cmd mode */
+		DSI_MASKREG32(cmdq_handle, DISP_REG_CONFIG_MUTEX0_RST, 0x1, 0x1); /* reset mutex for V2C */
+		DSI_MASKREG32(cmdq_handle, DISP_REG_CONFIG_MUTEX0_RST, 0x1, 0x0);
+		DSI_MASKREG32(cmdq_handle, DISP_REG_CONFIG_MUTEX0_SOF, 0x7, 0x0); /* mutex to cmd  mode */
+		if (disp_helper_get_option(DISP_OPT_MUTEX_EOF_EN_FOR_CMD_MODE))
+				DSI_MASKREG32(cmdq_handle, DISP_REG_CONFIG_MUTEX0_SOF, 0x1c0, 0x40); /* eof */
+
+		/* 8. cmd mode setting */
+		DSI_SetVdoFrmMode(module, cmdq_handle, 0);
+		DSI_OUTREG32(cmdq_handle, &DSI_CMDQ_REG[i]->data[0], 0x002c3909);
+		DSI_OUTREG32(cmdq_handle, &DSI_REG[i]->DSI_CMDQ_SIZE, 1);
+
+		/* te_rdy irq enable in dsi config */
+		DSI_OUTREGBIT(NULL, DSI_INT_ENABLE_REG, DSI_REG[i]->DSI_INTEN, TE_RDY, 1);
+		DSI_OUTREGBIT(cmdq_handle, DSI_TXRX_CTRL_REG, DSI_REG[i]->DSI_TXRX_CTRL, EXT_TE_EN, 1);
+		/* 9. blocking flush */
 		cmdqRecFlush(cmdq_handle);
 		cmdqRecReset(cmdq_handle);
+
+		dsi_analysis(module);
+		DSI_DumpRegisters(module, 2);
+
+		/* 10. disable dsi auto rack
+		DSI_SetBypassRack(module, NULL, 0);*/
+#else
+		/* 1. polling dsi idle -- vdo mode over */
+		DSI_SetMode(module, cmdq_handle, 0);
+		DSI_POLLREG32(cmdq_handle, &DSI_REG[i]->DSI_INTSTA, 0x80000000, 0x0);
+		DSI_OUTREGBIT(cmdq_handle, MIPITX_DSI_PLL_CON1_REG, DSI_PHY_REG[i]->MIPITX_DSI_PLL_CON1,
+								  RG_DSI0_MPPLL_SDM_SSC_EN, 1);
+		dsi_params->ssc_disable = 0;
+
+		/* 2. mutex setting -- cmd mode */
+		DSI_MASKREG32(cmdq_handle, DISP_REG_CONFIG_MUTEX0_RST, 0x1, 0x1); /* reset mutex for V2C */
+		DSI_MASKREG32(cmdq_handle, DISP_REG_CONFIG_MUTEX0_RST, 0x1, 0x0);
+		DSI_MASKREG32(cmdq_handle, DISP_REG_CONFIG_MUTEX0_SOF, 0x7, 0x0); /* mutex to cmd  mode */
+		DSI_MASKREG32(cmdq_handle, DISP_REG_CONFIG_MUTEX0_SOF, 0x0, 0x40); /* eof */
+
+		if (disp_helper_get_option(DISP_OPT_MUTEX_EOF_EN_FOR_CMD_MODE))
+				DSI_MASKREG32(cmdq_handle, DISP_REG_CONFIG_MUTEX0_SOF, 0x1c0, 0x40); /* eof */
+
+		/* 3.te_rdy irq enable in dsi config */
+		DSI_OUTREGBIT(NULL, DSI_INT_ENABLE_REG, DSI_REG[i]->DSI_INTEN, TE_RDY, 1);
+		DSI_OUTREGBIT(cmdq_handle, DSI_TXRX_CTRL_REG, DSI_REG[i]->DSI_TXRX_CTRL, EXT_TE_EN, 1);
+
+		/* 4.Set packet_size_mult */
+		if (dsi_params->packet_size_mult) {
+			unsigned int ps_wc = 0, h = 0;
+
+			h = DSI_INREG32(DSI_VACT_NL_REG, &DSI_REG[i]->DSI_VACT_NL);
+			h /= dsi_params->packet_size_mult;
+			DSI_OUTREGBIT(cmdq_handle, DSI_VACT_NL_REG, DSI_REG[i]->DSI_VACT_NL, VACT_NL, h);
+			ps_wc = DSI_INREG32(DSI_PSCTRL_REG, &DSI_REG[i]->DSI_PSCTRL);
+			ps_wc *= dsi_params->packet_size_mult;
+			DSI_OUTREGBIT(cmdq_handle, DSI_PSCTRL_REG, DSI_REG[i]->DSI_PSCTRL, DSI_PS_WC, ps_wc);
+		}
+
+		/* 5. Adjust PLL clk */
+		DSI_DisableClk(module, cmdq_handle);
+		DSI_PHY_clk_change(module, cmdq_handle, dsi_params);
+		DSI_EnableClk(module, cmdq_handle);
+		DSI_PHY_TIMCONFIG(module, cmdq_handle, dsi_params);
+
+		/* 6.update one frame */
+		DSI_OUTREG32(cmdq_handle, &DSI_CMDQ_REG[i]->data[0], 0x002c3909);
+		DSI_OUTREG32(cmdq_handle, &DSI_REG[i]->DSI_CMDQ_SIZE, 1);
+		cmdqRecClearEventToken(cmdq_handle, CMDQ_EVENT_DISP_RDMA0_EOF);
+		DISP_REG_SET(cmdq_handle, DISP_REG_CONFIG_MUTEX0_EN, 1);
+		DSI_Start(module, cmdq_handle);
+		cmdqRecWaitNoClear(cmdq_handle, CMDQ_EVENT_DISP_RDMA0_EOF);
+
+		/* 7. blocking flush */
+		cmdqRecFlush(cmdq_handle);
+		cmdqRecReset(cmdq_handle);
+#endif
+		dsi_analysis(module);
+		DSI_DumpRegisters(module, 2);
+
+		DISPMSG("[C2V]v2c switch finished\n");
+	} else {		/* C2V */
+		DISPMSG("[C2V]c2v switch begin\n");
+		/* 1. Adjust PLL clk */
 		cmdqRecWaitNoClear(cmdq_handle, CMDQ_SYNC_TOKEN_STREAM_EOF);
+		DSI_DisableClk(module, cmdq_handle);
+		DSI_PHY_clk_change(module, cmdq_handle, dsi_params);
+		DSI_EnableClk(module, cmdq_handle);
+		DSI_PHY_TIMCONFIG(module, cmdq_handle, dsi_params);
+
+		/* 2. wait TE */
+		cmdqRecClearEventToken(cmdq_handle, CMDQ_EVENT_DSI_TE);
+		cmdqRecWait(cmdq_handle, CMDQ_EVENT_DSI_TE);
+
+		/* 3. disable DSI EXT TE, only BTA te could work, reason unknown */
+		DSI_OUTREGBIT(cmdq_handle, DSI_TXRX_CTRL_REG, DSI_REG[i]->DSI_TXRX_CTRL, EXT_TE_EN, 0);
+		DSI_OUTREGBIT(cmdq_handle, MIPITX_DSI_PLL_CON1_REG, DSI_PHY_REG[i]->MIPITX_DSI_PLL_CON1,
+								  RG_DSI0_MPPLL_SDM_SSC_EN, 0);
+		dsi_params->ssc_disable = 1;
+
+		/* 4. change to vdo mode */
+		DSI_SetMode(module, cmdq_handle, mode);
+		/* DSI_SetSwitchMode(module, cmdq_handle, 1); */
+		/* DSI_SetBypassRack(module, cmdq_handle, 1); */
+
+		/* 4. c2v switch on
+		DSI_OUTREG32(cmdq_handle,  &DSI_CMDQ_REG[i]->data[0], 0x00000020);
+		DSI_OUTREG32(cmdq_handle,  &DSI_CMDQ_REG[i]->data[1],
+				0x00001500 |(lcm_cmd.addr << 16)|(lcm_cmd.val[0]<< 24));
+		DSI_OUTREG32(cmdq_handle,  &DSI_REG[i]->DSI_CMDQ_SIZE, 2);
+		DSI_Start(module, cmdq_handle);
+		*/
+
+		/* 5. mutex setting */
+		DSI_MASKREG32(cmdq_handle, DISP_REG_CONFIG_MUTEX0_SOF, 0x7, 0x1); /* sof */
+		DSI_MASKREG32(cmdq_handle, DISP_REG_CONFIG_MUTEX0_SOF, 0x1c0, 0x40); /* eof */
+
+		/* 6.Disable packet_size_mult */
+		if (dsi_params->packet_size_mult) {
+			unsigned int ps_wc = 0, h = 0;
+
+			h = DSI_INREG32(DSI_VACT_NL_REG, &DSI_REG[i]->DSI_VACT_NL);
+			h *= dsi_params->packet_size_mult;
+			DSI_OUTREGBIT(cmdq_handle, DSI_VACT_NL_REG, DSI_REG[i]->DSI_VACT_NL, VACT_NL, h);
+			ps_wc = DSI_INREG32(DSI_PSCTRL_REG, &DSI_REG[i]->DSI_PSCTRL);
+			ps_wc /= dsi_params->packet_size_mult;
+			DSI_OUTREGBIT(cmdq_handle, DSI_PSCTRL_REG, DSI_REG[i]->DSI_PSCTRL, DSI_PS_WC, ps_wc);
+		}
+
+		/* 7. trigger vdo mode frame update */
+		DSI_MASKREG32(cmdq_handle, DISP_REG_CONFIG_MUTEX0_EN, 0x1, 0x1); /* release mutex for video mode */
+		DSI_Start(module, cmdq_handle);
+
+		/* 8. blocking flush */
+		cmdqRecFlush(cmdq_handle);
+		cmdqRecReset(cmdq_handle);
+
+		DISPMSG("[C2V]after c2v switch, cmdq flushed\n");
+
+		/* THIS IS NOT A GOOD DESIGN!!!!!
+		TEMP WORKAROUND FOR ESD/CV SWITCH */
+		/******************************************************************/
+		while (wait_count) {
+				DISPMSG("[C2V]wait loop %d\n", wait_count);
+				if (DSI_REG[i]->DSI_STATE_DBG6.CMTRL_STATE == 0x1) {
+						DISPMSG("[C2V]after c2v switch, dsi fsm is idle\n");
+						break;
+				}
+				lcm_mdelay(1);
+				wait_count--;
+		}
+
+		if (wait_count == 0) {
+				DISPERR("[C2V]after c2v switch, dsi state is not idle[0x%08x]\n",
+						DSI_REG[i]->DSI_STATE_DBG6.CMTRL_STATE);
+				dsi_analysis(module);
+				DSI_DumpRegisters(module, 2);
+				DSI_Reset(module, NULL);
+				DSI_OUTREGBIT(NULL, DSI_MODE_CTRL_REG, DSI_REG[i]->DSI_MODE_CTRL,
+						C2V_SWITCH_ON, 0);
+				DSI_OUTREG32(NULL,	&DSI_REG[i]->DSI_CMDQ_SIZE, 0);
+				DSI_Start(module, NULL);
+
+		}
+		/******************************************************************/
+
+		dsi_analysis(module);
+		DSI_DumpRegisters(module, 2);
+
+		/* 8. disable dsi auto rack  */
+		/* DSI_SetBypassRack(module, NULL, 0); */
+
+		DISPMSG("[C2V]c2v switch finished\n");
+
 	}
 	dsi_currect_mode = mode;
 	for (i = DSI_MODULE_BEGIN(module); i <= DSI_MODULE_END(module); i++)
@@ -3551,7 +3743,7 @@ int ddp_dsi_ioctl(DISP_MODULE_ENUM module, void *cmdq_handle, unsigned int ioctl
 		}
 	case DDP_SWITCH_LCM_MODE:
 		{
-			ret = ddp_dsi_switch_lcm_mode(module, params);
+			/* ret = ddp_dsi_switch_lcm_mode(module, params); */
 			break;
 		}
 	case DDP_BACK_LIGHT:
@@ -3605,6 +3797,13 @@ int ddp_dsi_ioctl(DISP_MODULE_ENUM module, void *cmdq_handle, unsigned int ioctl
 			DSI_PHY_clk_change(module, cmdq_handle, dsi_params);
 			DSI_EnableClk(module, cmdq_handle);
 			DSI_PHY_TIMCONFIG(module, cmdq_handle, dsi_params);
+			break;
+		}
+	case DDP_UPDATE_PLL_CLK_ONLY:
+		{
+			LCM_DSI_PARAMS *dsi_params = &_dsi_context[0].dsi_params;
+
+			dsi_params->PLL_CLOCK = *params;
 			break;
 		}
 	case DDP_PARTIAL_UPDATE:
@@ -3770,6 +3969,8 @@ int ddp_dsi_power_off(DISP_MODULE_ENUM module, void *cmdq_handle)
 	int i = 0;
 	int ret = 0;
 	unsigned int value = 0;
+	unsigned int try_cnt = 1;
+
 	DISPFUNC();
 	/* DSI_DumpRegisters(module,1); */
 
@@ -3788,11 +3989,21 @@ int ddp_dsi_power_off(DISP_MODULE_ENUM module, void *cmdq_handle)
 		/* make sure enter ulps mode */
 		while (1) {
 			mdelay(1);
+
 			value = INREG32(&DSI_REG[0]->DSI_STATE_DBG1);
 			value = value >> 24;
-			if (value == 0x20)
+			if (value == 0x20) {
+				if (try_cnt > 1)
+					DDPMSG("dsi in ulps mode, try_cnt(%u)\n", try_cnt);
 				break;
-			DDPMSG("dsi not in ulps mode, try again...\n");
+			}
+
+			if (try_cnt == 1)
+				DDPERR("dsi not in ulps mode, try again...(%u)\n", try_cnt);
+			else if (!(try_cnt & 0x3FF))
+				DDPMSG("dsi not in ulps mode, try again...(%u)\n", try_cnt);
+
+			try_cnt++;
 		}
 		/* clear lane_num when enter ulps */
 		for (i = DSI_MODULE_BEGIN(module); i <= DSI_MODULE_END(module); i++)
@@ -4263,7 +4474,8 @@ UINT32 PanelMaster_get_TE_status(UINT32 dsi_idx)
 
 UINT32 PanelMaster_get_CC(UINT32 dsi_idx)
 {
-	DSI_TXRX_CTRL_REG tmp_reg;
+	DSI_TXRX_CTRL_REG tmp_reg = { 0 };
+
 	if ((dsi_idx == PM_DSI0) || (dsi_idx == PM_DSI_DUAL))
 		DSI_READREG32(PDSI_TXRX_CTRL_REG, &tmp_reg, &DSI_REG[0]->DSI_TXRX_CTRL);
 	else if (dsi_idx == PM_DSI1)

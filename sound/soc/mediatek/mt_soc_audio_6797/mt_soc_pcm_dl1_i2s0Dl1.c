@@ -1,17 +1,19 @@
 /*
- * Copyright (C) 2007 The Android Open Source Project
+ * Copyright (C) 2015 MediaTek Inc.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * along with this program
+ * If not, see <http://www.gnu.org/licenses/>.
  */
 /*******************************************************************************
  *
@@ -131,9 +133,8 @@ static int Audio_Irqcnt1_Set(struct snd_kcontrol *kcontrol, struct snd_ctl_elem_
 		irq1_cnt,
 		ucontrol->value.integer.value[0]);
 
-	if (irq1_cnt == ucontrol->value.integer.value[0]) {
+	if (irq1_cnt == ucontrol->value.integer.value[0])
 		return 0;
-	}
 
 	irq1_cnt = ucontrol->value.integer.value[0];
 
@@ -187,20 +188,6 @@ static int mtk_pcm_I2S0dl1_stop(struct snd_pcm_substream *substream)
 	irq_remove_user(substream, Soc_Aud_IRQ_MCU_MODE_IRQ1_MCU_MODE);
 
 	SetMemoryPathEnable(Soc_Aud_Digital_Block_MEM_DL1, false);
-
-	/* here start digital part */
-	SetConnection(Soc_Aud_InterCon_DisConnect, Soc_Aud_InterConnectionInput_I05,
-		      Soc_Aud_InterConnectionOutput_O00);
-	SetConnection(Soc_Aud_InterCon_DisConnect, Soc_Aud_InterConnectionInput_I06,
-		      Soc_Aud_InterConnectionOutput_O01);
-	SetConnection(Soc_Aud_InterCon_DisConnect, Soc_Aud_InterConnectionInput_I05,
-		      Soc_Aud_InterConnectionOutput_O03);
-	SetConnection(Soc_Aud_InterCon_DisConnect, Soc_Aud_InterConnectionInput_I06,
-		      Soc_Aud_InterConnectionOutput_O04);
-	SetConnection(Soc_Aud_InterCon_DisConnect, Soc_Aud_InterConnectionInput_I05,
-		      Soc_Aud_InterConnectionOutput_O28);
-	SetConnection(Soc_Aud_InterCon_DisConnect, Soc_Aud_InterConnectionInput_I06,
-		      Soc_Aud_InterConnectionOutput_O29);
 
 	ClearMemBlock(Soc_Aud_Digital_Block_MEM_DL1);
 	return 0;
@@ -374,6 +361,19 @@ static int mtk_pcm_I2S0dl1_close(struct snd_pcm_substream *substream)
 	pr_warn("%s\n", __func__);
 
 	if (mPrepareDone == true) {
+		/* here start digital part */
+		SetConnection(Soc_Aud_InterCon_DisConnect, Soc_Aud_InterConnectionInput_I05,
+			      Soc_Aud_InterConnectionOutput_O00);
+		SetConnection(Soc_Aud_InterCon_DisConnect, Soc_Aud_InterConnectionInput_I06,
+			      Soc_Aud_InterConnectionOutput_O01);
+		SetConnection(Soc_Aud_InterCon_DisConnect, Soc_Aud_InterConnectionInput_I05,
+			      Soc_Aud_InterConnectionOutput_O03);
+		SetConnection(Soc_Aud_InterCon_DisConnect, Soc_Aud_InterConnectionInput_I06,
+			      Soc_Aud_InterConnectionOutput_O04);
+		SetConnection(Soc_Aud_InterCon_DisConnect, Soc_Aud_InterConnectionInput_I05,
+			      Soc_Aud_InterConnectionOutput_O28);
+		SetConnection(Soc_Aud_InterCon_DisConnect, Soc_Aud_InterConnectionInput_I06,
+			      Soc_Aud_InterConnectionOutput_O29);
 		/* stop DAC output */
 		SetMemoryPathEnable(Soc_Aud_Digital_Block_I2S_OUT_DAC, false);
 		if (GetI2SDacEnable() == false)
@@ -392,7 +392,8 @@ static int mtk_pcm_I2S0dl1_close(struct snd_pcm_substream *substream)
 			pr_warn("%s mI2S0dl1_hdoutput_control == %d\n", __func__,
 			       mI2S0dl1_hdoutput_control);
 			/* here to open APLL */
-			DisableALLbySampleRate(substream->runtime->rate);
+			if (!mtk_soc_always_hd)
+				DisableALLbySampleRate(substream->runtime->rate);
 			EnableI2SDivPower(AUDIO_APLL12_DIV1, false);
 			EnableI2SDivPower(AUDIO_APLL12_DIV3, false);
 		}
@@ -453,7 +454,19 @@ static int mtk_pcm_I2S0dl1_prepare(struct snd_pcm_substream *substream)
 						  Soc_Aud_InterConnectionOutput_O29);
 			mI2SWLen = Soc_Aud_I2S_WLEN_WLEN_16BITS;
 		}
-
+		/* here start digital part */
+		SetConnection(Soc_Aud_InterCon_Connection, Soc_Aud_InterConnectionInput_I05,
+			      Soc_Aud_InterConnectionOutput_O00);
+		SetConnection(Soc_Aud_InterCon_Connection, Soc_Aud_InterConnectionInput_I06,
+			      Soc_Aud_InterConnectionOutput_O01);
+		SetConnection(Soc_Aud_InterCon_Connection, Soc_Aud_InterConnectionInput_I05,
+			      Soc_Aud_InterConnectionOutput_O03);
+		SetConnection(Soc_Aud_InterCon_Connection, Soc_Aud_InterConnectionInput_I06,
+			      Soc_Aud_InterConnectionOutput_O04);
+		SetConnection(Soc_Aud_InterCon_Connection, Soc_Aud_InterConnectionInput_I05,
+			      Soc_Aud_InterConnectionOutput_O28);
+		SetConnection(Soc_Aud_InterCon_Connection, Soc_Aud_InterConnectionInput_I06,
+			      Soc_Aud_InterConnectionOutput_O29);
 		/* TODO: KC: use Set2ndI2SOut() to set i2s3 */
 		/* I2S out Setting */
 		u32AudioI2S = SampleRateTransform(runtime->rate, Soc_Aud_Digital_Block_I2S_OUT_2) << 8;
@@ -464,7 +477,8 @@ static int mtk_pcm_I2S0dl1_prepare(struct snd_pcm_substream *substream)
 			pr_warn("%s mI2S0dl1_hdoutput_control == %d\n", __func__,
 			       mI2S0dl1_hdoutput_control);
 			/* here to open APLL */
-			EnableALLbySampleRate(runtime->rate);
+			if (!mtk_soc_always_hd)
+				EnableALLbySampleRate(runtime->rate);
 			SetCLkMclk(Soc_Aud_I2S1, runtime->rate); /* select I2S */
 			SetCLkMclk(Soc_Aud_I2S3, runtime->rate);
 			EnableI2SDivPower(AUDIO_APLL12_DIV1, true);
@@ -504,20 +518,6 @@ static int mtk_pcm_I2S0dl1_start(struct snd_pcm_substream *substream)
 	struct snd_pcm_runtime *runtime = substream->runtime;
 
 	pr_warn("%s\n", __func__);
-	/* here start digital part */
-
-	SetConnection(Soc_Aud_InterCon_Connection, Soc_Aud_InterConnectionInput_I05,
-		      Soc_Aud_InterConnectionOutput_O00);
-	SetConnection(Soc_Aud_InterCon_Connection, Soc_Aud_InterConnectionInput_I06,
-		      Soc_Aud_InterConnectionOutput_O01);
-	SetConnection(Soc_Aud_InterCon_Connection, Soc_Aud_InterConnectionInput_I05,
-		      Soc_Aud_InterConnectionOutput_O03);
-	SetConnection(Soc_Aud_InterCon_Connection, Soc_Aud_InterConnectionInput_I06,
-		      Soc_Aud_InterConnectionOutput_O04);
-	SetConnection(Soc_Aud_InterCon_Connection, Soc_Aud_InterConnectionInput_I05,
-		      Soc_Aud_InterConnectionOutput_O28);
-	SetConnection(Soc_Aud_InterCon_Connection, Soc_Aud_InterConnectionInput_I06,
-		      Soc_Aud_InterConnectionOutput_O29);
 
 	/* here to set interrupt */
 	irq_add_user(substream,

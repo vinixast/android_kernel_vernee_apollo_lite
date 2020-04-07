@@ -11,4 +11,4 @@
 # GNU General Public License for more details.
 #
 
-obj-$(CONFIG_MMC_MTK) := partition.o
+obj-y := partition.o

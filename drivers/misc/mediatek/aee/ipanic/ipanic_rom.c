@@ -47,6 +47,12 @@ int __weak has_mt_dump_support(void)
 	return 0;
 }
 
+int __weak panic_dump_disp_log(void *data, unsigned char *buffer, size_t sz_buf)
+{
+	pr_notice("%s: weak function\n", __func__);
+	return 0;
+}
+
 #if 1
 void ipanic_block_scramble(u8 *buf, int buflen)
 {
@@ -120,7 +126,7 @@ static int ipanic_mmprofile(void *data, unsigned char *buffer, size_t sz_buf)
 		}
 	}
 
-	MMProfileGetDumpBuffer(index, (unsigned int *)&pbuf, &bufsize);
+	MMProfileGetDumpBuffer(index, (unsigned long *)&pbuf, &bufsize);
 	if (bufsize == 0) {
 		errno = 0;
 	} else if (bufsize > sz_buf) {
@@ -156,7 +162,7 @@ const struct ipanic_dt_op ipanic_dt_ops[] = {
 	{"SYS_RADIO_LOG_RAW", __RADIO_BUF_SIZE, ipanic_alog_buffer},
 	{"SYS_LAST_LOG", LAST_LOG_LEN, ipanic_klog_buffer},
 	{"SYS_ATF_LOG", ATF_LOG_SIZE, ipanic_atflog_buffer},
-	{"reserved", 0, NULL},	/* 16 */
+	{"SYS_DISP_LOG", DISP_LOG_SIZE, panic_dump_disp_log},	/* 16 */
 	{"reserved", 0, NULL},
 	{"reserved", 0, NULL},
 	{"reserved", 0, NULL},
@@ -472,6 +478,7 @@ int ipanic(struct notifier_block *this, unsigned long event, void *ptr)
 	struct ipanic_data_header *dheader;
 	struct kmsg_dumper dumper;
 	struct ipanic_atf_log_rec atf_log = { ATF_LOG_SIZE, 0, 0 };
+	void *data = NULL;
 	int dt;
 	int errno;
 	struct ipanic_header *ipanic_hdr;
@@ -507,10 +514,14 @@ int ipanic(struct notifier_block *this, unsigned long event, void *ptr)
 	aee_wdt_dump_info();
 	ipanic_klog_region(&dumper);
 	ipanic_data_to_sd(IPANIC_DT_WDT_LOG, &dumper);
+#ifdef CONFIG_MTK_WQ_DEBUG
+	wq_debug_dump();
+#endif
 	ipanic_klog_region(&dumper);
 	ipanic_data_to_sd(IPANIC_DT_WQ_LOG, &dumper);
 	ipanic_data_to_sd(IPANIC_DT_MMPROFILE, 0);
 	ipanic_data_to_sd(IPANIC_DT_ATF_LOG, &atf_log);
+	ipanic_data_to_sd(IPANIC_DT_DISP_LOG, data);
 	errno = ipanic_header_to_sd(0);
 	if (!IS_ERR(ERR_PTR(errno)))
 		mrdump_mini_ipanic_done();
@@ -558,11 +569,6 @@ void ipanic_recursive_ke(struct pt_regs *regs, struct pt_regs *excp_regs, int cp
 	errno = ipanic_header_to_sd(0);
 	if (!IS_ERR(ERR_PTR(errno)))
 		mrdump_mini_ipanic_done();
-	if (ipanic_dt_active(IPANIC_DT_RAM_DUMP)) {
-		aee_nested_printf("RAMDUMP.\n");
-		__mrdump_create_oops_dump(AEE_REBOOT_MODE_NESTED_EXCEPTION, excp_regs,
-					  "Nested Panic");
-	}
 	bust_spinlocks(0);
 }
 EXPORT_SYMBOL(ipanic_recursive_ke);
@@ -631,10 +637,15 @@ static int ipanic_die(struct notifier_block *self, unsigned long cmd, void *ptr)
 	struct kmsg_dumper dumper;
 	struct die_args *dargs = (struct die_args *)ptr;
 
-	smp_send_stop();
-	LOGI("ipanic: stop cpu as early as possible\n");
-
+	aee_rr_rec_exp_type(2);
+	aee_rr_rec_fiq_step(AEE_FIQ_STEP_KE_IPANIC_DIE);
 	aee_disable_api();
+
+	if (aee_rr_curr_exp_type() == 1)
+		__mrdump_create_oops_dump(AEE_REBOOT_MODE_WDT, dargs->regs, "WDT/HWT");
+	else
+		__mrdump_create_oops_dump(AEE_REBOOT_MODE_KERNEL_OOPS, dargs->regs, "Kernel Oops");
+
 	__show_regs(dargs->regs);
 	dump_stack();
 	aee_rr_rec_scp();
@@ -642,15 +653,17 @@ static int ipanic_die(struct notifier_block *self, unsigned long cmd, void *ptr)
 	if (aee_rr_curr_exp_type() == 1)
 		sysrq_sched_debug_show_at_AEE();
 #endif
+#ifdef CONFIG_MTK_WQ_DEBUG
+	wq_debug_dump();
+#endif
 
-	aee_rr_rec_fiq_step(AEE_FIQ_STEP_KE_IPANIC_DIE);
-	aee_rr_rec_exp_type(2);
 	mrdump_mini_ke_cpu_regs(dargs->regs);
-	flush_cache_all();
+	__disable_dcache__inner_flush_dcache_L1__inner_flush_dcache_L2();
 
-	if (aee_rr_curr_exp_type() == 2)
-		/* No return if mrdump is enable */
-		__mrdump_create_oops_dump(AEE_REBOOT_MODE_KERNEL_OOPS, dargs->regs, "Kernel Oops");
+#if defined(CONFIG_MTK_MLC_NAND_SUPPORT) || defined(CONFIG_MTK_TLC_NAND_SUPPORT)
+	LOGE("MLC/TLC project, disable ipanic flow\n");
+	ipanic_enable = 0; /*for mlc/tlc nand project, only enable lk flow*/
+#endif
 
 	if (!has_mt_dump_support())
 		emergency_restart();
@@ -679,6 +692,9 @@ static struct notifier_block die_blk = {
 int __init aee_ipanic_init(void)
 {
 	spin_lock_init(&ipanic_lock);
+
+	mrdump_init();
+
 	atomic_notifier_chain_register(&panic_notifier_list, &panic_blk);
 	register_die_notifier(&die_blk);
 	register_ipanic_ops(&ipanic_oops_ops);

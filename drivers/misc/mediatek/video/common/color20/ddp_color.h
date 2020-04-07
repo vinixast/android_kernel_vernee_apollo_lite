@@ -78,13 +78,13 @@ enum {
 #define MIRAVISION_HW_VERSION       (2)
 #elif defined(CONFIG_ARCH_MT6795)
 #define MIRAVISION_HW_VERSION       (3)
-#elif defined(CONFIG_ARCH_MT6735)
+#elif defined(CONFIG_ARCH_MT6735) || defined(CONFIG_ARCH_MT8167)
 #define MIRAVISION_HW_VERSION       (4)
 #elif defined(CONFIG_ARCH_MT6735M)
 #define MIRAVISION_HW_VERSION       (5)
 #elif defined(CONFIG_ARCH_MT6753)
 #define MIRAVISION_HW_VERSION       (6)
-#elif defined(CONFIG_ARCH_MT6580)
+#elif defined(CONFIG_ARCH_MT6570) || defined(CONFIG_ARCH_MT6580)
 #define MIRAVISION_HW_VERSION       (7)
 #elif defined(CONFIG_ARCH_MT6755)
 #define MIRAVISION_HW_VERSION       (8)
@@ -94,7 +94,7 @@ enum {
 #define MIRAVISION_HW_VERSION       (0)
 #endif
 
-#define MIRAVISION_SW_VERSION       (2)	/* 1:Android Lollipop, 2:Android Marshmallow */
+#define MIRAVISION_SW_VERSION       (3)	/* 3:Android N */
 #define MIRAVISION_SW_FEATURE_VIDEO_DC  (0x1)
 #define MIRAVISION_SW_FEATURE_AAL       (0x2)
 #define MIRAVISION_SW_FEATURE_PQDS       (0x4)

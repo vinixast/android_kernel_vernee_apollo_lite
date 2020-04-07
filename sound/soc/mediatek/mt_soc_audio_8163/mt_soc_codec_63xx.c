@@ -1,17 +1,19 @@
 /*
- * Copyright (C) 2007 The Android Open Source Project
+ * Copyright (C) 2015 MediaTek Inc.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * along with this program
+ * If not, see <http://www.gnu.org/licenses/>.
  */
 /*******************************************************************************
  *
@@ -592,6 +594,7 @@ uint32 GetDLFrequency(uint32 frequency)
 		break;
 	case 48000:
 		Reg_value = 10;
+		break;
 	default:
 		pr_warn("%s, not supported frequency, return with default 8K\n", __func__);
 	}
@@ -908,9 +911,11 @@ uint32 GetDLNewIFFrequency(unsigned int frequency)
 		break;
 	case 48000:
 		Reg_value = 8;
+		break;
 	default:
 		pr_warn("%s, not supported frequency, return with default 8K\n", __func__);
 	}
+	PRINTK_AUDDRV("%s frequency = %d Reg_value = %d\n", __func__, frequency, Reg_value);
 	return Reg_value;
 }
 
@@ -926,10 +931,11 @@ uint32 GetULNewIFFrequency(unsigned int frequency)
 		break;
 	case 48000:
 		Reg_value = 3;
+		break;
 	default:
 		pr_warn("%s, not supported frequency %d\n", __func__, frequency);
 	}
-	PRINTK_AUDDRV("%s Reg_value = %d\n", __func__, Reg_value);
+	PRINTK_AUDDRV("%s frequency = %d Reg_value = %d\n", __func__, frequency, Reg_value);
 	return Reg_value;
 }
 
@@ -3327,6 +3333,15 @@ static int mtk_mt6323_codec_dev_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static void mtk_mt6323_codec_dev_shutdown(struct platform_device *pdev)
+{
+	pr_debug("%s\n", __func__);
+	Ana_Set_Reg(AUDTOP_CON6, 0x17E2, 0xFFFF);
+	mdelay(3500);
+	Ana_Set_Reg(AUDTOP_CON6, 0x15E2, 0xFFFF);
+}
+
+
 #ifdef CONFIG_OF
 static const struct of_device_id mt_soc_codec_63xx_of_ids[] = {
 
@@ -3391,6 +3406,7 @@ static struct platform_driver mtk_codec_6323_driver = {
 		   },
 	.probe = mtk_mt6323_codec_dev_probe,
 	.remove = mtk_mt6323_codec_dev_remove,
+	.shutdown = mtk_mt6323_codec_dev_shutdown,
 };
 
 #ifndef CONFIG_OF

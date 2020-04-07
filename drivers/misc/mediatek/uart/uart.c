@@ -620,6 +620,26 @@ void mtk_uart_dump_history(void)
 	uart_mem_dump(rx_history.index, rx_history.buffer, UART_HISTORY_DATA_SIZE);
 }
 
+void mtk_uart_dump_reg(char *s)
+{
+	struct mtk_uart *uart;
+
+	uart = &mtk_uarts[0];
+#if defined(ENABLE_CONSOLE_DEBUG)
+	dump_console_reg(uart, s);
+#endif
+}
+
+int mtk_uart_dump_timeout_cnt(void)
+{
+	int cnt1 = 0;
+	struct mtk_uart *uart;
+
+	uart = &mtk_uarts[0];
+	cnt1 = uart->cnt1;
+	return cnt1;
+}
+
 void update_history_byte(char is_tx, int nport, unsigned char byte)
 {
 	struct uart_history_data *x_history;
@@ -942,6 +962,8 @@ static void mtk_uart_console_write(struct console *co, const char *s, unsigned i
 				return;
 			}
 		}
+		uart->cnt1 = cnt;
+
 		spin_lock_irqsave(&mtk_console_lock, flags);
 		mtk_uart_write_byte(uart, s[i]);
 		spin_unlock_irqrestore(&mtk_console_lock, flags);
@@ -955,6 +977,8 @@ static void mtk_uart_console_write(struct console *co, const char *s, unsigned i
 					return;
 				}
 			}
+			uart->cnt2 = cnt;
+
 			spin_lock_irqsave(&mtk_console_lock, flags);
 			mtk_uart_write_byte(uart, '\r');
 			spin_unlock_irqrestore(&mtk_console_lock, flags);
@@ -2288,7 +2312,7 @@ static int mtk_uart_probe(struct platform_device *pdev)
 {
 	struct mtk_uart *uart;
 	int err;
-#if !defined(CONFIG_MTK_FPGA)
+#if !defined(CONFIG_FPGA_EARLY_PORTING)
 #if !defined(CONFIG_MTK_CLKMGR)
 	static const char * const clk_uart_name[] = {
 		"uart0-main",
@@ -2303,7 +2327,7 @@ static int mtk_uart_probe(struct platform_device *pdev)
 	/* for GPIO pinctrl */
 	struct pinctrl *ppinctrl = NULL;
 #endif
-#endif /* !defined(CONFIG_MTK_FPGA) */
+#endif /* !defined(CONFIG_FPGA_EARLY_PORTING) */
 
 #ifdef CONFIG_OF
 	if (pdev->dev.of_node) {
@@ -2322,7 +2346,7 @@ static int mtk_uart_probe(struct platform_device *pdev)
 	MSG_FUNC_ENTRY();
 
 /* For clock setting */
-#if !defined(CONFIG_MTK_CLKMGR) && !defined(CONFIG_MTK_FPGA)
+#if !defined(CONFIG_MTK_CLKMGR) && !defined(CONFIG_FPGA_EARLY_PORTING)
 	uart_setting = get_uart_default_settings(pdev->id);
 	uart_setting->clk_uart_main = devm_clk_get(&pdev->dev, clk_uart_name[pdev->id]);
 	if (IS_ERR(uart_setting->clk_uart_main)) {
@@ -2342,23 +2366,24 @@ static int mtk_uart_probe(struct platform_device *pdev)
 		set_uart_dma_clk(pdev->id, clk_uart0_dma);
 		pr_debug("[UART][CCF]clk_uart0_dma:%p\n", clk_uart0_dma);
 	}
-#else /* !defined(CONFIG_MTK_CLKMGR) && !defined(CONFIG_MTK_FPGA) */
-	pr_debug("[UART][CCF]mtk_uart_probe CONFIG_MTK_CLKMGR or CONFIG_MTK_FPGA is defined!\n");
-#endif /*!defined(CONFIG_MTK_CLKMGR) && !defined(CONFIG_MTK_FPGA) */
+#else /* !defined(CONFIG_MTK_CLKMGR) && !defined(CONFIG_FPGA_EARLY_PORTING) */
+	pr_debug("[UART][CCF]mtk_uart_probe CONFIG_MTK_CLKMGR or CONFIG_FPGA_EARLY_PORTING is defined!\n");
+#endif /*!defined(CONFIG_MTK_CLKMGR) && !defined(CONFIG_FPGA_EARLY_PORTING) */
 
 /* For GPIO setting */
-#if !defined(CONFIG_MTK_LEGACY) && !defined(CONFIG_MTK_FPGA)
+#if !defined(CONFIG_MTK_LEGACY) && !defined(CONFIG_FPGA_EARLY_PORTING)
 	ppinctrl = devm_pinctrl_get(&pdev->dev);
 	if (IS_ERR(ppinctrl)) {
 		err = PTR_ERR(ppinctrl);
 		pr_err("[UART%d][PinC]cannot find pinctrl. ptr_err:%ld\n", pdev->id, PTR_ERR(ppinctrl));
-		return err;
+		set_uart_pinctrl(pdev->id, NULL);
+	} else {
+		set_uart_pinctrl(pdev->id, ppinctrl);
 	}
-	set_uart_pinctrl(pdev->id, ppinctrl);
 	pr_debug("[UART%d][PinC]set idx:%d, ppinctrl:%p\n", pdev->id, pdev->id, ppinctrl);
-#else /* !defined(CONFIG_MTK_LEGACY) && !defined(CONFIG_MTK_FPGA) */
-	pr_debug("[UART][PinC]mtk_uart_probe CONFIG_MTK_LEGACY or CONFIG_MTK_FPGA is defined!\n");
-#endif /* !defined(CONFIG_MTK_LEGACY) && !defined(CONFIG_MTK_FPGA) */
+#else /* !defined(CONFIG_MTK_LEGACY) && !defined(CONFIG_FPGA_EARLY_PORTING) */
+	pr_debug("[UART][PinC]mtk_uart_probe CONFIG_MTK_LEGACY or CONFIG_FPGA_EARLY_PORTING is defined!\n");
+#endif /* !defined(CONFIG_MTK_LEGACY) && !defined(CONFIG_FPGA_EARLY_PORTING) */
 
 	if (uart->setting->support_33bits) {
 		pdev->dev.coherent_dma_mask = DMA_BIT_MASK(33);
@@ -2420,7 +2445,6 @@ static int mtk_uart_syscore_suspend(void)
 		/* tx pin:  idle->high   power down->low */
 		mtk_uart_switch_tx_to_gpio(uart);
 		spin_unlock_irqrestore(&mtk_uart_bt_lock, flags);
-		pr_debug("[UART%d] Suspend(%d)!\n", uart->nport, ret);
 	}
 	return ret;
 }
@@ -2439,7 +2463,6 @@ static void mtk_uart_syscore_resume(void)
 		ret = uart_resume_port(&mtk_uart_drv, &uart->port);
 		spin_unlock_irqrestore(&mtk_uart_bt_lock, flags);
 		disable_irq(uart->port.irq);
-		pr_debug("[UART%d] Resume(%d)!\n", uart->nport, ret);
 	}
 }
 
@@ -2454,7 +2477,6 @@ static int mtk_uart_suspend(struct platform_device *pdev, pm_message_t state)
 		mtk_uart_save(uart);
 	if (uart && (uart->nport < UART_NR) && (uart != bt_port)) {
 		ret = uart_suspend_port(&mtk_uart_drv, &uart->port);
-		pr_debug("[UART%d] Suspend(%d)!\n", uart->nport, ret);
 		mtk_uart_switch_rx_to_gpio(uart);
 	}
 	return ret;
@@ -2469,7 +2491,6 @@ static int mtk_uart_resume(struct platform_device *pdev)
 	if (uart && (uart->nport < UART_NR) && (uart != bt_port)) {
 		mtk_uart_switch_to_rx(uart);
 		ret = uart_resume_port(&mtk_uart_drv, &uart->port);
-		pr_debug("[UART%d] Resume(%d)!\n", uart->nport, ret);
 	}
 	return ret;
 }
@@ -2682,6 +2703,8 @@ static int mtk_uart_init_ports(void)
 		uart->read_status = mtk_uart_read_status;
 		uart->poweron_count = 0;
 		uart->timeout_count = 0;
+		uart->cnt1 = 0;
+		uart->cnt2 = 0;
 		uart->baudrate = 0;
 		uart->custom_baud = 0;
 		uart->registers.dll = 1;
@@ -2741,7 +2764,7 @@ static int mtk_uart_init_ports(void)
 static const struct of_device_id apuart_of_ids[] = {
 	{.compatible = "mediatek,AP_UART0",},
 	{.compatible = "mediatek,AP_UART1",},
-#ifndef CONFIG_MTK_FPGA
+#ifndef CONFIG_FPGA_EARLY_PORTING
 	{.compatible = "mediatek,AP_UART2",},
 	{.compatible = "mediatek,AP_UART3",},
 #if (UART_NR > 4)
@@ -2753,6 +2776,7 @@ static const struct of_device_id apuart_of_ids[] = {
 	{.compatible = "mediatek,mt8173-uart",},
 	{.compatible = "mediatek,mt6797-uart",},
 	{.compatible = "mediatek,mt8163-uart",},
+	{.compatible = "mediatek,mtk-uart",},
 	{}
 };
 #endif

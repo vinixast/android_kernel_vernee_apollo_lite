@@ -23,6 +23,7 @@
 #include <linux/delay.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
+#include <linux/clocksource.h>
 #include <uapi/linux/psci.h>
 
 #include <asm/compiler.h>
@@ -32,7 +33,7 @@
 #include <asm/smp_plat.h>
 #include <asm/suspend.h>
 #include <asm/system_misc.h>
-#include <mtk_hibernate_core.h>
+#include <mt-plat/mtk_ram_console.h>
 #ifdef CONFIG_ARCH_MT6797
 #include <mt6797/da9214.h>
 #include <mach/mt_freqhopping.h>
@@ -444,8 +445,6 @@ int __init psci_init(void)
 	return init_fn(np);
 }
 
-#ifdef CONFIG_SMP
-
 static int __init cpu_psci_cpu_init(struct device_node *dn, unsigned int cpu)
 {
 	return 0;
@@ -533,7 +532,7 @@ static int cpu_psci_cpu_boot(unsigned int cpu)
 	int err = 0;
 
 
-#ifdef MTK_CPU_HOTPLUG_DEBUG_3
+#ifdef CONFIG_MTK_CPU_HOTPLUG_DEBUG_3
 	TIMESTAMP_REC(hotplug_ts_rec, TIMESTAMP_FILTER,  cpu, 0, 0, 0);
 #endif
 
@@ -583,13 +582,13 @@ static int cpu_psci_cpu_boot(unsigned int cpu)
 		}
 	}
 
-#ifdef MTK_CPU_HOTPLUG_DEBUG_3
+#ifdef CONFIG_MTK_CPU_HOTPLUG_DEBUG_3
 	TIMESTAMP_REC(hotplug_ts_rec, TIMESTAMP_FILTER,  cpu, 0, 0, 0);
 #endif
 
 	err = psci_ops.cpu_on(cpu_logical_map(cpu), __pa(secondary_entry));
 
-#ifdef MTK_CPU_HOTPLUG_DEBUG_3
+#ifdef CONFIG_MTK_CPU_HOTPLUG_DEBUG_3
 	TIMESTAMP_REC(hotplug_ts_rec, TIMESTAMP_FILTER,  cpu, 0, 0, 0);
 #endif
 
@@ -629,7 +628,7 @@ static int cpu_psci_cpu_boot(unsigned int cpu)
 			g_cl2_online |= (1 << (cpu - 8));
 	}
 
-#ifdef MTK_CPU_HOTPLUG_DEBUG_3
+#ifdef CONFIG_MTK_CPU_HOTPLUG_DEBUG_3
 	TIMESTAMP_REC(hotplug_ts_rec, TIMESTAMP_FILTER,  cpu, 0, 0, 0);
 #endif
 	/* shrink kernel log
@@ -773,26 +772,29 @@ static int cpu_psci_cpu_kill(unsigned int cpu)
 	for (i = 0; i < 10; i++) {
 #ifdef CONFIG_ARCH_MT6797
 #ifdef CONFIG_OCP_IDVFS_CTRL
-#ifdef MTK_CPU_HOTPLUG_DEBUG_3
+#ifdef CONFIG_MTK_CPU_HOTPLUG_DEBUG_3
 		TIMESTAMP_REC(hotplug_ts_rec, TIMESTAMP_FILTER,  cpu, 0, 0, 0);
 #endif
 
+		aee_rr_rec_hotplug_footprint(cpu, 81);
 		if (idvfs_init && last_cl2_online_cpus(cpu)) {
 			BigiDVFSDisable_hp();
 			idvfs_init = 0;
 		}
 
+		aee_rr_rec_hotplug_footprint(cpu, 82);
 		if (ocp_cl0_init && last_cl0_online_cpus(cpu)) {
 			Cluster0_OCP_OFF();
 			ocp_cl0_init = 0;
 		}
 
+		aee_rr_rec_hotplug_footprint(cpu, 83);
 		if (ocp_cl1_init && last_cl1_online_cpus(cpu)) {
 			Cluster1_OCP_OFF();
 			ocp_cl1_init = 0;
 		}
 
-#ifdef MTK_CPU_HOTPLUG_DEBUG_3
+#ifdef CONFIG_MTK_CPU_HOTPLUG_DEBUG_3
 		TIMESTAMP_REC(hotplug_ts_rec, TIMESTAMP_FILTER,  cpu, 0, 0, 0);
 #endif
 #endif
@@ -802,48 +804,55 @@ static int cpu_psci_cpu_kill(unsigned int cpu)
 		if ((cpu == 8) || (cpu == 9)) {
 			g_cl2_online &= ~(1 << (cpu - 8));
 			if (!g_cl2_online) {
+				aee_rr_rec_hotplug_footprint(cpu, 84);
 				/* disable MP2 Sync DCM */
 				dcm_mcusys_mp2_sync_dcm(0);
 			}
 		}
 #endif
 
-#ifdef MTK_CPU_HOTPLUG_DEBUG_3
+#ifdef CONFIG_MTK_CPU_HOTPLUG_DEBUG_3
 		TIMESTAMP_REC(hotplug_ts_rec, TIMESTAMP_FILTER,  cpu, 0, 0, 0);
 #endif
 
+		aee_rr_rec_hotplug_footprint(cpu, 85);
 		err = psci_ops.affinity_info(cpu_logical_map(cpu), 0);
 
-#ifdef MTK_CPU_HOTPLUG_DEBUG_3
+#ifdef CONFIG_MTK_CPU_HOTPLUG_DEBUG_3
 		TIMESTAMP_REC(hotplug_ts_rec, TIMESTAMP_FILTER,  cpu, 0, 0, 0);
 #endif
 
+		aee_rr_rec_hotplug_footprint(cpu, 86);
 		if (err == PSCI_0_2_AFFINITY_LEVEL_OFF) {
+#ifndef CONFIG_ARCH_MT6797
+			aee_rr_rec_hotplug_footprint(cpu, 87);
 			pr_info("CPU%d killed.\n", cpu);
+#endif
 #ifdef CONFIG_ARCH_MT6797
 
-#ifdef MTK_CPU_HOTPLUG_DEBUG_3
+#ifdef CONFIG_MTK_CPU_HOTPLUG_DEBUG_3
 		TIMESTAMP_REC(hotplug_ts_rec, TIMESTAMP_FILTER,  cpu, 0, 0, 0);
 #endif
 			cpu_kill_pll_buck_ctrl(cpu);
 
-#ifdef MTK_CPU_HOTPLUG_DEBUG_3
+#ifdef CONFIG_MTK_CPU_HOTPLUG_DEBUG_3
 		TIMESTAMP_REC(hotplug_ts_rec, TIMESTAMP_FILTER,  cpu, 0, 0, 0);
 #endif
 #endif
 			return 1;
 		}
 
+		aee_rr_rec_hotplug_footprint(cpu, 88);
 		msleep(10);
 		pr_info("Retrying again to check for CPU kill\n");
 	}
 
+	aee_rr_rec_hotplug_footprint(cpu, 89);
 	pr_warn("CPU%d may not have shut down cleanly (AFFINITY_INFO reports %d)\n",
 			cpu, err);
 	/* Make op_cpu_kill() fail. */
 	return 0;
 }
-#endif
 #endif
 
 static int psci_suspend_finisher(unsigned long index)
@@ -894,7 +903,6 @@ const struct cpu_operations cpu_psci_ops = {
 	.cpu_init_idle	= cpu_psci_cpu_init_idle,
 	.cpu_suspend	= cpu_psci_cpu_suspend,
 #endif
-#ifdef CONFIG_SMP
 	.cpu_init	= cpu_psci_cpu_init,
 	.cpu_prepare	= cpu_psci_cpu_prepare,
 	.cpu_boot	= cpu_psci_cpu_boot,
@@ -903,6 +911,4 @@ const struct cpu_operations cpu_psci_ops = {
 	.cpu_die	= cpu_psci_cpu_die,
 	.cpu_kill	= cpu_psci_cpu_kill,
 #endif
-#endif
 };
-

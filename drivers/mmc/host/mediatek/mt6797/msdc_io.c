@@ -582,7 +582,10 @@ int msdc_of_parse(struct mmc_host *mmc)
 		pr_err("[msdc%d] cd_level isn't found in device tree\n",
 				host->id);
 	/*get cd_gpio*/
-	of_property_read_u32_index(np, "cd-gpios", 1, &cd_gpio);
+	if (of_property_read_u32_index(np, "cd-gpios", 1, &cd_gpio))
+		pr_err("[msdc%d] cd_gpios isn't found in device tree\n",
+				host->id);
+
 	msdc_get_rigister_settings(host);
 	msdc_get_pinctl_settings(host);
 
@@ -594,6 +597,10 @@ int msdc_dt_init(struct platform_device *pdev, struct mmc_host *mmc,
 {
 	int i, ret;
 	struct device_node *msdc_backup_node;
+	struct pinctrl *pinctrl;
+	struct pinctrl_state *pins_ins;
+	struct msdc_host *host = mmc_priv(mmc);
+
 	static const char const *msdc_names[] = {"msdc0", "msdc1", "msdc2", "msdc3"};
 
 	for (i = 0; i < HOST_MAX_NUM; i++) {
@@ -729,6 +736,27 @@ int msdc_dt_init(struct platform_device *pdev, struct mmc_host *mmc,
 	/* restore original dev.of_node */
 	pdev->dev.of_node = msdc_backup_node;
 
+	/* Set SDcard card detect pin mode: EINT mode */
+	if ((pdev->id == 1) && (host->hw->host_function == MSDC_SD)) {
+		pinctrl = devm_pinctrl_get(&pdev->dev);
+		if (IS_ERR(pinctrl)) {
+			ret = PTR_ERR(pinctrl);
+			dev_err(&pdev->dev, "Cannot find pinctrl!\n");
+			return -1;
+		}
+
+		pins_ins = pinctrl_lookup_state(pinctrl, "insert_cfg");
+		if (IS_ERR(pins_ins)) {
+			ret = PTR_ERR(pins_ins);
+			dev_err(&pdev->dev, "Cannot find pinctrl insert_cfg!\n");
+			return -1;
+		}
+
+		pinctrl_select_state(pinctrl, pins_ins);
+		pr_err("msdc1 pinctl select state\n");
+	}
+
+
 #endif
 
 	return 0;
@@ -841,7 +869,10 @@ void msdc_dump_clock_sts(struct msdc_host *host)
 			MSDC_READ32(apmixed_reg_base + MSDCPLL_PWR_CON0_OFFSET));
 	}
 }
-
+inline unsigned int msdc_clk_enable(struct msdc_host *host)
+{
+	return clk_enable(host->clock_control);
+}
 void msdc_clk_status(int *status)
 {
 	int g_clk_gate = 0;
@@ -1329,7 +1360,7 @@ void dump_axi_bus_info(void)
 {
 	pr_err("=============== AXI BUS INFO =============");
 	return; /*weiping check*/
-
+#if 0
 	if (infracfg_ao_reg_base && infracfg_reg_base && pericfg_reg_base) {
 		pr_err("reg[0x10001224]=0x%x",
 			MSDC_READ32(infracfg_ao_reg_base + 0x224));
@@ -1349,6 +1380,7 @@ void dump_axi_bus_info(void)
 			infracfg_reg_base,
 			pericfg_reg_base);
 	}
+#endif
 }
 
 void dump_emi_info(void)

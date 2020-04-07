@@ -1,3 +1,16 @@
+/*
+ * Copyright (C) 2016 MediaTek Inc.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See http://www.gnu.org/licenses/gpl-2.0.html for more details.
+ */
+
 #define pr_fmt(fmt) "memory-lowpower-task: " fmt
 #define CONFIG_MTK_MEMORY_LOWPOWER_TASK_DEBUG
 
@@ -11,6 +24,7 @@
 #include <linux/init.h>
 #include <linux/rwlock.h>
 #include <linux/sort.h>
+#include <linux/delay.h>
 
 /* Trigger method for screen on/off */
 #include <linux/fb.h>
@@ -21,6 +35,7 @@
 #ifdef CONFIG_PM_WAKELOCKS
 #include <linux/pm_wakeup.h>
 #endif
+#include <linux/uaccess.h>
 
 /* Memory lowpower private header file */
 #include "internal.h"
@@ -55,13 +70,19 @@ static struct wakeup_source mlp_wakeup;
 #define MLPT_CLEAR_ACTION       (0x0)
 #define MLPT_SET_ACTION         (0x1)
 static struct task_struct *memory_lowpower_task;
+#ifdef CONFIG_MTK_PERIODIC_DATA_COLLECTION
+static struct task_struct *periodic_dc_task;
+unsigned long nr_dc;
+unsigned long nr_skip_dc;
+#define DATA_COLLECTION_PERIOD 300000
+#endif /* CONFIG_MTK_PERIODIC_DATA_COLLECTION */
 static enum power_state memory_lowpower_action;
 static atomic_t action_changed;
 static unsigned long memory_lowpower_state;
 static int get_cma_aligned;			/* in PAGE_SIZE order */
-static int get_cma_num;				/* Number of allocation */
+static int get_cma_num;				/* number of allocations */
 static unsigned long get_cma_size;		/* in PAGES */
-static struct page **cma_aligned_pages;
+static struct page **cma_aligned_pages;		/* NULL means full allocation */
 static struct memory_lowpower_statistics memory_lowpower_statistics;
 
 /*
@@ -132,15 +153,25 @@ static void insert_buffer(struct page *page, int bound)
 			inser_buffer_cmp, NULL);
 }
 
-/* Wrapper for memory lowpower CMA allocation */
+/*
+ * Wrapper for memory lowpower CMA allocation -
+ * Return 0 if success, -ENOMEM if no memory, -EBUSY if being aborted
+ */
 static int acquire_memory(void)
 {
-	int i = 0, ret;
+	int i = 0, ret = 0;
 	struct page *page;
 
 	/* Full allocation */
-	if (cma_aligned_pages == NULL)
-		return get_memory_lowpower_cma();
+	if (cma_aligned_pages == NULL) {
+		if (get_cma_num == 0) {
+			i = 1;
+			ret = get_memory_lowpower_cma();
+			if (!ret)
+				get_cma_num = 1;
+		}
+		goto out;
+	}
 
 	/* Find the 1st null position */
 	while (i < get_cma_num && cma_aligned_pages[i] != NULL)
@@ -151,31 +182,53 @@ static int acquire_memory(void)
 		ret = get_memory_lowpower_cma_aligned(get_cma_size, get_cma_aligned, &page);
 		if (ret)
 			break;
+
 		MLPT_PRINT("%s: PFN[%lu] allocated for [%d]\n", __func__, page_to_pfn(page), i);
 		insert_buffer(page, i);
 		++i;
+
+		/* Early termination for "action is changed" */
+		if (!IS_ACTION_SCREENOFF(memory_lowpower_action)) {
+			pr_warn("%s: got a screen-on event\n", __func__);
+			ret = -EBUSY;
+			break;
+		}
 	}
 
+out:
 	memory_lowpower_statistics.nr_acquire_memory++;
-	if (i == (get_cma_num - 1))
+	if (i == (get_cma_num))
 		memory_lowpower_statistics.nr_full_acquire++;
 	else if (i > 0)
 		memory_lowpower_statistics.nr_partial_acquire++;
 	else
 		memory_lowpower_statistics.nr_empty_acquire++;
 
-	return 0;
+	/* Translate to -ENOMEM */
+	if (ret == -1)
+		ret = -ENOMEM;
+
+	return ret;
 }
 
-/* Wrapper for memory lowpower CMA free */
+/*
+ * Wrapper for memory lowpower CMA free -
+ * It returns 0 in success, otherwise return -EINVAL.
+ */
 static int release_memory(void)
 {
-	int i = 0, ret;
+	int i = 0, ret = 0;
 	struct page **pages;
 
 	/* Full release */
-	if (cma_aligned_pages == NULL)
-		return put_memory_lowpower_cma();
+	if (cma_aligned_pages == NULL) {
+		if (get_cma_num == 1) {
+			ret = put_memory_lowpower_cma();
+			if (!ret)
+				get_cma_num = 0;
+		}
+		goto out;
+	}
 
 	/* Aligned release */
 	pages = cma_aligned_pages;
@@ -190,9 +243,14 @@ static int release_memory(void)
 			BUG();
 	} while (++i < get_cma_num);
 
+out:
 	memory_lowpower_statistics.nr_release_memory++;
 
-	return 0;
+	/* Translate to -EINVAL */
+	if (ret == -1)
+		ret = -EINVAL;
+
+	return ret;
 }
 
 /* Query CMA allocated buffer */
@@ -205,8 +263,10 @@ static void memory_range(int which, unsigned long *spfn, unsigned long *epfn)
 
 	/* Range of full allocation */
 	if (cma_aligned_pages == NULL) {
-		*spfn = __phys_to_pfn(memory_lowpower_cma_base());
-		*epfn = __phys_to_pfn(memory_lowpower_cma_base() + memory_lowpower_cma_size());
+		if (get_cma_num == 1) {
+			*spfn = __phys_to_pfn(memory_lowpower_cma_base());
+			*epfn = __phys_to_pfn(memory_lowpower_cma_base() + memory_lowpower_cma_size());
+		}
 		goto out;
 	}
 
@@ -385,17 +445,16 @@ static void go_to_screenoff(void)
 		goto acquired;
 	}
 
-	/* Collect free pages */
-	do {
-		/* Try to collect free pages. If done or can't proceed, then break. */
-		if (!acquire_memory())
-			break;
+	/*
+	 * Try to collect free pages.
+	 * If done or can't proceed, just go ahead.
+	 */
+	if (acquire_memory())
+		pr_warn("%s: some exception occurs!\n", __func__);
 
-		/* Action is changed, just leave here. */
-		if (!IS_ACTION_SCREENOFF(memory_lowpower_action))
-			goto out;
-
-	} while (1);
+	/* Action is changed, just leave here. */
+	if (!IS_ACTION_SCREENOFF(memory_lowpower_action))
+		goto out;
 
 	/* Clear SCREENON state */
 	ClearMlpsScreenOn(&memory_lowpower_state);
@@ -484,6 +543,46 @@ static int memory_lowpower_entry(void *p)
 
 	return 0;
 }
+
+#ifdef CONFIG_MTK_PERIODIC_DATA_COLLECTION
+/*
+ * periodic_dc_entry
+ * Every DATA_COLLECTION_PERIOD ms we check if the free page
+ * numbers of ZONE_MOVABLE is less than 90% of total pages of
+ * ZONE_MOVABLE.
+ */
+static int periodic_dc_entry(void *p)
+{
+	int nid;
+	pg_data_t *pgdat;
+	struct zone *zone;
+	unsigned long free_pages, spanned_pages;
+	int trigger;
+
+	do {
+		trigger = 0;
+		for_each_online_node(nid) {
+			pgdat = NODE_DATA(nid);
+			zone = &pgdat->node_zones[ZONE_MOVABLE];
+			free_pages = zone_page_state(zone, NR_FREE_PAGES);
+			spanned_pages = zone->spanned_pages;
+			if (free_pages < (spanned_pages / 10 * 9)) {
+				trigger = 1;
+				break;
+			}
+		}
+		if (trigger) {
+			get_memory_lowpower_cma();
+			put_memory_lowpower_cma();
+			nr_dc++;
+		} else
+			nr_skip_dc++;
+		msleep(DATA_COLLECTION_PERIOD);
+	} while (1);
+
+	return 0;
+}
+#endif /* CONFIG_MTK_PERIODIC_DATA_COLLECTION */
 
 #ifdef CONFIG_PM
 /* FB event notifier */
@@ -590,6 +689,15 @@ int __init memory_lowpower_task_init(void)
 		goto out;
 	}
 
+#ifdef CONFIG_MTK_PERIODIC_DATA_COLLECTION
+	periodic_dc_task = kthread_run(periodic_dc_entry, NULL, "periodic_dc_task");
+	if (IS_ERR(periodic_dc_task)) {
+		MLPT_PRERR("Failed to start periodic_dc_task!\n");
+		ret = PTR_ERR(periodic_dc_task);
+		goto out;
+	}
+#endif /* CONFIG_MTK_PERIODIC_DATA_COLLECTION */
+
 #ifdef CONFIG_PM
 	/* Initialize PM ops */
 	ret = memory_lowpower_init_pm_ops();
@@ -617,12 +725,20 @@ late_initcall(memory_lowpower_task_init);
 #ifdef CONFIG_MTK_MEMORY_LOWPOWER_TASK_DEBUG
 static int memory_lowpower_task_show(struct seq_file *m, void *v)
 {
+	/*
+	 * At SCREEN-ON, nr_release_memory may be larger than nr_acquire_memory by 1
+	 * due to boot-up flow with FB operations.
+	 */
 	seq_printf(m, "memory lowpower statistics: %lld, %lld, %lld, %lld, %lld\n",
 			memory_lowpower_statistics.nr_acquire_memory,
 			memory_lowpower_statistics.nr_release_memory,
 			memory_lowpower_statistics.nr_full_acquire,
 			memory_lowpower_statistics.nr_partial_acquire,
 			memory_lowpower_statistics.nr_empty_acquire);
+#ifdef CONFIG_MTK_PERIODIC_DATA_COLLECTION
+	seq_printf(m, "data collection=%lu, skip=%lu, t=%d(ms)\n",
+			nr_dc, nr_skip_dc, DATA_COLLECTION_PERIOD);
+#endif /* CONFIG_MTK_PERIODIC_DATA_COLLECTION */
 
 	return 0;
 }
@@ -632,9 +748,37 @@ static int memory_lowpower_open(struct inode *inode, struct file *file)
 	return single_open(file, &memory_lowpower_task_show, NULL);
 }
 
+static ssize_t memory_lowpower_write(struct file *file, const char __user *buffer,
+					size_t count, loff_t *ppos)
+{
+	static char state;
+	struct fb_event fb_event;
+	int blank;
+
+	if (count > 0) {
+		if (get_user(state, buffer))
+			return -EFAULT;
+		state -= '0';
+		fb_event.data = &blank;
+
+		if (!state) {
+			/* collect cma */
+			blank = 1;
+			memory_lowpower_fb_event(NULL, FB_EVENT_BLANK, &fb_event);
+		} else {
+			/* undo collection */
+			blank = 0;
+			memory_lowpower_fb_event(NULL, FB_EVENT_BLANK, &fb_event);
+		}
+	}
+
+	return count;
+}
+
 static const struct file_operations memory_lowpower_task_fops = {
 	.open		= memory_lowpower_open,
 	.read		= seq_read,
+	.write		= memory_lowpower_write,
 	.release	= single_release,
 };
 

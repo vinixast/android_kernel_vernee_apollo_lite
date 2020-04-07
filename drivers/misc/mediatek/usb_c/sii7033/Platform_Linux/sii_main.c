@@ -112,10 +112,6 @@ int register_typec_switch_callback(struct typec_switch_data *new_driver)
 	if (new_driver->type == HOST_TYPE) {
 		g_exttypec->host_driver = new_driver;
 		g_exttypec->host_driver->on = 0;
-		if (g_ptypeC) {
-			if (g_ptypeC->state == ATTACHED_DFP)
-				trigger_driver(g_exttypec, HOST_TYPE, ENABLE, DONT_CARE);
-		}
 		return 0;
 	}
 

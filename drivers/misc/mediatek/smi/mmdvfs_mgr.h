@@ -79,6 +79,8 @@ extern int is_mmdvfs_freq_mux_disabled(void);
 extern int is_force_max_mmsys_clk(void);
 extern int is_force_camera_hpm(void);
 extern int is_mmdvfs_disabled(void);
+extern void mmdvfs_enable(int enable);
+extern int mmdvfs_get_stable_isp_clk(void);
 
 
 #ifdef MMDVFS_STANDALONE
@@ -105,11 +107,13 @@ extern int primary_display_switch_mode_for_mmdvfs(int sess_mode, unsigned int se
 #endif
 
 /* D2 plus only */
-/* extern void mt_set_vencpll_con1(int val); */
-/* extern int clkmux_sel(int id, unsigned int clksrc, char *name); */
+#if defined(SMI_D2)
+extern void mt_set_vencpll_con1(int val);
+extern int clkmux_sel(int id, unsigned int clksrc, char *name);
+#endif
 
 /* D1 plus implementation only */
-/* extern u32 get_devinfo_with_index(u32 index); */
+extern u32 get_devinfo_with_index(u32 index);
 
 #define MMDVFS_PROFILE_UNKNOWN (0)
 #define MMDVFS_PROFILE_R1 (1)

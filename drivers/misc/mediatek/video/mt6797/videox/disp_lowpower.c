@@ -18,7 +18,6 @@
 #include <linux/wait.h>
 #include <linux/kthread.h>
 #include <linux/mutex.h>
-#include <linux/rtpm_prio.h>
 #include <linux/types.h>
 #include <linux/ktime.h>
 #include <linux/of.h>
@@ -320,6 +319,8 @@ void _acquire_wrot_resource_nolock(CMDQ_EVENT_ENUM resourceEvent)
 	if (is_mipi_enterulps())
 		return;
 
+	if (primary_get_state() != DISP_ALIVE)
+		return;
 
 	/* 1.create and reset cmdq */
 	cmdqRecCreate(CMDQ_SCENARIO_PRIMARY_DISP, &handle);
@@ -376,6 +377,8 @@ void _release_wrot_resource_nolock(CMDQ_EVENT_ENUM resourceEvent)
 	if (use_wrot_sram() == 0)
 		return;
 
+	if (primary_get_state() != DISP_ALIVE)
+		return;
 
 	/* 1.create and reset cmdq */
 	cmdqRecCreate(CMDQ_SCENARIO_PRIMARY_DISP, &handle);
@@ -550,7 +553,8 @@ void _primary_display_disable_mmsys_clk(void)
 		DISPCHECK("[LP]3.1 dpmanager path power off: ovl2men [end]\n");
 	}
 	DISPCHECK("[LP]3.dpmanager path power off[end]\n");
-	set_enterulps(1);
+	if (disp_helper_get_option(DISP_OPT_MET_LOG))
+		set_enterulps(1);
 }
 
 void _primary_display_enable_mmsys_clk(void)
@@ -579,7 +583,8 @@ void _primary_display_enable_mmsys_clk(void)
 
 	dpmgr_path_power_on_bypass_pwm(primary_get_dpmgr_handle(), CMDQ_DISABLE);
 	DISPCHECK("[LP]1.dpmanager path power on[end]\n");
-	set_enterulps(0);
+	if (disp_helper_get_option(DISP_OPT_MET_LOG))
+		set_enterulps(0);
 
 	DISPDBG("[LP]2.dpmanager path config[begin]\n");
 
@@ -841,7 +846,7 @@ static int _primary_path_idlemgr_monitor_thread(void *data)
 
 	msleep(16000);
 	while (1) {
-		msleep(100); /* 100ms */
+		msleep(20); /* 20ms */
 		ret = wait_event_interruptible(idlemgr_pgc->idlemgr_wait_queue, atomic_read(&idlemgr_task_wakeup));
 
 		primary_display_manual_lock();
@@ -863,8 +868,8 @@ static int _primary_path_idlemgr_monitor_thread(void *data)
 			continue;
 		}
 #endif
-		if (((local_clock() - idlemgr_pgc->idlemgr_last_kick_time) / 1000) < 500 * 1000) {
-			/* kicked in 500ms, it's not idle */
+		if (((local_clock() - idlemgr_pgc->idlemgr_last_kick_time) / 1000) < 50000 /* 50ms */) {
+			/* kicked in 50ms, it's not idle */
 			primary_display_manual_unlock();
 			continue;
 		}
@@ -934,6 +939,11 @@ unsigned int get_mipi_clk(void)
 	} else {
 		return 0;
 	}
+}
+
+void primary_display_sodi_enable(int flag)
+{
+	spm_enable_sodi(flag);
 }
 
 /* for met - end */

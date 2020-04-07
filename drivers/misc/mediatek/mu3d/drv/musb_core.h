@@ -50,9 +50,7 @@
 #include <linux/wakelock.h>
 #include <linux/workqueue.h>
 /*#include <mt-plat/battery_common.h>*/
-#ifndef CONFIG_MTK_FPGA
 #include <mt-plat/charging.h>
-#endif
 
 struct musb;
 struct musb_hw_ep;
@@ -65,7 +63,7 @@ extern u32 fake_CDP;
 extern unsigned int musb_speed;
 
 extern struct musb *_mu3d_musb;
-#if defined(CONFIG_MTK_SMART_BATTERY)
+#if defined(CONFIG_MTK_SMART_BATTERY) && !defined(FOR_BRING_UP)
 extern void BATTERY_SetUSBState(int usb_state_value);
 extern CHARGER_TYPE mt_get_charger_type(void);
 #endif
@@ -90,7 +88,11 @@ extern CHARGER_TYPE mt_get_charger_type(void);
 
 /* #define U3_COMPLIANCE */
 
+#ifdef SUPPORT_U3
 #define USB_GADGET_SUPERSPEED
+#else
+#define USB_GADGET_DUALSPEED
+#endif
 #define EP_PROFILING
 
 #define MUSB_DRIVER_NAME "musb-hdrc"
@@ -112,6 +114,7 @@ extern CHARGER_TYPE mt_get_charger_type(void);
 #define clk_enable(clock)	do {} while (0)
 #define clk_disable(clock)	do {} while (0)
 #endif
+#define EP_FLAGS(num, dir) ((dir == USB_TX)?(1<<num):(1<<(num+16)))
 
 #ifdef CONFIG_PROC_FS
 #include <linux/fs.h>
@@ -141,8 +144,10 @@ extern void musb_g_resume(struct musb *);
 extern void musb_g_wakeup(struct musb *);
 extern void musb_g_disconnect(struct musb *);
 #ifdef CONFIG_DEBUG_FS
+#ifndef USB_ELBRUS
 extern unsigned musb_uart_debug;
 extern int usb20_phy_init_debugfs(void);
+#endif
 #endif
 /****************************** HOST ROLE ***********************************/
 
@@ -812,12 +817,8 @@ extern ssize_t musb_cmode_store(struct device *dev, struct device_attribute *att
 
 extern void usb20_pll_settings(bool host, bool forceOn);
 
-#if defined(FOR_BRING_UP) || !defined(CONFIG_MTK_SMART_BATTERY)
-/* implement static function in mt_usb.c */
-#else
 extern bool upmu_is_chr_det(void);
 extern u32 upmu_get_rgs_chrdet(void);
-#endif
 
 #ifdef CONFIG_USB_MTK_DUALMODE
 extern bool mtk_is_host_mode(void);
@@ -834,4 +835,6 @@ static inline int mtk_is_host_mode(void)
 extern int typec_switch_usb_disconnect(void *data);
 extern int typec_switch_usb_connect(void *data);
 #endif
+extern int mu3d_force_on;
+extern void mt_usb_connect(void);
 #endif	/* __MUSB_CORE_H__ */

@@ -34,22 +34,8 @@ LCM_DSI_MODE_CON lcm_dsi_mode;
 #endif
 
 LCM_DRIVER *lcm_driver_list[] = {
-#if defined(R63419_WQHD_BOYI_VDO)
-	&r63419_wqhd_boyi_vdo_lcm_drv,
-#endif
-#if defined(R63419_WQHD_LIDE_VDO)
-	&r63419_wqhd_lide_vdo_lcm_drv,
-#endif
-#if defined(NT35523_FHD_DSI_VDO)
-	&nt35523_fhd_dsi_vdo_lcm_drv,
-
-#endif
 #if defined(LIDE_ILI9885_FHD_DSI_VDO)
 	&lide_ili9885_fhd_dsi_vdo_lcm_drv,
-
-#endif
-#if defined(BOYI_R63350_FHD_DSI_VDO)
-	&boyi_r63350_fhd_dsi_vdo_lcm_drv,
 #endif
 #if defined(BOYI_HX8398_FHD_DSI_VDO)
 	&boyi_hx8398_fhd_dsi_vdo_lcm_drv,

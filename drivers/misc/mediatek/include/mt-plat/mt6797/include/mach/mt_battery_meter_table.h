@@ -1,15 +1,3 @@
-/*
- * Copyright (C) 2015 MediaTek Inc.
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- */
 
 #ifndef _CUST_BATTERY_METER_TABLE_H
 #define _CUST_BATTERY_METER_TABLE_H
@@ -22,7 +10,11 @@
 #define BAT_NTC_47 0
 
 #if (BAT_NTC_10 == 1)
-#define RBAT_PULL_UP_R             24000
+#if defined(CONFIG_MTK_PMIC_CHIP_MT6353)
+        #define RBAT_PULL_UP_R             16900
+#else
+#define RBAT_PULL_UP_R                     24000
+#endif
 #endif
 
 #if (BAT_NTC_47 == 1)
@@ -31,7 +23,6 @@
 
 #define RBAT_PULL_UP_VOLT          2800
 
-#define BIF_NTC_R 16000
 
 
 /* ============================================================
@@ -809,4 +800,3 @@ int fgauge_get_saddles_r_table(void);
 R_PROFILE_STRUCT_P fgauge_get_profile_r_table(unsigned int temperature);
 
 #endif
-

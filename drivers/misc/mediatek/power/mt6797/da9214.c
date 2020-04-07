@@ -498,12 +498,6 @@ static int da9214_driver_probe(struct i2c_client *client, const struct i2c_devic
 	int err = 0;
 
 	PMICLOG1("[da9214_driver_probe]\n");
-	new_client = kmalloc(sizeof(struct i2c_client), GFP_KERNEL);
-	if (new_client == NULL) {
-		err = -ENOMEM;
-		goto exit;
-	}
-	memset(new_client, 0, sizeof(struct i2c_client));
 
 	new_client = client;
 
@@ -519,8 +513,8 @@ static int da9214_driver_probe(struct i2c_client *client, const struct i2c_devic
 		 g_da9214_hw_exist, g_da9214_driver_ready);
 
 	if (g_da9214_hw_exist == 0) {
-		PMICLOG1("[da9214_driver_probe] return err\n");
-		return err;
+		err = -1;
+		goto exit;
 	}
 
 	da9214_config_interface(0x0, 0x1, 0xF, 0);	/* select to page 0,1 */
@@ -713,8 +707,8 @@ static void __exit da9214_exit(void)
 {
 	if (new_client != NULL)
 		kfree(new_client);
-	i2c_del_driver(&da9214_driver);
 
+	i2c_del_driver(&da9214_driver);
 }
 module_init(da9214_init);
 module_exit(da9214_exit);

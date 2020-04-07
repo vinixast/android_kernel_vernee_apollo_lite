@@ -1,9 +1,18 @@
 /*
- * drivers/leds/leds-mt65xx.c
+ * Copyright (C) 2015 MediaTek Inc.
  *
- * This file is subject to the terms and conditions of the GNU General Public
- * License.  See the file COPYING in the main directory of this archive for
- * more details.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See http://www.gnu.org/licenses/gpl-2.0.html for more details.
+ */
+
+/*
+ * drivers/leds/leds-mt65xx.c
  *
  * mt65xx leds driver
  *
@@ -31,7 +40,6 @@
 #include <leds_hal.h>
 #include "leds_drv.h"
 #include <mt-plat/mt_pwm.h>
-#include <mt-plat/upmu_common.h>
 
 #ifdef CONFIG_BACKLIGHT_SUPPORT_LP8557
 #include <linux/of_gpio.h>

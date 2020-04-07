@@ -11,7 +11,7 @@
 * See http://www.gnu.org/licenses/gpl-2.0.html for more details.
 */
 /*
- * @file    mt_idvfs.h
+ * @file    mt_idvfs.c
  * @brief   Driver for CPU iDVFS define
  *
  */

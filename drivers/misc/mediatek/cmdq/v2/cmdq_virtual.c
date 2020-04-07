@@ -199,6 +199,11 @@ uint64_t cmdq_virtual_flag_from_scenario_legacy(CMDQ_SCENARIO_ENUM scn)
 			(1LL << CMDQ_ENG_DISP_GAMMA) |
 			(1LL << CMDQ_ENG_DISP_RDMA1) | (1LL << CMDQ_ENG_DISP_DSI1_CMD));
 		break;
+#ifdef CONFIG_MTK_CMDQ_TAB
+	case CMDQ_SCENARIO_SUB_MEMOUT:
+		flag = ((1LL << CMDQ_ENG_DISP_OVL1) | (1LL << CMDQ_ENG_DISP_WDMA1));
+		break;
+#endif
 	case CMDQ_SCENARIO_SUB_ALL:
 		flag = ((1LL << CMDQ_ENG_DISP_OVL1) |
 			(1LL << CMDQ_ENG_DISP_WDMA1) |
@@ -230,7 +235,7 @@ uint64_t cmdq_virtual_flag_from_scenario_legacy(CMDQ_SCENARIO_ENUM scn)
 /*
  * GCE capability
  */
-uint32_t cmdq_virtual_get_subsys_LSB_in_argA(void)
+uint32_t cmdq_virtual_get_subsys_LSB_in_arg_a(void)
 {
 	return 16;
 }
@@ -368,7 +373,6 @@ int cmdq_virtual_disp_thread(CMDQ_SCENARIO_ENUM scenario)
 
 	case CMDQ_SCENARIO_SUB_DISP:
 	case CMDQ_SCENARIO_SUB_ALL:
-	case CMDQ_SCENARIO_MHL_DISP:
 	case CMDQ_SCENARIO_RDMA1_DISP:
 	case CMDQ_SCENARIO_RDMA2_DISP:
 	case CMDQ_SCENARIO_DISP_CONFIG_SUB_GAMMA:
@@ -376,9 +380,16 @@ int cmdq_virtual_disp_thread(CMDQ_SCENARIO_ENUM scenario)
 	case CMDQ_SCENARIO_DISP_CONFIG_SUB_PQ:
 	case CMDQ_SCENARIO_DISP_CONFIG_SUB_PWM:
 	case CMDQ_SCENARIO_SUB_MEMOUT:
+#ifdef CMDQ_DISP_LEGACY_SUB_SCENARIO
 		/* when HW thread 0 enables pre-fetch, */
 		/* any thread 1 operation will let HW thread 0's behavior abnormally */
 		/* forbid thread 1 */
+		return 5;
+#else
+		return 1;
+#endif
+
+	case CMDQ_SCENARIO_MHL_DISP:
 		return 5;
 
 	case CMDQ_SCENARIO_HIGHP_TRIGGER_LOOP:
@@ -421,7 +432,7 @@ int cmdq_virtual_get_thread_index(CMDQ_SCENARIO_ENUM scenario, const bool secure
 	case CMDQ_SCENARIO_RDMA0_DISP:
 	case CMDQ_SCENARIO_DEBUG_PREFETCH:
 		/* CMDQ_MIN_SECURE_THREAD_ID */
-		return 12;
+		return CMDQ_THREAD_SEC_PRIMARY_DISP;
 	case CMDQ_SCENARIO_DISP_SUB_DISABLE_SECURE_PATH:
 	case CMDQ_SCENARIO_SUB_DISP:
 	case CMDQ_SCENARIO_SUB_ALL:
@@ -431,12 +442,14 @@ int cmdq_virtual_get_thread_index(CMDQ_SCENARIO_ENUM scenario, const bool secure
 	case CMDQ_SCENARIO_DISP_MIRROR_MODE:
 	case CMDQ_SCENARIO_DISP_COLOR:
 	case CMDQ_SCENARIO_PRIMARY_MEMOUT:
-		return 13;
+	/* tablet use */
+	case CMDQ_SCENARIO_SUB_MEMOUT:
+		return CMDQ_THREAD_SEC_SUB_DISP;
 	case CMDQ_SCENARIO_USER_MDP:
 	case CMDQ_SCENARIO_USER_SPACE:
 	case CMDQ_SCENARIO_DEBUG:
 		/* because there is one input engine for MDP, reserve one secure thread is enough */
-		return 14;
+		return CMDQ_THREAD_SEC_MDP;
 	default:
 		CMDQ_ERR("no dedicated secure thread for senario:%d\n", scenario);
 		return CMDQ_INVALID_THREAD;
@@ -496,7 +509,7 @@ CMDQ_HW_THREAD_PRIORITY_ENUM cmdq_virtual_priority_from_scenario(CMDQ_SCENARIO_E
 		break;
 	}
 
-	if (cmdq_get_func()->isLoopScenario(scenario, true))
+	if (cmdq_get_func()->is_disp_loop(scenario))
 		return CMDQ_THR_PRIO_DISPLAY_TRIGGER;
 	else
 		return CMDQ_THR_PRIO_NORMAL;
@@ -504,36 +517,31 @@ CMDQ_HW_THREAD_PRIORITY_ENUM cmdq_virtual_priority_from_scenario(CMDQ_SCENARIO_E
 
 bool cmdq_virtual_force_loop_irq(CMDQ_SCENARIO_ENUM scenario)
 {
-	bool forceLoop = false;
+	bool force_loop = false;
 
 #ifdef CMDQ_SECURE_PATH_SUPPORT
 	if (CMDQ_SCENARIO_SECURE_NOTIFY_LOOP == scenario) {
 		/* For secure notify loop, we need IRQ to update secure task */
-		forceLoop = true;
+		force_loop = true;
 	}
 #endif
 	if (CMDQ_SCENARIO_HIGHP_TRIGGER_LOOP == scenario
 		|| CMDQ_SCENARIO_LOWP_TRIGGER_LOOP == scenario) {
 		/* For monitor thread loop, we need IRQ to set callback function */
-		forceLoop = true;
+		force_loop = true;
 	}
 
-	return forceLoop;
+	return force_loop;
 }
 
-bool cmdq_virtual_is_loop_scenario(CMDQ_SCENARIO_ENUM scenario, bool displayOnly)
+bool cmdq_virtual_is_disp_loop(CMDQ_SCENARIO_ENUM scenario)
 {
-#ifdef CMDQ_SECURE_PATH_SUPPORT
-	if (!displayOnly && CMDQ_SCENARIO_SECURE_NOTIFY_LOOP == scenario)
-		return true;
-#endif
+	bool is_disp_loop = false;
 
-	if (CMDQ_SCENARIO_TRIGGER_LOOP == scenario
-		|| CMDQ_SCENARIO_HIGHP_TRIGGER_LOOP == scenario
-		|| CMDQ_SCENARIO_LOWP_TRIGGER_LOOP == scenario)
-		return true;
+	if (CMDQ_SCENARIO_TRIGGER_LOOP == scenario)
+		is_disp_loop = true;
 
-	return false;
+	return is_disp_loop;
 }
 
 /**
@@ -570,9 +578,11 @@ void cmdq_virtual_get_reg_id_from_hwflag(uint64_t hwflag, CMDQ_DATA_REGISTER_ENU
 	}
 }
 
-const char *cmdq_virtual_module_from_event_id(const int32_t event)
+const char *cmdq_virtual_module_from_event_id(const int32_t event,
+	struct CmdqCBkStruct *groupCallback, uint64_t engineFlag)
 {
 	const char *module = "CMDQ";
+	CMDQ_GROUP_ENUM group = CMDQ_MAX_GROUP_COUNT;
 
 	switch (event) {
 	case CMDQ_EVENT_DISP_RDMA0_SOF:
@@ -585,6 +595,7 @@ const char *cmdq_virtual_module_from_event_id(const int32_t event)
 	case CMDQ_EVENT_DISP_RDMA1_UNDERRUN:
 	case CMDQ_EVENT_DISP_RDMA2_UNDERRUN:
 		module = "DISP_RDMA";
+		group = CMDQ_GROUP_DISP;
 		break;
 
 	case CMDQ_EVENT_DISP_WDMA0_SOF:
@@ -592,6 +603,7 @@ const char *cmdq_virtual_module_from_event_id(const int32_t event)
 	case CMDQ_EVENT_DISP_WDMA0_EOF:
 	case CMDQ_EVENT_DISP_WDMA1_EOF:
 		module = "DISP_WDMA";
+		group = CMDQ_GROUP_DISP;
 		break;
 
 	case CMDQ_EVENT_DISP_OVL0_SOF:
@@ -603,11 +615,13 @@ const char *cmdq_virtual_module_from_event_id(const int32_t event)
 	case CMDQ_EVENT_DISP_2L_OVL0_EOF:
 	case CMDQ_EVENT_DISP_2L_OVL1_EOF:
 		module = "DISP_OVL";
+		group = CMDQ_GROUP_DISP;
 		break;
 
 	case CMDQ_EVENT_UFOD_RAMA0_L0_SOF ... CMDQ_EVENT_UFOD_RAMA1_L3_SOF:
 	case CMDQ_EVENT_UFOD_RAMA0_L0_EOF ... CMDQ_EVENT_UFOD_RAMA1_L3_EOF:
 		module = "DISP_UFOD";
+		group = CMDQ_GROUP_DISP;
 		break;
 
 	case CMDQ_EVENT_DSI_TE:
@@ -622,16 +636,19 @@ const char *cmdq_virtual_module_from_event_id(const int32_t event)
 	case CMDQ_EVENT_DISP_COLOR_EOF ... CMDQ_EVENT_DISP_DSC_EOF:
 	case CMDQ_EVENT_MUTEX0_STREAM_EOF ... CMDQ_EVENT_MUTEX4_STREAM_EOF:
 		module = "DISP";
+		group = CMDQ_GROUP_DISP;
 		break;
 	case CMDQ_SYNC_TOKEN_CONFIG_DIRTY:
 	case CMDQ_SYNC_TOKEN_STREAM_EOF:
 		module = "DISP";
+		group = CMDQ_GROUP_DISP;
 		break;
 
 	case CMDQ_EVENT_MDP_RDMA0_SOF ... CMDQ_EVENT_MDP_CROP_SOF:
 	case CMDQ_EVENT_MDP_RDMA0_EOF ... CMDQ_EVENT_MDP_CROP_EOF:
 	case CMDQ_EVENT_MUTEX5_STREAM_EOF ... CMDQ_EVENT_MUTEX9_STREAM_EOF:
 		module = "MDP";
+		group = CMDQ_GROUP_MDP;
 		break;
 
 	case CMDQ_EVENT_ISP_PASS2_2_EOF ... CMDQ_EVENT_ISP_PASS1_0_EOF:
@@ -647,6 +664,7 @@ const char *cmdq_virtual_module_from_event_id(const int32_t event)
 	case CMDQ_EVENT_ISP_CAMSV_2_PASS1_DONE:
 	case CMDQ_EVENT_SENINF_0_FIFO_FULL ... CMDQ_EVENT_SENINF_7_FIFO_FULL:
 		module = "ISP";
+		group = CMDQ_GROUP_ISP;
 		break;
 
 	case CMDQ_EVENT_JPEG_ENC_EOF:
@@ -654,29 +672,35 @@ const char *cmdq_virtual_module_from_event_id(const int32_t event)
 	case CMDQ_EVENT_JPEG_ENC_PASS1_EOF:
 	case CMDQ_EVENT_JPEG_DEC_EOF:
 		module = "JPGE";
+		group = CMDQ_GROUP_JPEG;
 		break;
 
 	case CMDQ_EVENT_VENC_EOF:
 	case CMDQ_EVENT_VENC_MB_DONE:
 	case CMDQ_EVENT_VENC_128BYTE_CNT_DONE:
 		module = "VENC";
+		group = CMDQ_GROUP_VENC;
 		break;
 
 	default:
 		module = "CMDQ";
+		group = CMDQ_MAX_GROUP_COUNT;
 		break;
 	}
+
+	if (group < CMDQ_MAX_GROUP_COUNT && groupCallback[group].dispatchMod)
+		module = groupCallback[group].dispatchMod(engineFlag);
 
 	return module;
 }
 
 const char *cmdq_virtual_parse_module_from_reg_addr(uint32_t reg_addr)
 {
-	const uint32_t addr_base_and_page = (reg_addr & 0xFFFFF000);
-
 #ifdef CMDQ_USE_LEGACY
 	return cmdq_virtual_parse_module_from_reg_addr_legacy(reg_addr);
 #else
+	const uint32_t addr_base_and_page = (reg_addr & 0xFFFFF000);
+
 	/* for well-known base, we check them with 12-bit mask */
 	/* defined in mt_reg_base.h */
 	/* TODO: comfirm with SS if IO_VIRT_TO_PHYS workable when enable device tree? */
@@ -791,9 +815,12 @@ void cmdq_virtual_enable_common_clock_locked(bool enable)
 #else
 		cmdq_dev_enable_clock_SMI_LARB0(enable);
 #endif
+#if defined(CMDQ_USE_CCF) && defined(CMDQ_USE_LEGACY)
+		cmdq_mdp_get_func()->mdpSmiLarbEnableClock(enable);
+#endif
 #ifdef CMDQ_USE_LEGACY
 		CMDQ_VERBOSE("[CLOCK] enable MT_CG_DISP0_MUTEX_32K\n");
-		cmdq_dev_enable_clock_MUTEX_32K(enable);
+		cmdq_mdp_get_func()->mdpEnableClockMutex32k(enable);
 #endif
 	} else {
 		CMDQ_VERBOSE("[CLOCK] Disable SMI & LARB0 Clock\n");
@@ -806,7 +833,10 @@ void cmdq_virtual_enable_common_clock_locked(bool enable)
 		cmdq_dev_enable_clock_SMI_COMMON(enable);
 #ifdef CMDQ_USE_LEGACY
 		CMDQ_VERBOSE("[CLOCK] disable MT_CG_DISP0_MUTEX_32K\n");
-		cmdq_dev_enable_clock_MUTEX_32K(enable);
+		cmdq_mdp_get_func()->mdpEnableClockMutex32k(enable);
+#endif
+#if defined(CMDQ_USE_CCF) && defined(CMDQ_USE_LEGACY)
+		cmdq_mdp_get_func()->mdpSmiLarbEnableClock(enable);
 #endif
 	}
 #endif				/* CMDQ_PWR_AWARE */
@@ -850,7 +880,7 @@ const char *cmdq_virtual_parse_error_module_by_hwflag_impl(const TaskStruct *pTa
 		if (NULL != module)
 			break;
 
-		if (false == pTask->secData.isSecure) {
+		if (false == pTask->secData.is_secure) {
 			/* normal path, need parse current running instruciton for more detail */
 			break;
 		} else if (CMDQ_ENG_MDP_GROUP_FLAG(pTask->engineFlag)) {
@@ -906,7 +936,7 @@ int cmdq_virtual_dump_smi(const int showSmiDump)
 {
 	int isSMIHang = 0;
 
-#if defined(CMDQ_CONFIG_SMI) && !defined(CONFIG_MTK_FPGA)
+#if defined(CMDQ_CONFIG_SMI) && !defined(CONFIG_MTK_FPGA) && !defined(CONFIG_MTK_SMI_VARIANT)
 	isSMIHang =
 	    smi_debug_bus_hanging_detect_ext(SMI_DBG_DISPSYS | SMI_DBG_VDEC | SMI_DBG_IMGSYS |
 					     SMI_DBG_VENC | SMI_DBG_MJC, showSmiDump, showSmiDump);
@@ -944,7 +974,7 @@ uint64_t cmdq_virtual_flag_from_scenario(CMDQ_SCENARIO_ENUM scn)
 	uint64_t flag = 0;
 
 #ifdef CMDQ_USE_LEGACY
-	cmdq_virtual_flag_from_scenario_legacy(scn);
+	flag = cmdq_virtual_flag_from_scenario_legacy(scn);
 #else
 	switch (scn) {
 	case CMDQ_SCENARIO_PRIMARY_DISP:
@@ -1158,7 +1188,7 @@ void cmdq_virtual_function_setting(void)
 	/*
 	 * GCE capability
 	 */
-	pFunc->getSubsysLSBArgA = cmdq_virtual_get_subsys_LSB_in_argA;
+	pFunc->getSubsysLSBArgA = cmdq_virtual_get_subsys_LSB_in_arg_a;
 
 	/* HW thread related */
 	pFunc->isSecureThread = cmdq_virtual_is_a_secure_thread;
@@ -1174,8 +1204,8 @@ void cmdq_virtual_function_setting(void)
 	pFunc->dispThread = cmdq_virtual_disp_thread;
 	pFunc->getThreadID = cmdq_virtual_get_thread_index;
 	pFunc->priority = cmdq_virtual_priority_from_scenario;
-	pFunc->forceLoopIRQ = cmdq_virtual_force_loop_irq;
-	pFunc->isLoopScenario = cmdq_virtual_is_loop_scenario;
+	pFunc->force_loop_irq = cmdq_virtual_force_loop_irq;
+	pFunc->is_disp_loop = cmdq_virtual_is_disp_loop;
 
 	/**
 	 * Module dependent

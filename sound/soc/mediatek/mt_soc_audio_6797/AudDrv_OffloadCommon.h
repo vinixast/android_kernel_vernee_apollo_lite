@@ -78,6 +78,7 @@
 #define OFFLOADSERVICE_GETWRITEBLOCK  _IO(OFFLOAD_IOC_MAGIC, 0x09)
 #define OFFLOADSERVICE_SETPARAM       _IO(OFFLOAD_IOC_MAGIC, 0x0A)
 #define OFFLOADSERVICE_WRITE          _IO(OFFLOAD_IOC_MAGIC, 0x0B)
+#define OFFLOADSERVICE_PCMDUMP        _IO(OFFLOAD_IOC_MAGIC, 0x0C)
 
 
 
@@ -130,10 +131,10 @@ struct AFE_OFFLOAD_T {
 	kal_uint32   pcmformat;
 	kal_uint32   drain_state;
 	kal_uint32   hw_buffer_size;
-	kal_uint32   hw_buffer_addr;  /* physical address */
-	kal_int8    *hw_buffer_area;  /* virtual pointer */
+	kal_uint64   hw_buffer_addr;  /* physical address */
 	kal_uint64   transferred;
 	kal_uint64   copied_total;    /* for tstamp*/
+	kal_int8    *hw_buffer_area;  /* virtual pointer */
 	bool         write_blocked;
 	bool         wakelock;
 	DMA_BUFFER_T buf;
@@ -152,9 +153,10 @@ struct AFE_OFFLOAD_SERVICE_T {
 };
 
 typedef enum {
-	MP3_NEEDDATA = 11,
-	MP3_PCMCONSUMED = 12,
-	MP3_DRAINDONE = 13,
+	MP3_NEEDDATA = 21,
+	MP3_PCMCONSUMED = 22,
+	MP3_DRAINDONE = 23,
+	MP3_PCMDUMP_OK = 24,
 } IPI_RECEIVED_MP3;
 
 typedef enum {
@@ -167,8 +169,8 @@ typedef enum {
 	MP3_SETWRITEBLOCK,
 	MP3_DRAIN,
 	MP3_VOLUME,
-	MP3_WRITEIDX,
 	MP3_TSTAMP,
+	MP3_PCMDUMP_ON,
 } IPI_MSG_ID;
 
 void OffloadService_SetWriteblocked(bool flag);

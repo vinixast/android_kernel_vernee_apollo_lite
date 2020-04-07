@@ -54,7 +54,7 @@ extern void scp_ram_dump_init(void);
 #define SCP_TCM_SIZE		(scpreg.tcmsize)
 #define SCP_TCM			(scpreg.sram)
 #define SCP_DTCM		SCP_TCM
-#define SCP_SHARE_BUFFER	(scpreg.sram + SCP_TCM_SIZE - 0x200)
+#define SCP_SHARE_BUFFER	(scpreg.sram + SCP_TCM_SIZE - SHARE_BUF_SIZE*2)
 #define SCP_BASE		(scpreg.cfg)
 #define SCP_SEMAPHORE		(SCP_BASE  + 0x90)
 #define SCP_CLK_CTRL_BASE	(scpreg.clkctrl)
@@ -117,7 +117,9 @@ typedef enum {
 	MP3_FEATURE_ID		= 3,
 	FLP_FEATURE_ID		= 4,
 	RTOS_FEATURE_ID		= 5,
-	NUM_FEATURE_ID		= 6,
+	VCORE_TEST_FEATURE_ID	= 6,
+	VCORE_TEST2_FEATURE_ID	= 7,
+	NUM_FEATURE_ID		= 8,
 } feature_id_t;
 
 typedef struct {
@@ -144,5 +146,6 @@ extern void deregister_feature(feature_id_t id);
 extern uint32_t get_freq(void);
 extern int request_freq(void);
 extern int check_scp_resource(void);
+extern int scp_check_dram_resource(void);
 
 #endif

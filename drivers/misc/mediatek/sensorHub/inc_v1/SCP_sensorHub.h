@@ -16,7 +16,7 @@
 #define SCP_SENSOR_HUB_TEMP_BUFSIZE     256
 
 #define SCP_SENSOR_HUB_FIFO_SIZE        0x800000
-#define SCP_KFIFO_BUFFER_SIZE        	(2048)
+#define SCP_KFIFO_BUFFER_SIZE           (2048)
 #define SCP_DIRECT_PUSH_FIFO_SIZE       8192
 
 #define SCP_SENSOR_HUB_SUCCESS          0
@@ -490,4 +490,44 @@ int sensor_enable_to_hub(uint8_t sensorType, int enabledisable);
 int sensor_set_delay_to_hub(uint8_t sensorType, unsigned int delayms);
 int sensor_get_data_from_hub(uint8_t sensorType, struct data_unit_t *data);
 int sensor_set_cmd_to_hub(uint8_t sensorType, CUST_ACTION action, void *data);
+
+#ifdef CONFIG_CUSTOM_KERNEL_ACCELEROMETER
+extern int acc_data_report(int x, int y, int z, int status, int64_t nt);
+#endif
+#ifdef CONFIG_CUSTOM_KERNEL_GYROSCOPE
+extern int gyro_data_report(int x, int y, int z, int status, int64_t nt);
+#endif
+#ifdef CONFIG_CUSTOM_KERNEL_MAGNETOMETER
+extern int magnetic_data_report(int x, int y, int z, int status, int64_t nt);
+#endif
+#ifdef CONFIG_CUSTOM_KERNEL_MAGNETOMETER
+extern int orientation_data_report(int x, int y, int z, int status, int64_t nt);
+#endif
+#ifdef CONFIG_CUSTOM_KERNEL_GRV_SENSOR
+extern int grv_data_report(int x, int y, int z, int scalar, int status, int64_t nt);
+#endif
+#ifdef CONFIG_CUSTOM_KERNEL_GMRV_SENSOR
+extern int gmrv_data_report(int x, int y, int z, int scalar, int status, int64_t nt);
+#endif
+#ifdef CONFIG_CUSTOM_KERNEL_GRAVITY_SENSOR
+extern int grav_data_report(int x, int y, int z, int status, int64_t nt);
+#endif
+#ifdef CONFIG_CUSTOM_KERNEL_LINEARACCEL_SENSOR
+extern int la_data_report(int x, int y, int z, int status, int64_t nt);
+#endif
+#ifdef CONFIG_CUSTOM_KERNEL_RV_SENSOR
+extern int rotationvector_data_report(int x, int y, int z, int scalar, int status, int64_t nt);
+#endif
+#ifdef CONFIG_CUSTOM_KERNEL_UNCALI_GYRO_SENSOR
+extern int uncali_gyro_data_report(int *data, int status, int64_t nt);
+#endif
+#ifdef CONFIG_CUSTOM_KERNEL_UNCALI_MAG_SENSOR
+extern int uncali_mag_data_report(int *data, int status, int64_t nt);
+#endif
+#ifdef CONFIG_CUSTOM_KERNEL_PEDOMETER
+extern int pedo_data_report(struct hwm_sensor_data *data, int status);
+#endif
+#ifdef CONFIG_CUSTOM_KERNEL_ACTIVITY_SENSOR
+extern int act_data_report(struct hwm_sensor_data *data, int status);
+#endif
 #endif

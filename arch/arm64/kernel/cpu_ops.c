@@ -18,6 +18,7 @@
 
 #include <asm/cpu_ops.h>
 #include <asm/smp_plat.h>
+#include <linux/cache.h>
 #include <linux/errno.h>
 #include <linux/of.h>
 #include <linux/string.h>
@@ -29,14 +30,12 @@
 extern const struct cpu_operations smp_spin_table_ops;
 extern const struct cpu_operations cpu_psci_ops;
 
-const struct cpu_operations *cpu_ops[NR_CPUS];
+const struct cpu_operations *cpu_ops[NR_CPUS] __ro_after_init;
 
 static const struct cpu_operations *supported_cpu_ops[] __initconst = {
-#ifdef CONFIG_SMP
 	&smp_spin_table_ops,
 #ifdef CONFIG_MTK_PSCI
 	&mt_cpu_psci_ops,
-#endif
 #endif
 	&cpu_psci_ops,
 	NULL,

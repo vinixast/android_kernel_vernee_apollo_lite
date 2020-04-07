@@ -73,8 +73,10 @@ static unsigned int kp_irq_bit;
 static unsigned int conn_wdt_irq_bit;
 static unsigned int lowbattery_irq_bit;
 static unsigned int md1_wdt_irq_bit;
-#ifdef CONFIG_MTK_C2K_SUPPORT
+#ifdef CONFIG_MTK_MD3_SUPPORT
+#if CONFIG_MTK_MD3_SUPPORT /* Using this to check >0 */
 static unsigned int c2k_wdt_irq_bit;
+#endif
 #endif
 
 #if defined(CONFIG_ARCH_MT6735_SERIES) || defined(CONFIG_ARCH_MT6580)
@@ -284,9 +286,11 @@ static void restore_edge_gic_spm_irq(unsigned long gic_distributor_address)
 	restore_gic_spm_irq(id, CPUIDLE_WAKE_SRC_R12_CONN_WDT_IRQ_B, &conn_wdt_irq_bit);
 	restore_gic_spm_irq(id, CPUIDLE_WAKE_SRC_R12_LOWBATTERY_IRQ_B, &lowbattery_irq_bit);
 	restore_gic_spm_irq(id, CPUIDLE_WAKE_SRC_R12_MD1_WDT_B, &md1_wdt_irq_bit);
-#ifdef CONFIG_MTK_C2K_SUPPORT
+#ifdef CONFIG_MTK_MD3_SUPPORT
+#if CONFIG_MTK_MD3_SUPPORT /* Using this to check >0 */
 	restore_gic_spm_irq(id, CPUIDLE_WAKE_SRC_R12_C2K_WDT_IRQ_B, &c2k_wdt_irq_bit);
-#endif /* #ifdef CONFIG_MTK_C2K_SUPPORT */
+#endif
+#endif
 
 	id->control = backup;
 }
@@ -732,6 +736,12 @@ void mt_platform_save_context(int flags)
 
 void mt_platform_restore_context(int flags)
 {
+#if defined(CONFIG_ARCH_MT6580) && (defined(CONFIG_TRUSTONIC_TEE_SUPPORT) || defined(CONFIG_TRUSTY))
+	int cpuid, clusterid;
+
+	read_id(&cpuid, &clusterid);
+#endif
+
 	mt_cluster_restore(flags);
 	mt_cpu_restore();
 
@@ -745,6 +755,23 @@ void mt_platform_restore_context(int flags)
 	if (IS_DORMANT_GIC_OFF(flags))
 		restore_edge_gic_spm_irq(gic_id_base);
 #endif
+
+#if defined(CONFIG_ARCH_MT6580)
+#if defined(CONFIG_TRUSTONIC_TEE_SUPPORT)
+	/* SODI/DPIDLE */
+	if (!IS_DORMANT_INNER_OFF(flags)) {
+		if (cpuid == 0)
+			mt_secure_call(MC_FC_SLEEP_CANCELLED, 0, 0, 0);
+	}
+#elif defined(CONFIG_TRUSTY)
+	/* SODI/DPIDLE */
+	if (!IS_DORMANT_INNER_OFF(flags)) {
+		if (cpuid == 0)
+			mt_trusty_call(SMC_FC_CPU_DORMANT_CANCEL, 0, 0, 0);
+	}
+#endif
+#endif /* CONFIG_ARCH_MT6580  */
+
 }
 
 #if !defined(CONFIG_ARM64) && !defined(CONFIG_ARCH_MT6580)
@@ -860,7 +887,8 @@ int mt_cpu_dormant(unsigned long flags)
 #else
 	dormant_data[0].poc.cpu_resume_phys = (void (*)(void))(long)virt_to_phys(cpu_resume);
 #ifdef CONFIG_TRUSTONIC_TEE_SUPPORT
-	mt_secure_call(MC_FC_MTK_SLEEP, virt_to_phys(cpu_resume), cpuid, 0);
+	/* CPU_DEEP_SLEEP (0), CPU_MCDI_SLEEP (1)  */
+	mt_secure_call(MC_FC_MTK_SLEEP, virt_to_phys(cpu_resume), cpuid, IS_DORMANT_INNER_OFF(flags) ? 0 : 1);
 #elif defined(CONFIG_TRUSTY) && defined(CONFIG_ARCH_MT6580)
 	mt_trusty_call(SMC_FC_CPU_DORMANT, virt_to_phys(cpu_resume), cpuid, 0);
 #else
@@ -1015,8 +1043,10 @@ static void get_dts_nodes_irq_bit(void)
 	conn_wdt_irq_bit = get_dts_node_irq_bit("mediatek,mt6735-consys", 6, 3);
 	lowbattery_irq_bit = get_dts_node_irq_bit("mediatek,mt6735-auxadc", 3, 0);
 	md1_wdt_irq_bit = get_dts_node_irq_bit("mediatek,mdcldma", 9, 6);
-#ifdef CONFIG_MTK_C2K_SUPPORT
+#ifdef CONFIG_MTK_MD3_SUPPORT
+#if CONFIG_MTK_MD3_SUPPORT /* Using this to check >0 */
 	c2k_wdt_irq_bit = get_dts_node_irq_bit("mediatek,mdc2k", 3, 0);
+#endif
 #endif
 }
 #elif defined(CONFIG_ARCH_MT6755)
@@ -1031,8 +1061,10 @@ static void get_dts_nodes_irq_bit(void)
 	conn_wdt_irq_bit = get_dts_node_irq_bit("mediatek,mt6755-consys", 6, 3);
 	lowbattery_irq_bit = get_dts_node_irq_bit(NULL, 3, 0);
 	md1_wdt_irq_bit = get_dts_node_irq_bit("mediatek,mdcldma", 9, 6);
-#ifdef CONFIG_MTK_C2K_SUPPORT
+#ifdef CONFIG_MTK_MD3_SUPPORT
+#if CONFIG_MTK_MD3_SUPPORT /* Using this to check >0 */
 	c2k_wdt_irq_bit = get_dts_node_irq_bit("mediatek,ap2c2k_ccif", 6, 3);
+#endif
 #endif
 }
 #elif defined(CONFIG_ARCH_MT6797)
@@ -1047,8 +1079,10 @@ static void get_dts_nodes_irq_bit(void)
 	conn_wdt_irq_bit = get_dts_node_irq_bit("mediatek,mt6797-consys", 6, 3);
 	lowbattery_irq_bit = get_dts_node_irq_bit("mediatek,mt6797-auxadc", 3, 0);
 	md1_wdt_irq_bit = get_dts_node_irq_bit("mediatek,mdcldma", 9, 6);
-#ifdef CONFIG_MTK_C2K_SUPPORT
+#ifdef CONFIG_MTK_MD3_SUPPORT
+#if CONFIG_MTK_MD3_SUPPORT /* Using this to check >0 */
 	c2k_wdt_irq_bit = get_dts_node_irq_bit("mediatek,ap2c2k_ccif", 6, 3);
+#endif
 #endif
 }
 #endif

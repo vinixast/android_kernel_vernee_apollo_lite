@@ -41,9 +41,14 @@ enum dvfs_table_type {
 };
 
 enum ppm_sysboost_user {
-	BOOST_BY_WIFI = 0,
+	BOOST_BY_UT = 0,
+	BOOST_BY_WIFI,
 	BOOST_BY_PERFSERV,
-	BOOST_BY_UT,
+	BOOST_BY_USB,
+	BOOST_BY_USB_PD,
+	/* dedicate ID for debugd to avoid over-writing other kernel users */
+	BOOST_BY_DEBUGD = 5,
+	BOOST_BY_DEBUGD_64,
 
 	NR_PPM_SYSBOOST_USER,
 };
@@ -90,16 +95,27 @@ struct ppm_cluster_status {
 	int volt;
 };
 
+struct ppm_limit_data {
+	int min;
+	int max;
+};
+
 /*==============================================================*/
 /* APIs								*/
 /*==============================================================*/
 extern void mt_ppm_set_dvfs_table(unsigned int cpu, struct cpufreq_frequency_table *tbl,
 	unsigned int num, enum dvfs_table_type type);
 extern void mt_ppm_register_client(enum ppm_client client, void (*limit)(struct ppm_client_req req));
+extern void mt_ppm_set_5A_limit_throttle(bool enable);
+extern void mt_ppm_limit_freq_when_ke(void);
 
 /* SYS boost policy */
 extern void mt_ppm_sysboost_core(enum ppm_sysboost_user user, unsigned int core_num);
 extern void mt_ppm_sysboost_freq(enum ppm_sysboost_user user, unsigned int freq);
+extern void mt_ppm_sysboost_set_core_limit(enum ppm_sysboost_user user, unsigned int cluster,
+					int min_core, int max_core);
+extern void mt_ppm_sysboost_set_freq_limit(enum ppm_sysboost_user user, unsigned int cluster,
+					int min_freq, int max_freq);
 
 /* DLPT policy */
 extern void mt_ppm_dlpt_set_limit_by_pbm(unsigned int limited_power);
@@ -110,6 +126,9 @@ extern void mt_ppm_cpu_thermal_protect(unsigned int limited_power);
 extern unsigned int mt_ppm_thermal_get_min_power(void);
 extern unsigned int mt_ppm_thermal_get_max_power(void);
 extern unsigned int mt_ppm_thermal_get_cur_power(void);
+
+/* Force limit policy */
+extern unsigned int mt_ppm_forcelimit_cpu_core(unsigned int cluster_num, struct ppm_limit_data *data);
 
 /* PTPOD policy */
 extern void mt_ppm_ptpod_policy_activate(void);

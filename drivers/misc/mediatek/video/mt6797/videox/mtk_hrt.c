@@ -1,3 +1,16 @@
+/*
+ * Copyright (C) 2016 MediaTek Inc.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See http://www.gnu.org/licenses/gpl-2.0.html for more details.
+ */
+
 #include <linux/delay.h>
 #include <linux/sched.h>
 #include <linux/semaphore.h>
@@ -5,7 +18,6 @@
 #include <linux/wait.h>
 #include <linux/kthread.h>
 #include <linux/mutex.h>
-#include <linux/rtpm_prio.h>
 #include <linux/types.h>
 #include <linux/of.h>
 #include <linux/of_irq.h>
@@ -943,7 +955,7 @@ static int set_hrt_bound(void)
 	if (primary_display_get_lcm_refresh_rate() == 120) {
 		emi_lower_bound = OD_EMI_LOWER_BOUND;
 		emi_upper_bound = OD_EMI_UPPER_BOUND;
-		larb_upper_bound = OD_LARB_LOWER_BOUND;
+		larb_lower_bound = OD_LARB_LOWER_BOUND;
 		larb_upper_bound = OD_LARB_UPPER_BOUND;
 #ifdef HRT_DEBUG
 		DISPMSG("120hz hrt bound\n");
@@ -1056,9 +1068,7 @@ int dispsys_hrt_calc(disp_layer_info *disp_info_user)
 	dump_disp_info(&disp_info_hrt);
 #endif
 
-	/*
-	Set corresponding hrt bound for 60HZ and 120HZ.
-	*/
+	/* Set corresponding hrt bound for 60HZ and 120HZ. */
 	primary_fps = set_hrt_bound();
 
 	/*
@@ -1074,11 +1084,14 @@ int dispsys_hrt_calc(disp_layer_info *disp_info_user)
 	*/
 	calc_hrt_num(&disp_info_hrt);
 
-	/*
-	Fill layer id for each input layers. All the gles layer set as same layer id.
-	*/
+	/* Fill layer id for each input layers. All the gles layer set as same layer id. */
 	ret = dispatch_ovl_id(&disp_info_hrt);
 	dump_disp_info(&disp_info_hrt);
+
+#ifdef CONFIG_MTK_DISPLAY_120HZ_SUPPORT
+	/* Make hrt number with primary fps. */
+	disp_info_hrt.hrt_num = MAKE_HRT_NUM(primary_fps, disp_info_hrt.hrt_num);
+#endif
 
 	ret = copy_layer_info_to_user(disp_info_user);
 	return ret;

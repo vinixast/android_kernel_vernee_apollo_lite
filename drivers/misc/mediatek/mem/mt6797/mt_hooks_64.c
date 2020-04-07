@@ -1,3 +1,15 @@
+/*
+ * Copyright (C) 2016 MediaTek Inc.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See http://www.gnu.org/licenses/gpl-2.0.html for more details.
+ */
 #include <linux/types.h>
 #include <linux/sizes.h>
 #include <linux/printk.h>
@@ -9,6 +21,7 @@
 #include <asm/cacheflush.h>
 #include <asm/pgtable.h>
 #include <asm/atomic.h>
+#include <mt-plat/mt_cache_dump.h>
 
 static atomic_t reg_0x1001Axxx_cnt = ATOMIC_INIT(1);
 
@@ -46,10 +59,9 @@ int arm_undefinstr_retry(struct pt_regs *regs, unsigned int instr)
 {
 	void __user *pc = (void __user *)instruction_pointer(regs);
 	struct thread_info *thread = current_thread_info();
-#ifdef CONFIG_MTK_CACHE_DUMP
-	extern int mt_icache_dump(void);
+
 	mt_icache_dump();
-#endif
+
 	/*
 	 * Place the SIGILL ICache Invalidate after the Debugger
 	 * Undefined-Instruction Solution.

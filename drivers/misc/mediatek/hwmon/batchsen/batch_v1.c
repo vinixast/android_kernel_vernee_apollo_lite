@@ -1,3 +1,16 @@
+/*
+* Copyright (C) 2015 MediaTek Inc.
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License version 2 as
+* published by the Free Software Foundation.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+* See http://www.gnu.org/licenses/gpl-2.0.html for more details.
+*/
+
 #include <batch.h>
 #include <linux/time.h>
 #include <linux/delay.h>
@@ -112,19 +125,20 @@ static int batch_update_polling_rate(void)
 	int onchange_delay = 0;
 
 	for (idx = 0; idx < ID_SENSOR_MAX_HANDLE; idx++) {
-		if ((obj->active_sensor & (1ULL << idx)) && (0 != obj->dev_list.data_dev[idx].maxBatchReportLatencyMs)) {
+		if ((obj->active_sensor & (1ULL << idx)) &&
+				(0 != obj->dev_list.data_dev[idx].maxBatchReportLatencyMs)) {
 			switch (idx) {
-				case ID_LIGHT:
-				case ID_PROXIMITY:
-				case ID_HUMIDITY:
-				case ID_STEP_COUNTER:
-				case ID_STEP_DETECTOR:
-				case ID_TILT_DETECTOR:
-					onchange_delay = obj->dev_list.data_dev[idx].maxBatchReportLatencyMs - 2000;
-					break;
-				default:
-					onchange_delay = obj->dev_list.data_dev[idx].maxBatchReportLatencyMs;
-					break;
+			case ID_LIGHT:
+			case ID_PROXIMITY:
+			case ID_HUMIDITY:
+			case ID_STEP_COUNTER:
+			case ID_STEP_DETECTOR:
+			case ID_TILT_DETECTOR:
+				onchange_delay = obj->dev_list.data_dev[idx].maxBatchReportLatencyMs - 2000;
+				break;
+			default:
+				onchange_delay = obj->dev_list.data_dev[idx].maxBatchReportLatencyMs;
+				break;
 			}
 			if ((onchange_delay < mindelay) || (mindelay == 0))
 				atomic_set(&obj->min_timeout_handle, idx);
@@ -685,9 +699,14 @@ static ssize_t batch_show_devnum(struct device *dev,
 {
 	struct batch_context *cxt = NULL;
 	const char *devname = NULL;
+	struct input_handle *handle;
 
 	cxt = batch_context_obj;
-	devname = dev_name(&cxt->idev->dev);
+	list_for_each_entry(handle, &cxt->idev->h_list, d_node)
+		if (strncmp(handle->name, "event", 5) == 0) {
+			devname = handle->name;
+			break;
+		}
 	return snprintf(buf, PAGE_SIZE, "%s\n", devname+5);
 }
 /*----------------------------------------------------------------*/

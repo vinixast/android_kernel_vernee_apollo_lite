@@ -1,3 +1,16 @@
+/*
+* Copyright (C) 2016 MediaTek Inc.
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License version 2 as
+* published by the Free Software Foundation.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+* See http://www.gnu.org/licenses/gpl-2.0.html for more details.
+*/
+
 #include "precomp.h"
 
 #ifdef __GNUC__
@@ -42,6 +55,7 @@ VOID p2pFuncRequestScan(IN P_ADAPTER_T prAdapter, IN P_P2P_SCAN_REQ_INFO_T prSca
 {
 
 	P_MSG_SCN_SCAN_REQ prScanReq = (P_MSG_SCN_SCAN_REQ) NULL;
+	UINT_8 aucP2pSsid[] = P2P_WILDCARD_SSID;
 	/*NFC Beam + Indication */
 	P_BSS_INFO_T prP2pBssInfo = (P_BSS_INFO_T) NULL;
 	BOOLEAN fgIsPureAP = FALSE;
@@ -50,16 +64,8 @@ VOID p2pFuncRequestScan(IN P_ADAPTER_T prAdapter, IN P_P2P_SCAN_REQ_INFO_T prSca
 	prP2pBssInfo = &(prAdapter->rWifiVar.arBssInfo[NETWORK_TYPE_P2P_INDEX]);
 	fgIsPureAP = prAdapter->rWifiVar.prP2pFsmInfo->fgIsApMode;
 
-	DEBUGFUNC("p2pFuncRequestScan()");
-
 	do {
 		ASSERT_BREAK((prAdapter != NULL) && (prScanReqInfo != NULL));
-
-		if (prScanReqInfo->eChannelSet == SCAN_CHANNEL_SPECIFIED) {
-			ASSERT_BREAK(prScanReqInfo->ucNumChannelList > 0);
-			DBGLOG(P2P, LOUD,
-			       "P2P Scan Request Channel:%d\n", prScanReqInfo->arScanChannelList[0].ucChannelNum);
-		}
 
 		prScanReq = (P_MSG_SCN_SCAN_REQ) cnmMemAlloc(prAdapter, RAM_TYPE_MSG, sizeof(MSG_SCN_SCAN_REQ));
 		if (!prScanReq) {
@@ -71,125 +77,60 @@ VOID p2pFuncRequestScan(IN P_ADAPTER_T prAdapter, IN P_P2P_SCAN_REQ_INFO_T prSca
 		prScanReq->ucSeqNum = ++prScanReqInfo->ucSeqNumOfScnMsg;
 		prScanReq->ucNetTypeIndex = (UINT_8) NETWORK_TYPE_P2P_INDEX;
 		prScanReq->eScanType = prScanReqInfo->eScanType;
-		prScanReq->eScanChannel = prScanReqInfo->eChannelSet;
-		prScanReq->u2IELen = 0;
 
-		/* Copy IE for Probe Request. */
-		if (prScanReqInfo->u4BufLength > MAX_IE_LENGTH)
-			prScanReqInfo->u4BufLength = MAX_IE_LENGTH;
-		kalMemCopy(prScanReq->aucIE, prScanReqInfo->aucIEBuf, prScanReqInfo->u4BufLength);
-		prScanReq->u2IELen = (UINT_16) prScanReqInfo->u4BufLength;
+		COPY_SSID(prScanReq->aucSSID,
+			  prScanReq->ucSSIDLength,
+			  prScanReqInfo->rSsidStruct.aucSsid, prScanReqInfo->rSsidStruct.ucSsidLen);
+
+		if (EQUAL_SSID(aucP2pSsid, P2P_WILDCARD_SSID_LEN,
+			       prScanReq->aucSSID, prScanReq->ucSSIDLength))
+			prScanReq->ucSSIDType = SCAN_REQ_SSID_P2P_WILDCARD;
+		else if (prScanReq->ucSSIDLength != 0)
+			prScanReq->ucSSIDType = SCAN_REQ_SSID_SPECIFIED;
+		else
+			prScanReq->ucSSIDType = SCAN_REQ_SSID_WILDCARD;
 
 		prScanReq->u2ChannelDwellTime = prScanReqInfo->u2PassiveDewellTime;
 
-		switch (prScanReqInfo->eChannelSet) {
-		case SCAN_CHANNEL_SPECIFIED:
-			{
-				UINT_32 u4Idx = 0;
-				P_RF_CHANNEL_INFO_T prDomainInfo =
-						(P_RF_CHANNEL_INFO_T) prScanReqInfo->arScanChannelList;
-				UINT_8 aucP2pSsid[] = P2P_WILDCARD_SSID;
+		prScanReq->eScanChannel = prScanReqInfo->eChannelSet;
+		if (prScanReqInfo->eChannelSet == SCAN_CHANNEL_SPECIFIED) {
+			UINT_32 u4Idx = 0;
+			P_RF_CHANNEL_INFO_T prChnInfo = prScanReqInfo->arScanChannelList;
 
+			ASSERT_BREAK(prScanReqInfo->ucNumChannelList > 0);
 
-				if (prScanReqInfo->ucNumChannelList > MAXIMUM_OPERATION_CHANNEL_LIST)
-					prScanReqInfo->ucNumChannelList = MAXIMUM_OPERATION_CHANNEL_LIST;
+			if (prScanReqInfo->ucNumChannelList > MAXIMUM_OPERATION_CHANNEL_LIST)
+				prScanReqInfo->ucNumChannelList = MAXIMUM_OPERATION_CHANNEL_LIST;
 
-				for (u4Idx = 0; u4Idx < prScanReqInfo->ucNumChannelList; u4Idx++) {
-					prScanReq->arChnlInfoList[u4Idx].ucChannelNum = prDomainInfo->ucChannelNum;
-					prScanReq->arChnlInfoList[u4Idx].eBand = prDomainInfo->eBand;
-					prDomainInfo++;
-				}
-
-				prScanReq->ucChannelListNum = prScanReqInfo->ucNumChannelList;
-
-				/*NFC Beam + Indication */
-				prChnlReqInfo = &prAdapter->rWifiVar.prP2pFsmInfo->rChnlReqInfo;
-				if (prChnlReqInfo->eChannelReqType == CHANNEL_REQ_TYPE_GO_START_BSS &&
-					prP2pBssInfo->eCurrentOPMode == OP_MODE_ACCESS_POINT &&
-					!fgIsPureAP) {
-					prScanReq->ucChannelListNum = 1;
-					prScanReq->arChnlInfoList[0].ucChannelNum = prChnlReqInfo->ucReqChnlNum;
-					prScanReq->arChnlInfoList[0].eBand = prChnlReqInfo->eBand;
-
-					DBGLOG(P2P, INFO,
-				       "NFC:GO Skip Scan and Only Froce on %s[%d]\n",
-						prChnlReqInfo->eBand == 1 ? "2.4G" : "5G",
-						prChnlReqInfo->ucReqChnlNum);
-					}
-
-				COPY_SSID(prScanReq->aucSSID,
-					  prScanReq->ucSSIDLength,
-					  prScanReqInfo->rSsidStruct.aucSsid, prScanReqInfo->rSsidStruct.ucSsidLen);
-
-				/* For compatible. */
-				if (EQUAL_SSID(aucP2pSsid, P2P_WILDCARD_SSID_LEN,
-						prScanReq->aucSSID, prScanReq->ucSSIDLength)) {
-						prScanReq->ucSSIDType = SCAN_REQ_SSID_P2P_WILDCARD;
-				} else if (prScanReq->ucSSIDLength != 0) {
-						prScanReq->ucSSIDType = SCAN_REQ_SSID_SPECIFIED;
-				}
-
+			for (u4Idx = 0; u4Idx < prScanReqInfo->ucNumChannelList; u4Idx++) {
+				prScanReq->arChnlInfoList[u4Idx].ucChannelNum = prChnInfo->ucChannelNum;
+				prScanReq->arChnlInfoList[u4Idx].eBand = prChnInfo->eBand;
+				prChnInfo++;
 			}
-			break;
 
-		case SCAN_CHANNEL_FULL:
-			{
-				UINT_8 aucP2pSsid[] = P2P_WILDCARD_SSID;
+			prScanReq->ucChannelListNum = prScanReqInfo->ucNumChannelList;
 
-				COPY_SSID(prScanReq->aucSSID,
-					  prScanReq->ucSSIDLength,
-					  prScanReqInfo->rSsidStruct.aucSsid, prScanReqInfo->rSsidStruct.ucSsidLen);
+			/*NFC Beam + Indication */
+			prChnlReqInfo = &prAdapter->rWifiVar.prP2pFsmInfo->rChnlReqInfo;
+			if (prChnlReqInfo->eChannelReqType == CHANNEL_REQ_TYPE_GO_START_BSS &&
+			    prP2pBssInfo->eCurrentOPMode == OP_MODE_ACCESS_POINT &&
+			    !fgIsPureAP) {
+				prScanReq->ucChannelListNum = 1;
+				prScanReq->arChnlInfoList[0].ucChannelNum = prChnlReqInfo->ucReqChnlNum;
+				prScanReq->arChnlInfoList[0].eBand = prChnlReqInfo->eBand;
 
-				/* For compatible. */
-				if (EQUAL_SSID(aucP2pSsid, P2P_WILDCARD_SSID_LEN,
-						prScanReq->aucSSID, prScanReq->ucSSIDLength)) {
-						prScanReq->ucSSIDType = SCAN_REQ_SSID_P2P_WILDCARD;
-				} else if (prScanReq->ucSSIDLength != 0) {
-						prScanReq->ucSSIDType = SCAN_REQ_SSID_SPECIFIED;
-				}
+				DBGLOG(P2P, INFO, "NFC:GO Skip Scan and Only Froce on %s[%d]\n",
+				       prChnlReqInfo->eBand == 1 ? "2.4G" : "5G",
+				       prChnlReqInfo->ucReqChnlNum);
 			}
-			break;
-
-		case SCAN_CHANNEL_2G4:
-			{
-				UINT_8 aucP2pSsid[] = P2P_WILDCARD_SSID;
-
-				COPY_SSID(prScanReq->aucSSID,
-					  prScanReq->ucSSIDLength,
-					  prScanReqInfo->rSsidStruct.aucSsid, prScanReqInfo->rSsidStruct.ucSsidLen);
-
-				/* For compatible. */
-				if (EQUAL_SSID(aucP2pSsid, P2P_WILDCARD_SSID_LEN,
-						prScanReq->aucSSID, prScanReq->ucSSIDLength)) {
-						prScanReq->ucSSIDType = SCAN_REQ_SSID_P2P_WILDCARD;
-				} else if (prScanReq->ucSSIDLength != 0) {
-						prScanReq->ucSSIDType = SCAN_REQ_SSID_SPECIFIED;
-				}
-			}
-			break;
-
-		case SCAN_CHANNEL_P2P_SOCIAL:
-			{
-				UINT_8 aucP2pSsid[] = P2P_WILDCARD_SSID;
-
-				COPY_SSID(prScanReq->aucSSID,
-					  prScanReq->ucSSIDLength,
-					  prScanReqInfo->rSsidStruct.aucSsid, prScanReqInfo->rSsidStruct.ucSsidLen);
-
-				/* For compatible. */
-				if (EQUAL_SSID(aucP2pSsid, P2P_WILDCARD_SSID_LEN,
-						prScanReq->aucSSID, prScanReq->ucSSIDLength)) {
-						prScanReq->ucSSIDType = SCAN_REQ_SSID_P2P_WILDCARD;
-				} else if (prScanReq->ucSSIDLength != 0) {
-						prScanReq->ucSSIDType = SCAN_REQ_SSID_SPECIFIED;
-				}
-			}
-			break;
-		default:
-			/* Currently there is no other scan channel set. */
-			ASSERT(FALSE);
-			break;
 		}
+
+		/* Copy IE for Probe Request */
+		if (prScanReqInfo->u4BufLength > MAX_IE_LENGTH)
+			prScanReqInfo->u4BufLength = MAX_IE_LENGTH;
+
+		kalMemCopy(prScanReq->aucIE, prScanReqInfo->aucIEBuf, prScanReqInfo->u4BufLength);
+		prScanReq->u2IELen = (UINT_16) prScanReqInfo->u4BufLength;
 
 		mboxSendMsg(prAdapter, MBOX_ID_0, (P_MSG_HDR_T) prScanReq, MSG_SEND_METHOD_BUF);
 
@@ -899,8 +840,7 @@ p2pFuncDissolve(IN P_ADAPTER_T prAdapter,
 			/* Reset station record status. */
 			if (prP2pBssInfo->prStaRecOfAP) {
 				kalP2PGCIndicateConnectionStatus(prAdapter->prGlueInfo,
-								 NULL, NULL, 0, REASON_CODE_DEAUTH_LEAVING_BSS,
-								 WLAN_STATUS_MEDIA_DISCONNECT_LOCALLY);
+								 NULL, NULL, 0, REASON_CODE_DEAUTH_LEAVING_BSS);
 
 				/* 2012/02/14 frog: After formation before join group, prStaRecOfAP is NULL. */
 				p2pFuncDisconnect(prAdapter, prP2pBssInfo->prStaRecOfAP, fgSendDeauth, u2ReasonCode);
@@ -1030,7 +970,8 @@ p2pFuncDisconnect(IN P_ADAPTER_T prAdapter,
 		}
 
 	} while (FALSE);
-
+	/*start dump pkt info*/
+	wlanPktDebugDumpInfo(prAdapter);
 	return;
 
 }				/* p2pFuncDisconnect */
@@ -1166,7 +1107,7 @@ VOID p2pFuncTagActionActionP2PFrame(IN P_MSDU_INFO_T prMgmtTxMsdu,
 			IN P_WLAN_ACTION_FRAME prActFrame,
 			IN UINT_8 ucP2pAction, IN UINT_64 u8Cookie)
 {
-	DBGLOG(P2P, INFO, "Found P2P_%s, SA: %pM - DA: %pM, cookie: 0x%llx, SeqNO: %d\n",
+	DBGLOG(P2P, TRACE, "Found P2P_%s, SA: %pM - DA: %pM, cookie: 0x%llx, SeqNO: %d\n",
 		p2p_to_string(ucP2pAction),
 		prActFrame->aucSrcAddr,
 		prActFrame->aucDestAddr,
@@ -1174,41 +1115,52 @@ VOID p2pFuncTagActionActionP2PFrame(IN P_MSDU_INFO_T prMgmtTxMsdu,
 		prMgmtTxMsdu->ucTxSeqNum);
 }
 
+#define P2P_INFO_MSG_LENGTH 200
 VOID p2pFuncTagActionActionFrame(IN P_MSDU_INFO_T prMgmtTxMsdu,
 			IN P_WLAN_ACTION_FRAME prActFrame,
 			IN UINT_8 ucAction, IN UINT_64 u8Cookie)
 {
 	PUINT_8 pucVendor = NULL;
+	UINT_32 offsetMsg;
+	UINT8 aucMsg[P2P_INFO_MSG_LENGTH];
 
-	DBGLOG(P2P, INFO, "Found WLAN_%s, SA: %pM - DA: %pM, cookie: 0x%llx, SeqNo: %d\n",
-		pa_to_string(ucAction),
-		prActFrame->aucSrcAddr,
-		prActFrame->aucDestAddr,
-		u8Cookie,
-		prMgmtTxMsdu->ucTxSeqNum);
+	offsetMsg = 0;
+	offsetMsg += kalSnprintf((aucMsg + offsetMsg), sizeof(aucMsg), "WLAN_%s, ",
+			  pa_to_string(ucAction));
+
+
 
 	if (ucAction == WLAN_PA_VENDOR_SPECIFIC) {
 		pucVendor = (PUINT_8)prActFrame + 26;
 		if (*(pucVendor + 0) == 0x50 &&
 		    *(pucVendor + 1) == 0x6f &&
 		    *(pucVendor + 2) == 0x9a) {
-			if (*(pucVendor + 3) == 0x09)
+			if (*(pucVendor + 3) == 0x09) {
 				/* found p2p IE */
 				p2pFuncTagActionActionP2PFrame(prMgmtTxMsdu,
 					prActFrame, *(pucVendor + 4), u8Cookie);
-			else if (*(pucVendor + 3) == 0x0a)
+				offsetMsg += kalSnprintf((aucMsg + offsetMsg), sizeof(aucMsg) - offsetMsg
+					, "P2P_%s, ", p2p_to_string(*(pucVendor + 4)));
+			} else if (*(pucVendor + 3) == 0x0a) {
 				/* found WFD IE */
-				DBGLOG(P2P, INFO, "Found WFD IE, SA: %pM - DA: %pM\n",
+				DBGLOG(P2P, TRACE, "Found WFD IE, SA: %pM - DA: %pM\n",
 					prActFrame->aucSrcAddr,
 					prActFrame->aucDestAddr);
-			else
-				DBGLOG(P2P, INFO, "Found Other vendor 0x%x, SA: %pM - DA: %pM\n",
+				offsetMsg += kalSnprintf((aucMsg + offsetMsg), sizeof(aucMsg) - offsetMsg
+					, "WFD IE%s, ", "");
+			} else {
+				DBGLOG(P2P, TRACE, "Found Other vendor 0x%x, SA: %pM - DA: %pM\n",
 					*(pucVendor + 3),
 					prActFrame->aucSrcAddr,
 					prActFrame->aucDestAddr);
+				offsetMsg += kalSnprintf((aucMsg + offsetMsg), sizeof(aucMsg) - offsetMsg
+					, "Other vendor 0x%x, ", *(pucVendor + 3));
+			}
 		}
 	}
+	DBGLOG(P2P, INFO, "Found :%s\n", aucMsg);
 }
+
 
 VOID p2pFuncTagActionCategoryFrame(IN P_MSDU_INFO_T prMgmtTxMsdu,
 			P_WLAN_ACTION_FRAME prActFrame,
@@ -1592,7 +1544,6 @@ p2pFuncValidateAuth(IN P_ADAPTER_T prAdapter,
 		ASSERT_BREAK((prAdapter != NULL) &&
 			     (prSwRfb != NULL) && (pprStaRec != NULL) && (pu2StatusCode != NULL));
 
-		/* P2P 3.2.8 */
 		*pu2StatusCode = STATUS_CODE_REQ_DECLINED;
 
 		prP2pBssInfo = &(prAdapter->rWifiVar.arBssInfo[NETWORK_TYPE_P2P_INDEX]);
@@ -1600,10 +1551,28 @@ p2pFuncValidateAuth(IN P_ADAPTER_T prAdapter,
 
 		if ((prP2pBssInfo->eCurrentOPMode != OP_MODE_ACCESS_POINT)
 		    || (prP2pBssInfo->eIntendOPMode != OP_MODE_NUM)) {
-			/* We are not under AP Mode yet. */
+			/* We are not under AP mode yet */
 			fgReplyAuth = FALSE;
 			DBGLOG(P2P, WARN,
 			       "Current OP mode is not under AP mode. (%d)\n", prP2pBssInfo->eCurrentOPMode);
+			break;
+		}
+
+		if (prP2pBssInfo->rStaRecOfClientList.u4NumElem >= P2P_MAXIMUM_CLIENT_COUNT ||
+		    kalP2PReachMaxClients(prAdapter->prGlueInfo, prP2pBssInfo->rStaRecOfClientList.u4NumElem)) {
+			/* GROUP limit full */
+			/* P2P 3.2.8 */
+			DBGLOG(P2P, WARN,
+			       "Group Limit Full. (%d)\n", (INT_16)prP2pBssInfo->rStaRecOfClientList.u4NumElem);
+
+			*pu2StatusCode = STATUS_CODE_ASSOC_DENIED_AP_OVERLOAD;
+			break;
+		}
+
+		if (prAuthFrame->aucSrcAddr &&
+		    kalP2PCmpBlackList(prAdapter->prGlueInfo, prAuthFrame->aucSrcAddr)) {
+			/* STA in the black list of Hotspot */
+			*pu2StatusCode = STATUS_CODE_ASSOC_DENIED_OUTSIDE_STANDARD;
 			break;
 		}
 
@@ -1612,13 +1581,11 @@ p2pFuncValidateAuth(IN P_ADAPTER_T prAdapter,
 		if (!prStaRec) {
 			prStaRec = cnmStaRecAlloc(prAdapter, (UINT_8) NETWORK_TYPE_P2P_INDEX);
 
-			/* TODO(Kevin): Error handling of allocation of STA_RECORD_T for
+			/* TODO(Kevin): Error handling of STA_RECORD_T allocation for
 			 * exhausted case and do removal of unused STA_RECORD_T.
 			 */
-			/* Sent a message event to clean un-used STA_RECORD_T. */
-			ASSERT(prStaRec);
 			if (!prStaRec) {
-				DBGLOG(AAA, INFO, "Station Limit Full. Decline a new Authentication.\n");
+				DBGLOG(P2P, WARN, "StaRec exhausted!! Decline a new Authentication\n");
 				break;
 			}
 
@@ -1627,9 +1594,7 @@ p2pFuncValidateAuth(IN P_ADAPTER_T prAdapter,
 			prSwRfb->ucStaRecIdx = prStaRec->ucIndex;
 
 			prStaRec->u2BSSBasicRateSet = prP2pBssInfo->u2BSSBasicRateSet;
-
 			prStaRec->u2DesiredNonHTRateSet = RATE_SET_ERP_P2P;
-
 			prStaRec->u2OperationalRateSet = RATE_SET_ERP_P2P;
 			prStaRec->ucPhyTypeSet = PHY_TYPE_SET_802_11GN;
 			prStaRec->eStaType = STA_TYPE_P2P_GC;
@@ -1639,6 +1604,8 @@ p2pFuncValidateAuth(IN P_ADAPTER_T prAdapter,
 		} else {
 			prSwRfb->ucStaRecIdx = prStaRec->ucIndex;
 
+			prStaRec->eStaType = STA_TYPE_P2P_GC;
+
 			if ((prStaRec->ucStaState > STA_STATE_1) && (IS_STA_IN_P2P(prStaRec))) {
 
 				cnmStaRecChangeState(prAdapter, prStaRec, STA_STATE_1);
@@ -1647,41 +1614,7 @@ p2pFuncValidateAuth(IN P_ADAPTER_T prAdapter,
 
 				bssRemoveStaRecFromClientList(prAdapter, prP2pBssInfo, prStaRec);
 			}
-
 		}
-
-		if (prP2pBssInfo->rStaRecOfClientList.u4NumElem >= P2P_MAXIMUM_CLIENT_COUNT ||
-		    kalP2PMaxClients(prAdapter->prGlueInfo, prP2pBssInfo->rStaRecOfClientList.u4NumElem)) {
-			/* GROUP limit full. */
-			/* P2P 3.2.8 */
-			DBGLOG(P2P, WARN,
-			       "Group Limit Full. (%d)\n", (INT_16) prP2pBssInfo->rStaRecOfClientList.u4NumElem);
-
-			bssRemoveStaRecFromClientList(prAdapter, prP2pBssInfo, prStaRec);
-
-			cnmStaRecFree(prAdapter, prStaRec, FALSE);
-			fgReplyAuth = TRUE;
-			*pu2StatusCode = STATUS_CODE_ASSOC_DENIED_AP_OVERLOAD;
-			break;
-		}
-		/* Hotspot Blacklist */
-		if (prAuthFrame->aucSrcAddr) {
-			if (kalP2PCmpBlackList(prAdapter->prGlueInfo, prAuthFrame->aucSrcAddr)) {
-				fgReplyAuth = TRUE;
-				*pu2StatusCode = STATUS_CODE_ASSOC_DENIED_OUTSIDE_STANDARD;
-				return fgReplyAuth;
-			}
-		}
-
-		/* prStaRec->eStaType = STA_TYPE_INFRA_CLIENT; */
-		prStaRec->eStaType = STA_TYPE_P2P_GC;
-
-		prStaRec->ucNetTypeIndex = NETWORK_TYPE_P2P_INDEX;
-
-		/* Update Station Record - Status/Reason Code */
-		prStaRec->u2StatusCode = STATUS_CODE_SUCCESSFUL;
-
-		prStaRec->ucJoinFailureCount = 0;
 
 		*pprStaRec = prStaRec;
 
@@ -1908,11 +1841,13 @@ BOOLEAN p2pFuncValidateAssocReq(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_T prSwRfb,
 			}
 
 			if (prAttriWfdDevInfo == NULL) {
-				/* Without WFD IE.
-				* Do nothing. Accept the connection request.
-				*/
+				/*
+				 * Without WFD IE.
+				 * Do nothing. Accept the connection request.
+				 */
+				*pu2StatusCode = STATUS_CODE_SUCCESSFUL;
 				break;
-		       }
+			}
 
 			/* prAttriWfdDevInfo = */
 			/* (P_WFD_DEVICE_INFORMATION_IE_T)p2pFuncGetSpecAttri(prAdapter, */
@@ -2588,17 +2523,8 @@ p2pFuncMgmtFrameRegister(IN P_ADAPTER_T prAdapter,
 
 		DBGLOG(P2P, TRACE, "P2P Set PACKET filter:0x%x\n", prAdapter->u4OsPacketFilter);
 
-		wlanSendSetQueryCmd(prAdapter,
-				    CMD_ID_SET_RX_FILTER,
-				    TRUE,
-				    FALSE,
-				    FALSE,
-				    nicCmdEventSetCommon,
-				    nicOidCmdTimeoutCommon,
-				    sizeof(UINT_32),
-				    (PUINT_8) &prAdapter->u4OsPacketFilter,
-				    &u4NewPacketFilter, sizeof(u4NewPacketFilter)
-		    );
+		wlanoidSetPacketFilter(prAdapter, prAdapter->u4OsPacketFilter,
+					FALSE, &u4NewPacketFilter, sizeof(u4NewPacketFilter));
 
 	} while (FALSE);
 
@@ -2617,16 +2543,8 @@ VOID p2pFuncUpdateMgmtFrameRegister(IN P_ADAPTER_T prAdapter, IN UINT_32 u4OsFil
 
 			prAdapter->u4OsPacketFilter |= (u4OsFilter & PARAM_PACKET_FILTER_P2P_MASK);
 
-			wlanSendSetQueryCmd(prAdapter,
-					    CMD_ID_SET_RX_FILTER,
-					    TRUE,
-					    FALSE,
-					    FALSE,
-					    nicCmdEventSetCommon,
-					    nicOidCmdTimeoutCommon,
-					    sizeof(UINT_32),
-					    (PUINT_8) &prAdapter->u4OsPacketFilter, &u4OsFilter, sizeof(u4OsFilter)
-			    );
+			wlanoidSetPacketFilter(prAdapter, prAdapter->u4OsPacketFilter,
+					FALSE, &u4OsFilter, sizeof(u4OsFilter));
 			DBGLOG(P2P, TRACE, "P2P Set PACKET filter:0x%x\n", prAdapter->u4OsPacketFilter);
 		}
 
@@ -2895,12 +2813,22 @@ P_MSDU_INFO_T p2pFuncProcessP2pProbeRsp(IN P_ADAPTER_T prAdapter, IN P_MSDU_INFO
 						break;
 
 				}
-				if ((prAdapter->prGlueInfo->prP2PInfo->u2VenderIELen + IE_SIZE(pucIEBuf)) <
-				    1024) {
-					kalMemCopy(prAdapter->prGlueInfo->prP2PInfo->aucVenderIE +
-						   prAdapter->prGlueInfo->prP2PInfo->u2VenderIELen, pucIEBuf,
-						   IE_SIZE(pucIEBuf));
-					prAdapter->prGlueInfo->prP2PInfo->u2VenderIELen += IE_SIZE(pucIEBuf);
+				if (p2pFuncParseCheckForP2PInfoElem(prAdapter, pucIEBuf, &ucOuiType) &&
+					(ucOuiType == VENDOR_OUI_TYPE_P2P)) {
+						/* 2 Note(frog): I use WSC IE buffer for Probe Request to
+						 * store the P2P IE for Probe Response. */
+						kalP2PUpdateWSC_IE(prAdapter->prGlueInfo, 1, pucIEBuf,
+							IE_SIZE(pucIEBuf));
+						fgIsP2PIE = TRUE;
+
+				} else {
+					if ((prAdapter->prGlueInfo->prP2PInfo->u2VenderIELen + IE_SIZE(pucIEBuf)) <
+						1024) {
+						kalMemCopy(prAdapter->prGlueInfo->prP2PInfo->aucVenderIE +
+							prAdapter->prGlueInfo->prP2PInfo->u2VenderIELen, pucIEBuf,
+							IE_SIZE(pucIEBuf));
+						prAdapter->prGlueInfo->prP2PInfo->u2VenderIELen += IE_SIZE(pucIEBuf);
+					}
 				}
 #endif
 				break;

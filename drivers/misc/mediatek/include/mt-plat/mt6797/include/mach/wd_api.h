@@ -86,6 +86,5 @@ void wk_cpu_update_bit_flag(int cpu, int plug_status);
 unsigned int get_check_bit(void);
 unsigned int get_kick_bit(void);
 extern void aee_wdt_printf(const char *fmt, ...);
-extern void dump_wdk_bind_info(void);
 
 #endif				/* _MT_WD_API_H_ */

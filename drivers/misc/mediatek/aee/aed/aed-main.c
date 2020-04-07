@@ -1,10 +1,16 @@
 /*
- * (C) Copyright 2010
- * MediaTek <www.MediaTek.com>
+ * Copyright (C) 2016 MediaTek Inc.
  *
- * Android Exception Device
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See http://www.gnu.org/licenses/gpl-2.0.html for more details.
  */
+
 #include <linux/cdev.h>
 #include <linux/delay.h>
 #include <linux/device.h>
@@ -50,6 +56,10 @@ static DECLARE_COMPLETION(aed_ee_com);
 static spinlock_t aed_device_lock;
 int aee_mode = AEE_MODE_NOT_INIT;
 static int force_red_screen = AEE_FORCE_NOT_SET;
+int aee_force_exp = 0;
+
+/* use ke_log_available to control aed_ke_poll */
+static int ke_log_available = 1;
 
 static struct proc_dir_entry *aed_proc_dir;
 
@@ -581,10 +591,12 @@ static int ke_gen_ind_msg(struct aee_oops *oops)
 		rep_msg->dbOption = oops->dump_option;
 
 		init_completion(&aed_ke_com);
+		/* kernel api log is safe to access by child debuggerd from here */
+		ke_log_available = 1;
 		wake_up(&aed_dev.kewait);
 		/* wait until current ke work is done, then aed_dev is available,
 		   add a 60s timeout in case of debuggerd quit abnormally */
-		if (wait_for_completion_timeout(&aed_ke_com, msecs_to_jiffies(5 * 60 * 1000)))
+		if (!wait_for_completion_timeout(&aed_ke_com, msecs_to_jiffies(5 * 60 * 1000)))
 			LOGE("%s: TIMEOUT, not receive close event, skip\n", __func__);
 	}
 	return 0;
@@ -592,19 +604,16 @@ static int ke_gen_ind_msg(struct aee_oops *oops)
 
 static void ke_destroy_log(void)
 {
+	struct aee_oops *lastlog = aed_dev.kerec.lastlog;
 	LOGD("%s\n", __func__);
 	msg_destroy(&aed_dev.kerec.msg);
 
 	if (aed_dev.kerec.lastlog) {
-		if (strncmp
-		    (aed_dev.kerec.lastlog->module, IPANIC_MODULE_TAG,
-		     strlen(IPANIC_MODULE_TAG)) == 0) {
-			ipanic_oops_free(aed_dev.kerec.lastlog, 0);
-		} else {
-			aee_oops_free(aed_dev.kerec.lastlog);
-		}
-
 		aed_dev.kerec.lastlog = NULL;
+		if (strncmp(lastlog->module, IPANIC_MODULE_TAG, strlen(IPANIC_MODULE_TAG)) == 0)
+			ipanic_oops_free(lastlog, 0);
+		else
+			aee_oops_free(lastlog);
 	}
 }
 
@@ -615,7 +624,10 @@ static int ke_log_avail(void)
 		if (is_compat_task() != ((aed_dev.kerec.lastlog->dump_option & DB_OPT_AARCH64) == 0))
 			return 0;
 #endif
-		LOGI("AEE api log available\n");
+		/*remove the log to reduce risk of dead loop: cpux keep moving log from buffer to
+		console and can not process debuggerd work flow, meanwhile aed keep calling poll
+		which produce more log into buffer and cpux stucked whith these log.
+		LOGI("AEE api log available\n");*/
 		return 1;
 	}
 
@@ -984,6 +996,10 @@ static unsigned int aed_ee_poll(struct file *file, struct poll_table_struct *pta
 
 static ssize_t aed_ee_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 {
+	if (aed_dev.eerec == NULL) {
+		LOGE("aed_ee_read fail for invalid kerec\n");
+		return 0;
+	}
 	return msg_copy_to_user(__func__, aed_dev.eerec->msg, buf, count, f_pos);
 }
 
@@ -1016,7 +1032,7 @@ static ssize_t aed_ee_write(struct file *filp, const char __user *buf, size_t co
 		return -1;
 	}
 
-	msg_show(__func__, &msg);
+	/*the same reason removing "AEE api log available". msg_show(__func__, &msg);*/
 
 	if (msg.cmdType == AE_REQ) {
 		if (!ee_log_avail()) {
@@ -1092,7 +1108,7 @@ static int aed_ke_release(struct inode *inode, struct file *filp)
 
 static unsigned int aed_ke_poll(struct file *file, struct poll_table_struct *ptable)
 {
-	if (ke_log_avail())
+	if (ke_log_available && ke_log_avail())
 		return POLLIN | POLLRDNORM | POLLOUT | POLLWRNORM;
 	poll_wait(file, &aed_dev.kewait, ptable);
 	return 0;
@@ -1188,7 +1204,7 @@ static const struct file_operations proc_current_ke_##ENTRY##_fops = { \
 	.open		= current_ke_##ENTRY##_open, \
 	.read		= seq_read, \
 	.llseek		= seq_lseek, \
-	.release	= seq_release, \
+	.release	= seq_release_private, \
 }
 
 
@@ -1221,7 +1237,7 @@ static ssize_t aed_ke_write(struct file *filp, const char __user *buf, size_t co
 		return -1;
 	}
 
-	msg_show(__func__, &msg);
+	/*the same reason removing "AEE api log available". msg_show(__func__, &msg);*/
 
 	if (msg.cmdType == AE_REQ) {
 		if (!ke_log_avail()) {
@@ -1266,6 +1282,7 @@ static ssize_t aed_ke_write(struct file *filp, const char __user *buf, size_t co
 		switch (msg.cmdId) {
 		case AE_IND_LOG_CLOSE:
 			/* real release operation move to ke_worker(): ke_destroy_log(); */
+			ke_log_available = 0;
 			complete(&aed_ke_com);
 			break;
 		default:
@@ -1333,6 +1350,15 @@ static long aed_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 				goto EXIT;
 			}
 			LOGD("set aee mode = %d\n", aee_mode);
+			break;
+		}
+	case AEEIOCTL_SET_AEE_FORCE_EXP:
+		{
+			if (copy_from_user(&aee_force_exp, (void __user *)arg, sizeof(aee_force_exp))) {
+				ret = -EFAULT;
+				goto EXIT;
+			}
+			LOGD("set aee force_exp = %d\n", aee_force_exp);
 			break;
 		}
 	case AEEIOCTL_DAL_SHOW:
@@ -1433,18 +1459,17 @@ static long aed_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 				struct task_struct *task;
 				struct pt_regs *user_ret = NULL;
 
+				rcu_read_lock();
 				task = find_task_by_vpid(tmp->tid);
 				if (task == NULL) {
+					rcu_read_unlock();
 					kfree(tmp);
 					ret = -EINVAL;
 					goto EXIT;
 				}
+				rcu_read_unlock();
+
 				user_ret = task_pt_regs(task);
-				if (NULL == user_ret) {
-					kfree(tmp);
-					ret = -EINVAL;
-					goto EXIT;
-				}
 				memcpy(&(tmp->regs), user_ret, sizeof(struct pt_regs));
 				if (copy_to_user
 				    ((struct aee_thread_reg __user *)arg, tmp,
@@ -1492,12 +1517,16 @@ static long aed_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 				struct task_struct *task;
 				int dumpable = -1;
 
+				rcu_read_lock();
 				task = find_task_by_vpid(pid);
 				if (task == NULL) {
+					rcu_read_unlock();
 					LOGD("%s: process:%d task null\n", __func__, pid);
 					ret = -EINVAL;
 					goto EXIT;
 				}
+				rcu_read_unlock();
+
 				if (task->mm == NULL) {
 					LOGD("%s: process:%d task mm null\n", __func__, pid);
 					ret = -EINVAL;
@@ -1529,6 +1558,57 @@ static long aed_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 				goto EXIT;
 			}
 			LOGD("force aee red screen = %d\n", force_red_screen);
+			break;
+		}
+
+	case AEEIOCTL_GET_AEE_SIGINFO:
+		{
+			struct aee_siginfo aee_si;
+
+			LOGD("%s: get aee_siginfo ioctl\n", __func__);
+
+			if (copy_from_user
+			    (&aee_si, (struct aee_siginfo __user *)arg,
+			     sizeof(aee_si))) {
+				ret = -EFAULT;
+				goto EXIT;
+			}
+
+			if (aee_si.tid > 0) {
+				struct task_struct *task;
+				siginfo_t *psi = NULL;
+
+				rcu_read_lock();
+				task = find_task_by_vpid(aee_si.tid);
+				if (task == NULL) {
+					rcu_read_unlock();
+					ret = -EINVAL;
+					goto EXIT;
+				}
+				rcu_read_unlock();
+
+				psi = task->last_siginfo;
+				if (psi) {
+					aee_si.si_signo = psi->si_signo;
+					aee_si.si_errno = psi->si_errno;
+					if (psi->si_code >= 0)  /* debuggerd original_si_code */
+						aee_si.si_code = psi->si_code & ~__SI_MASK;
+					else
+						aee_si.si_code = psi->si_code;
+					aee_si.fault_addr = (uintptr_t)psi->si_addr;
+					if (copy_to_user
+					((struct aee_siginfo __user *)arg, &aee_si,
+						sizeof(aee_si))) {
+						ret = -EFAULT;
+						goto EXIT;
+					}
+				}
+			} else {
+				LOGD("%s: get aee_siginfo ioctl tid invalid\n", __func__);
+				ret = -EINVAL;
+				goto EXIT;
+			}
+
 			break;
 		}
 
@@ -1784,11 +1864,13 @@ static void kernel_reportAPI(const AE_DEFECT_ATTR attr, const int db_opt, const 
 			oops->userthread_stack.Userthread_Stack = vzalloc(MaxStackSize);
 			if (oops->userthread_stack.Userthread_Stack == NULL) {
 				LOGE("%s: oops->userthread_stack.Userthread_Stack Vmalloc fail", __func__);
+				kfree(oops);
 				return;
 			}
 			oops->userthread_maps.Userthread_maps = vzalloc(MaxMapsSize);
 			if (oops->userthread_maps.Userthread_maps == NULL) {
 				LOGE("%s: oops->userthread_maps.Userthread_maps Vmalloc fail", __func__);
+				kfree(oops);
 				return;
 			}
 			LOGE("%s: oops->userthread_stack.Userthread_Stack :0x%08lx,maps:0x%08lx",
@@ -1805,7 +1887,7 @@ static void kernel_reportAPI(const AE_DEFECT_ATTR attr, const int db_opt, const 
 	}
 }
 
-#ifndef PARTIAL_BUILD
+#if 0/*disable aee_kernel_dal_api*/
 void aee_kernel_dal_api(const char *file, const int line, const char *msg)
 {
 	LOGW("aee_kernel_dal_api : <%s:%d> %s ", file, line, msg);
@@ -1853,7 +1935,7 @@ void aee_kernel_dal_api(const char *file, const int line, const char *msg)
 #else
 void aee_kernel_dal_api(const char *file, const int line, const char *msg)
 {
-	LOGW("aee_kernel_dal_api : <%s:%d> %s ", file, line, msg);
+	LOGW("aee_kernel_dal_api has been phased out! caller info: <%s:%d> %s ", file, line, msg);
 }
 #endif
 EXPORT_SYMBOL(aee_kernel_dal_api);
@@ -1866,7 +1948,7 @@ static void external_exception(const char *assert_type, const int *log, int log_
 
 	LOGD("%s : [%s] log ptr %p size %d, phy ptr %p size %d\n", __func__,
 	     assert_type, log, log_size, phy, phy_size);
-	if (aee_mode >= AEE_MODE_CUSTOMER_USER)
+	if ((aee_mode >= AEE_MODE_CUSTOMER_USER) && (!aee_force_exp))
 		return;
 	eerec = kzalloc(sizeof(struct aed_eerec), GFP_ATOMIC);
 	if (eerec == NULL) {
@@ -1909,7 +1991,7 @@ static void external_exception(const char *assert_type, const int *log, int log_
 		/* kernel vamlloc cannot be used in interrupt context */
 		LOGD("External exception occur in interrupt context, no coredump");
 		phy_size = 0;
-	} else if ((phy < 0) || (phy_size > MAX_EE_COREDUMP)) {
+	} else if ((phy == NULL) || (phy_size > MAX_EE_COREDUMP)) {
 		LOGD("EE Physical memory size(%d) too large or invalid", phy_size);
 		phy_size = 0;
 	}

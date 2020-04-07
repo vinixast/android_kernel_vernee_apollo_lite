@@ -23,6 +23,7 @@
 #include <linux/swap.h>
 #include <linux/init.h>
 #include <linux/bootmem.h>
+#include <linux/cache.h>
 #include <linux/mman.h>
 #include <linux/nodemask.h>
 #include <linux/initrd.h>
@@ -33,6 +34,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/dma-contiguous.h>
 #include <linux/efi.h>
+#include <linux/cma.h>
 #include <mt-plat/mtk_meminfo.h>
 
 #include <asm/fixmap.h>
@@ -45,7 +47,7 @@
 
 #include "mm.h"
 
-phys_addr_t memstart_addr __read_mostly = 0;
+phys_addr_t memstart_addr __ro_after_init = 0;
 
 #ifdef CONFIG_BLK_DEV_INITRD
 static int __init early_initrd(char *p)
@@ -70,7 +72,7 @@ early_param("initrd", early_initrd);
  * currently assumes that for memory starting above 4G, 32-bit devices will
  * use a DMA offset.
  */
-static phys_addr_t max_zone_dma_phys(void)
+static phys_addr_t __init max_zone_dma_phys(void)
 {
 	phys_addr_t offset = memblock_start_of_DRAM() & GENMASK_ULL(63, 32);
 	return min(offset + (1ULL << 32), memblock_end_of_DRAM());
@@ -82,8 +84,14 @@ static void __init zone_sizes_init(unsigned long min, unsigned long max)
 	unsigned long zone_size[MAX_NR_ZONES], zhole_size[MAX_NR_ZONES];
 	unsigned long max_dma = min;
 #ifdef CONFIG_ZONE_MOVABLE_CMA
-	unsigned long cma_base_pfn = get_zone_movable_cma_base() >> PAGE_SHIFT;
+	phys_addr_t cma_base, cma_size;
+	unsigned long cma_base_pfn = ULONG_MAX;
+
+	cma_get_range(&cma_base, &cma_size);
+	if (cma_size)
+		cma_base_pfn = PFN_DOWN(cma_base);
 #endif
+
 	memset(zone_size, 0, sizeof(zone_size));
 
 	/* 4GB maximum for 32-bit only capable devices */
@@ -95,8 +103,12 @@ static void __init zone_sizes_init(unsigned long min, unsigned long max)
 		zone_size[ZONE_DMA] = max_dma - min;
 	}
 #ifdef CONFIG_ZONE_MOVABLE_CMA
-	zone_size[ZONE_NORMAL] = cma_base_pfn - max_dma;
-	zone_size[ZONE_MOVABLE] = max - cma_base_pfn;
+	if (cma_size) {
+		zone_size[ZONE_NORMAL] = cma_base_pfn - max_dma;
+		zone_size[ZONE_MOVABLE] = max - cma_base_pfn;
+	} else {
+		zone_size[ZONE_NORMAL] = max - max_dma;
+	}
 #else
 	zone_size[ZONE_NORMAL] = max - max_dma;
 #endif
@@ -116,14 +128,14 @@ static void __init zone_sizes_init(unsigned long min, unsigned long max)
 		}
 
 #ifdef CONFIG_ZONE_MOVABLE_CMA
-		if (end > max_dma && end < cma_base_pfn) {
+		if (zone_size[ZONE_NORMAL] && end > max_dma && start < cma_base_pfn) {
 			unsigned long normal_end = min(end, cma_base_pfn);
 			unsigned long normal_start = max(start, max_dma);
 
 			zhole_size[ZONE_NORMAL] -= normal_end - normal_start;
 		}
 
-		if (end > cma_base_pfn) {
+		if (cma_size && end > cma_base_pfn) {
 			unsigned long movable_end = min(end, max);
 			unsigned long movable_start = max(start, cma_base_pfn);
 
@@ -152,11 +164,11 @@ EXPORT_SYMBOL(pfn_valid);
 #endif
 
 #ifndef CONFIG_SPARSEMEM
-static void arm64_memory_present(void)
+static void __init arm64_memory_present(void)
 {
 }
 #else
-static void arm64_memory_present(void)
+static void __init arm64_memory_present(void)
 {
 	struct memblock_region *reg;
 

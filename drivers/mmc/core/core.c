@@ -30,6 +30,7 @@
 #include <linux/slab.h>
 #include <linux/of.h>
 
+#define CREATE_TRACE_POINTS
 #include <trace/events/mmc.h>
 
 #include <linux/mmc/card.h>
@@ -50,6 +51,11 @@
 #include "sd_ops.h"
 #include "sdio_ops.h"
 #include "../card/mt_mmc_block.h"
+
+EXPORT_TRACEPOINT_SYMBOL_GPL(mmc_blk_erase_start);
+EXPORT_TRACEPOINT_SYMBOL_GPL(mmc_blk_erase_end);
+EXPORT_TRACEPOINT_SYMBOL_GPL(mmc_blk_rw_start);
+EXPORT_TRACEPOINT_SYMBOL_GPL(mmc_blk_rw_end);
 
 /* If the device is not responding */
 #define MMC_CORE_TIMEOUT_MS	(10 * 60 * 1000) /* 10 minute timeout */
@@ -198,6 +204,19 @@ void mmc_request_done(struct mmc_host *host, struct mmc_request *mrq)
 			pr_debug("%s:     %d bytes transferred: %d\n",
 				mmc_hostname(host),
 				mrq->data->bytes_xfered, mrq->data->error);
+#ifdef CONFIG_BLOCK
+			if (mrq->lat_hist_enabled) {
+				ktime_t completion;
+				u_int64_t delta_us;
+
+				completion = ktime_get();
+				delta_us = ktime_us_delta(completion,
+							  mrq->io_start);
+				blk_update_latency_hist(&host->io_lat_s,
+					(mrq->data->flags & MMC_DATA_READ),
+					delta_us);
+			}
+#endif
 			trace_mmc_blk_rw_end(cmd->opcode, cmd->arg, mrq->data);
 		}
 
@@ -555,7 +574,7 @@ int mmc_run_queue_thread(void *data)
 	int err;
 
 	pr_err("[CQ] start cmdq thread\n");
-
+	mt_bio_queue_alloc(current);
 	while (1) {
 		set_current_state(TASK_RUNNING);
 		mt_biolog_cmdq_check();
@@ -672,8 +691,8 @@ int mmc_run_queue_thread(void *data)
 						;
 				}
 				set_bit(task_id, &host->task_id_index);
-
 				host->ops->request(host, cmd_mrq);
+				host->task_queue_time[task_id] = jiffies;
 				atomic_inc(&host->cq_wait_rdy);
 				spin_lock_irq(&host->cmd_que_lock);
 				cmd_mrq = mmc_get_cmd_que(host);
@@ -693,7 +712,7 @@ int mmc_run_queue_thread(void *data)
 			schedule();
 		set_current_state(TASK_RUNNING);
 	}
-
+	mt_bio_queue_free(current);
 	return 0;
 }
 #endif
@@ -1121,10 +1140,23 @@ void mmc_wait_cmdq_done(struct mmc_request *mrq)
 				mmc_prep_areq_que(host, host->areq_que[i]);
 				mmc_enqueue_queue(host, host->areq_que[i]->mrq);
 				host->data_mrq_queued[i] = true;
+				host->task_queue_time[i] = 0;
 			}
 			resp >>= 1;
 			i++;
 		} while (resp && (i < host->card->ext_csd.cmdq_depth));
+		/* Check Task ready time out */
+		for (i = 0; i < host->card->ext_csd.cmdq_depth; i++) {
+			if ((host->task_id_index & (0x1 << i)) &&
+			    (host->task_queue_time[i] != 0)) {
+				if (time_after(jiffies,
+				    host->task_queue_time[i] + TASK_READY_TMO)) {
+					pr_err("[CQ] ERROR Task ready TMO ID: %d ready time is %ld ticks\n", i,
+						  (long)(jiffies) - (long)(host->task_queue_time[i]));
+			       }
+			}
+		}
+
 	}
 
 	/* cmd46 - request done */
@@ -1421,12 +1453,19 @@ struct mmc_async_req *mmc_start_req(struct mmc_host *host,
 	}
 
 	if (!err && areq) {
+#ifdef CONFIG_BLOCK
+		if (host->latency_hist_enabled) {
+			areq->mrq->io_start = ktime_get();
+			areq->mrq->lat_hist_enabled = 1;
+		} else
+			areq->mrq->lat_hist_enabled = 0;
+#endif
 		trace_mmc_blk_rw_start(areq->mrq->cmd->opcode,
 				       areq->mrq->cmd->arg,
 				       areq->mrq->data);
 
 #ifdef CONFIG_MTK_EMMC_CQ_SUPPORT
-		if (host->card->ext_csd.cmdq_mode_en)
+		if (areq->cmdq_en)
 			start_err = __mmc_start_data_req(host, areq->mrq_que);
 		else
 #endif
@@ -1434,7 +1473,14 @@ struct mmc_async_req *mmc_start_req(struct mmc_host *host,
 		mt_biolog_mmcqd_req_start(host);
 	}
 
+
+#ifdef CONFIG_MTK_EMMC_CQ_SUPPORT
+	/* skip if this request is in cq mode process */
+	if (!(areq && areq->cmdq_en)
+		&& host->areq)
+#else
 	if (host->areq)
+#endif
 		mmc_post_req(host, host->areq->mrq, 0);
 
 	 /* Cancel a prepared request if it was not started. */
@@ -1442,14 +1488,12 @@ struct mmc_async_req *mmc_start_req(struct mmc_host *host,
 		mmc_post_req(host, areq->mrq, -EINVAL);
 
 #ifdef CONFIG_MTK_EMMC_CQ_SUPPORT
-	if (areq && areq->cmdq_en) {
-		host->areq = NULL;
-	} else {
+	if (!(areq && areq->cmdq_en)) {
 #endif
-	if (err)
-		host->areq = NULL;
-	else
-		host->areq = areq;
+		if (err)
+			host->areq = NULL;
+		else
+			host->areq = areq;
 #ifdef CONFIG_MTK_EMMC_CQ_SUPPORT
 	}
 #endif
@@ -1460,7 +1504,7 @@ struct mmc_async_req *mmc_start_req(struct mmc_host *host,
 EXPORT_SYMBOL(mmc_start_req);
 
 #ifdef CONFIG_MTK_EMMC_CQ_SUPPORT
-int mmc_blk_cmdq_switch_tmp(struct mmc_card *card, int enable)
+int mmc_blk_cmdq_switch(struct mmc_card *card, int enable)
 {
 	int ret;
 
@@ -1490,6 +1534,7 @@ int mmc_blk_cmdq_switch_tmp(struct mmc_card *card, int enable)
 
 	return 0;
 }
+EXPORT_SYMBOL(mmc_blk_cmdq_switch);
 #endif
 
 /**
@@ -1820,6 +1865,7 @@ int __mmc_claim_host(struct mmc_host *host, atomic_t *abort)
 	DECLARE_WAITQUEUE(wait, current);
 	unsigned long flags;
 	int stop;
+	bool pm = false;
 
 	might_sleep();
 
@@ -1839,15 +1885,20 @@ int __mmc_claim_host(struct mmc_host *host, atomic_t *abort)
 		host->claimed = 1;
 		host->claimer = current;
 		host->claim_cnt += 1;
+		if (host->claim_cnt == 1)
+			pm = true;
 	} else
 		wake_up(&host->wq);
 	spin_unlock_irqrestore(&host->lock, flags);
 	remove_wait_queue(&host->wq, &wait);
 	if (host->ops->enable && !stop && host->claim_cnt == 1)
 		host->ops->enable(host);
+
+	if (pm)
+		pm_runtime_get_sync(mmc_dev(host));
+
 	return stop;
 }
-
 EXPORT_SYMBOL(__mmc_claim_host);
 
 /**
@@ -1875,6 +1926,8 @@ void mmc_release_host(struct mmc_host *host)
 		host->claimer = NULL;
 		spin_unlock_irqrestore(&host->lock, flags);
 		wake_up(&host->wq);
+		pm_runtime_mark_last_busy(mmc_dev(host));
+		pm_runtime_put_autosuspend(mmc_dev(host));
 	}
 }
 EXPORT_SYMBOL(mmc_release_host);
@@ -2193,6 +2246,34 @@ int mmc_of_parse_voltage(struct device_node *np, u32 *mask)
 EXPORT_SYMBOL(mmc_of_parse_voltage);
 
 #endif /* CONFIG_OF */
+
+static int mmc_of_get_func_num(struct device_node *node)
+{
+	u32 reg;
+	int ret;
+
+	ret = of_property_read_u32(node, "reg", &reg);
+	if (ret < 0)
+		return ret;
+
+	return reg;
+}
+
+struct device_node *mmc_of_find_child_device(struct mmc_host *host,
+		unsigned func_num)
+{
+	struct device_node *node;
+
+	if (!host->parent || !host->parent->of_node)
+		return NULL;
+
+	for_each_child_of_node(host->parent->of_node, node) {
+		if (mmc_of_get_func_num(node) == func_num)
+			return node;
+	}
+
+	return NULL;
+}
 
 #ifdef CONFIG_REGULATOR
 
@@ -2753,7 +2834,7 @@ void mmc_init_erase(struct mmc_card *card)
 }
 
 static unsigned int mmc_mmc_erase_timeout(struct mmc_card *card,
-				          unsigned int arg, unsigned int qty)
+					  unsigned int arg, unsigned int qty)
 {
 	unsigned int erase_timeout;
 
@@ -3672,6 +3753,56 @@ static void __exit mmc_exit(void)
 	mmc_unregister_bus();
 	destroy_workqueue(workqueue);
 }
+
+#ifdef CONFIG_BLOCK
+static ssize_t
+latency_hist_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct mmc_host *host = cls_dev_to_mmc_host(dev);
+
+	return blk_latency_hist_show(&host->io_lat_s, buf);
+}
+
+/*
+ * Values permitted 0, 1, 2.
+ * 0 -> Disable IO latency histograms (default)
+ * 1 -> Enable IO latency histograms
+ * 2 -> Zero out IO latency histograms
+ */
+static ssize_t
+latency_hist_store(struct device *dev, struct device_attribute *attr,
+		   const char *buf, size_t count)
+{
+	struct mmc_host *host = cls_dev_to_mmc_host(dev);
+	long value;
+
+	if (kstrtol(buf, 0, &value))
+		return -EINVAL;
+	if (value == BLK_IO_LAT_HIST_ZERO)
+		blk_zero_latency_hist(&host->io_lat_s);
+	else if (value == BLK_IO_LAT_HIST_ENABLE ||
+		 value == BLK_IO_LAT_HIST_DISABLE)
+		host->latency_hist_enabled = value;
+	return count;
+}
+
+static DEVICE_ATTR(latency_hist, S_IRUGO | S_IWUSR,
+		   latency_hist_show, latency_hist_store);
+
+void
+mmc_latency_hist_sysfs_init(struct mmc_host *host)
+{
+	if (device_create_file(&host->class_dev, &dev_attr_latency_hist))
+		dev_err(&host->class_dev,
+			"Failed to create latency_hist sysfs entry\n");
+}
+
+void
+mmc_latency_hist_sysfs_exit(struct mmc_host *host)
+{
+	device_remove_file(&host->class_dev, &dev_attr_latency_hist);
+}
+#endif
 
 subsys_initcall(mmc_init);
 module_exit(mmc_exit);

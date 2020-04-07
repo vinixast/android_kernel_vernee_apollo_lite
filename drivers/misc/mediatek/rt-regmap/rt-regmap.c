@@ -1,4 +1,4 @@
-/* drivers/misc/rt-regmap.c
+/* drivers/misc/mediatek/rt-regmap/rt-regmap.c
  * Richtek regmap with debugfs Driver
  *
  * Copyright (C) 2014 Richtek Technology Corp.
@@ -26,7 +26,7 @@
 #include <linux/seq_file.h>
 #include <linux/semaphore.h>
 
-#include "rt-regmap.h"
+#include <mt-plat/rt-regmap.h>
 
 struct rt_regmap_ops {
 	int (*regmap_block_write)(struct rt_regmap_device *rd, u32 reg,
@@ -1044,7 +1044,7 @@ EXPORT_SYMBOL(_rt_regmap_reg_read);
 void rt_cache_getlasterror(struct rt_regmap_device *rd, char *buf)
 {
 	down(&rd->semaphore);
-	sprintf(buf, "%s\n", rd->err_msg);
+	snprintf(buf, 512, "%s\n", rd->err_msg);
 	up(&rd->semaphore);
 }
 EXPORT_SYMBOL(rt_cache_getlasterror);
@@ -1053,7 +1053,7 @@ void rt_cache_clrlasterror(struct rt_regmap_device *rd)
 {
 	down(&rd->semaphore);
 	rd->error_occurred = 0;
-	sprintf(rd->err_msg, "%s", "No Error");
+	snprintf(rd->err_msg, 512, "%s", "No Error");
 	up(&rd->semaphore);
 }
 EXPORT_SYMBOL(rt_cache_clrlasterror);
@@ -1072,7 +1072,7 @@ int rt_regmap_cache_init(struct rt_regmap_device *rd)
 
 	if (rd->props.group == NULL) {
 		rd->props.group = devm_kzalloc(&rd->dev,
-				sizeof(rd->props.group), GFP_KERNEL);
+				sizeof(*rd->props.group), GFP_KERNEL);
 		rd->props.group[0].start = 0x00;
 		rd->props.group[0].end = 0xffff;
 		rd->props.group[0].mode = RT_1BYTE_MODE;
@@ -1217,7 +1217,7 @@ static void rt_check_dump_config_file(struct rt_regmap_device *rd,
 	int ret, tmp_cnt = 0;
 
 	buf = devm_kzalloc(&rd->dev, 64*sizeof(char), GFP_KERNEL);
-	sprintf(PATH, "/sdcard/%s_dump_config.txt", rd->props.name);
+	snprintf(PATH, 64, "/sdcard/%s_dump_config.txt", rd->props.name);
 	fp = filp_open(PATH, O_RDONLY, 0);
 	if (IS_ERR(fp)) {
 		pr_info("There is no Dump config file in sdcard\n");
@@ -1797,7 +1797,7 @@ static ssize_t eachreg_read(struct file *file, char __user *ubuf,
 {
 	struct rt_debug_st *st = file->private_data;
 	struct rt_regmap_device *rd = st->info;
-	char lbuf[80];
+	char lbuf[200];
 	unsigned char regval[32];
 	rt_register_map_t rm = rd->props.rm[st->id];
 	int i, j = 0, rc;
@@ -1841,10 +1841,10 @@ static void rt_create_every_debug(struct rt_regmap_device *rd,
 	for (i = 0; i < rd->props.register_num; i++) {
 		sprintf(buf, "reg0x%02x", (rd->props.rm[i])->addr);
 		rd->rt_reg_file[i] = devm_kzalloc(&rd->dev,
-						  sizeof(rd->rt_reg_file[i]),
+						  sizeof(*rd->rt_reg_file[i]),
 						  GFP_KERNEL);
 		rd->reg_st[i] =
-		    devm_kzalloc(&rd->dev, sizeof(rd->reg_st[i]), GFP_KERNEL);
+		    devm_kzalloc(&rd->dev, sizeof(*rd->reg_st[i]), GFP_KERNEL);
 
 		rd->reg_st[i]->info = rd;
 		rd->reg_st[i]->id = i;
@@ -1978,6 +1978,15 @@ struct rt_regmap_device *rt_regmap_device_register
 	char device_name[32];
 	unsigned char data;
 
+	if (!props) {
+		pr_err("%s rt_regmap_properties is NULL\n", __func__);
+		return NULL;
+	}
+	if (!rops) {
+		pr_err("%s rt_regmap_fops is NULL\n", __func__);
+		return NULL;
+	}
+
 	pr_info("regmap_device_register: name = %s\n", props->name);
 	rd = devm_kzalloc(parent, sizeof(*rd), GFP_KERNEL);
 	if (!rd) {
@@ -1991,10 +2000,9 @@ struct rt_regmap_device *rt_regmap_device_register
 	rd->client = client;
 	rd->dev.release = rt_regmap_device_release;
 	dev_set_drvdata(&rd->dev, drvdata);
-	sprintf(device_name, "rt_regmap_%s", props->name);
+	snprintf(device_name, 32, "rt_regmap_%s", props->name);
 	dev_set_name(&rd->dev, device_name);
-	if (props)
-		memcpy(&rd->props, props, sizeof(struct rt_regmap_properties));
+	memcpy(&rd->props, props, sizeof(struct rt_regmap_properties));
 
 	/* check rt_registe_map format */
 	ret = rt_regmap_check(rd);

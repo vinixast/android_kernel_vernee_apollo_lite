@@ -21,7 +21,6 @@
 #define SII_DRIVER_NAME "sii70xx"
 #define COMPATIBLE_NAME "simg,sii70xx"
 
-extern struct sii_typec *g_ptypeC;
 extern struct usbtypc *g_exttypec;
 extern struct sii70xx_drv_context *g_drv_context;
 extern irqreturn_t sii7033_eint_isr(int irqnum, void *data);

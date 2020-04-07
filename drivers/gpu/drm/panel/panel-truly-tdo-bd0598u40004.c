@@ -29,6 +29,9 @@
 #include <linux/platform_device.h>
 #include <linux/regulator/consumer.h>
 
+/* #define PANEL_BIST_PATTERN */	/* enable this to check panel self -bist pattern */
+#define PANEL_SUPPORT_READBACK	/* option function to read data from some panel address*/
+
 struct truly {
 	struct device *dev;
 	struct drm_panel panel;
@@ -73,6 +76,37 @@ static int truly_clear_error(struct truly *ctx)
 	return ret;
 }
 
+#ifdef PANEL_SUPPORT_READBACK
+static int truly_dcs_read(struct truly *ctx, u8 cmd, void *data, size_t len)
+{
+	struct mipi_dsi_device *dsi = to_mipi_dsi_device(ctx->dev);
+	ssize_t ret;
+
+	if (ctx->error < 0)
+		return 0;
+
+	ret = mipi_dsi_dcs_read(dsi, cmd, data, len);
+	if (ret < 0) {
+		dev_err(ctx->dev, "error %d reading dcs seq:(%#x)\n", ret, cmd);
+		ctx->error = ret;
+	}
+
+	return ret;
+}
+
+static void truly_panel_get_data(struct truly *ctx)
+{
+	u8 buffer[3] = {0};
+	static int ret;
+
+	if (0 == ret) {
+		ret = truly_dcs_read(ctx,  0x0A, buffer, 1);
+		dev_info(ctx->dev, "return %d data(0x%08x) to dsi engine\n",
+			 ret, buffer[0] | (buffer[1] << 8));
+	}
+}
+#endif
+
 static void truly_dcs_write(struct truly *ctx, const void *data, size_t len)
 {
 	struct mipi_dsi_device *dsi = to_mipi_dsi_device(ctx->dev);
@@ -95,12 +129,16 @@ static void truly_panel_init(struct truly *ctx)
 	mdelay(2);
 
 	truly_dcs_write_seq_static(ctx, 0xBB, 0x03);
-	truly_dcs_write_seq_static(ctx, 0x3B, 0x03, 0x0A, 0x0A, 0x0A, 0x0A);
+	truly_dcs_write_seq_static(ctx, 0x3B, 0x03, 0x0A, 0x0A,
+				   0x0A, 0x0A);
 	truly_dcs_write_seq_static(ctx, 0x53, 0x24);
 	truly_dcs_write_seq_static(ctx, 0x55, 0x00);
 	truly_dcs_write_seq_static(ctx, 0x5E, 0x00);
+
+#ifndef PANEL_BIST_PATTERN
 	truly_dcs_write_seq_static(ctx, 0x11);
 	mdelay(150);
+#endif
 
 	truly_dcs_write_seq_static(ctx, 0xFF, 0x24);
 	mdelay(2);
@@ -625,12 +663,19 @@ static void truly_panel_init(struct truly *ctx)
 	mdelay(2);
 
 	truly_dcs_write_seq_static(ctx, 0x08, 0x04);
-	truly_dcs_write_seq_static(ctx, 0xFF, 0x10);/*	Return	To	CMD1*/
+	truly_dcs_write_seq_static(ctx, 0xFF, 0x10);
 	mdelay(2);
 
+#ifdef PANEL_BIST_PATTERN
+	truly_dcs_write_seq_static(ctx, 0xFF, 0x24);
+	mdelay(1);
+
+	truly_dcs_write_seq_static(ctx, 0xEC, 0x01);
+#else
 	truly_dcs_write_seq_static(ctx, 0x35, 0x00);
 	truly_dcs_write_seq_static(ctx, 0x29);
 	mdelay(20);
+#endif
 }
 
 static void truly_set_sequence(struct truly *ctx)
@@ -643,28 +688,24 @@ static int truly_power_on(struct truly *ctx)
 	gpiod_set_value(ctx->reset_gpio, 1);
 	mdelay(100);
 
-	gpiod_set_value(ctx->reset_gpio, 0);
-	mdelay(100);
-
-	gpiod_set_value(ctx->reset_gpio, 1);
-	mdelay(100);
-
 	return 0;
 }
 
 static int truly_power_off(struct truly *ctx)
 {
 	gpiod_set_value(ctx->reset_gpio, 0);
-
 	return 0;
 }
 
 static int truly_disable(struct drm_panel *panel)
 {
 	struct truly *ctx = panel_to_truly(panel);
+	int ret = 0;
 
 	if (!ctx->enabled)
 		return 0;
+
+	ret = truly_power_off(ctx);
 
 	if (ctx->backlight) {
 		ctx->backlight->props.power = FB_BLANK_POWERDOWN;
@@ -673,28 +714,34 @@ static int truly_disable(struct drm_panel *panel)
 
 	ctx->enabled = false;
 
-	return 0;
+	return ret;
 }
 
 static int truly_unprepare(struct drm_panel *panel)
 {
 	struct truly *ctx = panel_to_truly(panel);
 
-	truly_dcs_write_seq_static(ctx, MIPI_DCS_ENTER_SLEEP_MODE);
+	if (!ctx->prepared)
+		return 0;
+
 	truly_dcs_write_seq_static(ctx, MIPI_DCS_SET_DISPLAY_OFF);
-	msleep(40);
+	truly_dcs_write_seq_static(ctx, MIPI_DCS_ENTER_SLEEP_MODE);
+	msleep(120);
 
 	truly_clear_error(ctx);
 
-	return truly_power_off(ctx);
+	ctx->prepared = false;
+
+	return 0;
 }
 
 static int truly_prepare(struct drm_panel *panel)
 {
 	struct truly *ctx = panel_to_truly(panel);
-	int ret;
+	int ret = 0;
 
-	ret = truly_power_on(ctx);
+	if (ctx->prepared)
+		return ret;
 
 	if (ret < 0)
 		return ret;
@@ -705,15 +752,24 @@ static int truly_prepare(struct drm_panel *panel)
 	if (ret < 0)
 		truly_unprepare(panel);
 
+	ctx->prepared = true;
+
+#ifdef PANEL_SUPPORT_READBACK
+	truly_panel_get_data(ctx);
+#endif
+
 	return ret;
 }
 
 static int truly_enable(struct drm_panel *panel)
 {
 	struct truly *ctx = panel_to_truly(panel);
+	int ret = 0;
 
 	if (ctx->enabled)
 		return 0;
+
+	ret = truly_power_on(ctx);
 
 	if (ctx->backlight) {
 		ctx->backlight->props.power = FB_BLANK_UNBLANK;
@@ -722,19 +778,19 @@ static int truly_enable(struct drm_panel *panel)
 
 	ctx->enabled = true;
 
-	return 0;
+	return ret;
 }
 
-static const struct drm_display_mode default_mode = {
-	.clock = 148500,
+static struct drm_display_mode default_mode = {
+	.clock = 142858,
 	.hdisplay = 1080,
-	.hsync_start = 1080 + 58,
-	.hsync_end = 1080 + 58 + 58,
-	.htotal = 1080 + 58 + 58 + 58,
+	.hsync_start = 1080 + 40,
+	.hsync_end = 1080 + 10 + 40,
+	.htotal = 1080 + 10 + 20 + 40,
 	.vdisplay = 1920,
-	.vsync_start = 1920 + 4,
-	.vsync_end = 1920 + 4 + 4,
-	.vtotal = 1920 + 4 + 4 + 4,
+	.vsync_start = 1920 + 10,
+	.vsync_end = 1920 + 2 + 10,
+	.vtotal = 1920 + 2 + 8 + 10,
 	.vrefresh = 60,
 };
 
@@ -825,7 +881,8 @@ static int truly_probe(struct mipi_dsi_device *dsi)
 	dsi->lanes = 4;
 	dsi->format = MIPI_DSI_FMT_RGB888;
 	dsi->mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_SYNC_PULSE
-					  | MIPI_DSI_MODE_LPM;
+			  | MIPI_DSI_MODE_LPM | MIPI_DSI_MODE_EOT_PACKET
+			  | MIPI_DSI_CLOCK_NON_CONTINUOUS;
 
 	ctx->supplies[0].supply = "avdd";
 	ctx->supplies[1].supply = "avee";
@@ -856,6 +913,8 @@ static int truly_probe(struct mipi_dsi_device *dsi)
 		return ret;
 	}
 
+	ctx->prepared = false;
+
 	drm_panel_init(&ctx->panel);
 	ctx->panel.dev = dev;
 	ctx->panel.funcs = &truly_drm_funcs;
@@ -885,6 +944,7 @@ static const struct of_device_id truly_of_match[] = {
 	{ .compatible = "truly,bd0598u4004", },
 	{ }
 };
+
 MODULE_DEVICE_TABLE(of, truly_of_match);
 
 static struct mipi_dsi_driver truly_driver = {
@@ -896,8 +956,10 @@ static struct mipi_dsi_driver truly_driver = {
 		.of_match_table = truly_of_match,
 	},
 };
+
 module_mipi_dsi_driver(truly_driver);
 
 MODULE_AUTHOR("Jitao Shi <jitao.shi@mediatek.com>");
+MODULE_AUTHOR("Shaoming Chen <shaoming.chen@mediatek.com>");
 MODULE_DESCRIPTION("TRULY TDO-BD0598U40004 LCD Panel Driver");
 MODULE_LICENSE("GPL v2");

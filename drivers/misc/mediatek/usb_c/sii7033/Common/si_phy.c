@@ -703,7 +703,6 @@ void typec_sm0_work(WORK_STRUCT *w)
 	}
 }
 
-struct sii_typec *g_ptypeC;
 void *phy_init(struct sii70xx_drv_context *drv_context)
 {
 	struct sii_typec *ptypeC = kzalloc(sizeof(struct sii_typec), GFP_KERNEL);
@@ -711,7 +710,6 @@ void *phy_init(struct sii70xx_drv_context *drv_context)
 	if (!ptypeC)
 		return NULL;
 
-	g_ptypeC = ptypeC;
 	ptypeC->drv_context = drv_context;
 	ptypeC->prev_state = DISABLED;
 

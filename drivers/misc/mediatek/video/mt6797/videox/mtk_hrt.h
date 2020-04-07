@@ -1,3 +1,16 @@
+/*
+ * Copyright (C) 2016 MediaTek Inc.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See http://www.gnu.org/licenses/gpl-2.0.html for more details.
+ */
+
 #ifndef __MTK_HRT_H__
 #define __MTK_HRT_H__
 
@@ -20,6 +33,12 @@
 
 #define PRIMARY_OVL_LAYER_NUM PRIMARY_SESSION_INPUT_LAYER_COUNT
 #define SECONDARY_OVL_LAYER_NUM EXTERNAL_SESSION_INPUT_LAYER_COUNT
+
+#ifdef CONFIG_MTK_DISPLAY_120HZ_SUPPORT
+#define HRT_LEVEL(id) ((id)&0xff)
+#define HRT_FPS(id) (((id)>>8)&0xff)
+#define MAKE_HRT_NUM(fps, level) (unsigned int)((fps)<<8 | (level))
+#endif
 
 /* #define HRT_DEBUG */
 

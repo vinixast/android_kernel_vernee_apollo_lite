@@ -941,20 +941,32 @@ fail:
 	return NULL;
 }
 
-static int unix_mknod(struct dentry *dentry, struct path *path, umode_t mode,
-		      struct path *res)
+static int unix_mknod(const char *sun_path, umode_t mode, struct path *res)
 {
-	int err;
+	struct dentry *dentry;
+	struct path path;
+	int err = 0;
+	/*
+	 * Get the parent directory, calculate the hash for last
+	 * component.
+	 */
+	dentry = kern_path_create(AT_FDCWD, sun_path, &path, 0);
+	err = PTR_ERR(dentry);
+	if (IS_ERR(dentry))
+		return err;
 
-	err = security_path_mknod(path, dentry, mode, 0);
+	/*
+	 * All right, let's create it.
+	 */
+	err = security_path_mknod(&path, dentry, mode, 0);
 	if (!err) {
-		err = vfs_mknod(d_inode(path->dentry), dentry, mode, 0);
+		err = vfs_mknod(d_inode(path.dentry), dentry, mode, 0);
 		if (!err) {
-			res->mnt = mntget(path->mnt);
+			res->mnt = mntget(path.mnt);
 			res->dentry = dget(dentry);
 		}
 	}
-
+	done_path_create(&path, dentry);
 	return err;
 }
 
@@ -965,12 +977,10 @@ static int unix_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 	struct unix_sock *u = unix_sk(sk);
 	struct sockaddr_un *sunaddr = (struct sockaddr_un *)uaddr;
 	char *sun_path = sunaddr->sun_path;
-	int err, name_err;
+	int err;
 	unsigned int hash;
 	struct unix_address *addr;
 	struct hlist_head *list;
-	struct path path;
-	struct dentry *dentry;
 
 	err = -EINVAL;
 	if (sunaddr->sun_family != AF_UNIX)
@@ -986,33 +996,13 @@ static int unix_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 		goto out;
 	addr_len = err;
 
-	name_err = 0;
-	dentry = NULL;
-	if (sun_path[0]) {
-		/* Get the parent directory, calculate the hash for last
-		 * component.
-		 */
-		dentry = kern_path_create(AT_FDCWD, sun_path, &path, 0);
-
-		if (IS_ERR(dentry)) {
-			/* delay report until after 'already bound' check */
-			name_err = PTR_ERR(dentry);
-			dentry = NULL;
-		}
-	}
-
 	err = mutex_lock_interruptible(&u->readlock);
 	if (err)
-		goto out_path;
+		goto out;
 
 	err = -EINVAL;
 	if (u->addr)
 		goto out_up;
-
-	if (name_err) {
-		err = name_err == -EEXIST ? -EADDRINUSE : name_err;
-		goto out_up;
-	}
 
 	err = -ENOMEM;
 	addr = kmalloc(sizeof(*addr)+addr_len, GFP_KERNEL);
@@ -1024,11 +1014,11 @@ static int unix_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 	addr->hash = hash ^ sk->sk_type;
 	atomic_set(&addr->refcnt, 1);
 
-	if (dentry) {
-		struct path u_path;
+	if (sun_path[0]) {
+		struct path path;
 		umode_t mode = S_IFSOCK |
 		       (SOCK_INODE(sock)->i_mode & ~current_umask());
-		err = unix_mknod(dentry, &path, mode, &u_path);
+		err = unix_mknod(sun_path, mode, &path);
 		if (err) {
 			if (err == -EEXIST)
 				err = -EADDRINUSE;
@@ -1036,9 +1026,9 @@ static int unix_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 			goto out_up;
 		}
 		addr->hash = UNIX_HASH_SIZE;
-		hash = d_backing_inode(dentry)->i_ino & (UNIX_HASH_SIZE - 1);
+		hash = d_backing_inode(path.dentry)->i_ino & (UNIX_HASH_SIZE-1);
 		spin_lock(&unix_table_lock);
-		u->path = u_path;
+		u->path = path;
 		list = &unix_socket_table[hash];
 	} else {
 		spin_lock(&unix_table_lock);
@@ -1061,10 +1051,6 @@ out_unlock:
 	spin_unlock(&unix_table_lock);
 out_up:
 	mutex_unlock(&u->readlock);
-out_path:
-	if (dentry)
-		done_path_create(&path, dentry);
-
 out:
 	return err;
 }
@@ -1163,11 +1149,12 @@ restart:
 	}
 
 #ifdef CONFIG_MTK_NET_LOGGING
-	if ((SOCK_INODE(sock) != NULL) && (sunaddr != NULL) && (other->sk_socket != NULL) &&
-	    (SOCK_INODE(other->sk_socket) != NULL)) {
-		pr_debug("[mtk_net][socket]unix_dgram_connect[%lu]:connect [%s] other:[%lu]\n",
-			 SOCK_INODE(sock)->i_ino, sunaddr->sun_path,
-			 SOCK_INODE(other->sk_socket)->i_ino);
+	if ((SOCK_INODE(sock) != NULL) && (sunaddr != NULL) && (other != NULL) && (other->sk_socket != NULL) &&
+	     (SOCK_INODE(other->sk_socket) != NULL)) {
+		if (!strstr(sunaddr->sun_path, "logdw")) {
+			pr_info("[mtk_net][socket]unix_dgram_connect[%lu]:connect [%s] other:[%lu]\n",
+				SOCK_INODE(sock)->i_ino, sunaddr->sun_path, SOCK_INODE(other->sk_socket)->i_ino);
+		}
 	}
 #endif
 
@@ -1180,11 +1167,45 @@ out:
 	return err;
 }
 
+#ifdef CONFIG_MTK_NET_LOGGING
+struct wait_for_peer_info_t {
+	char *process;
+	int pid;
+	unsigned long long when;
+};
+
+static void print_wait_peer_sock_info(unsigned long data)
+{
+	struct wait_for_peer_info_t *wait_info = (struct wait_for_peer_info_t *)data;
+	unsigned long long time = jiffies - wait_info->when;
+
+	/*Compatible 32bit projet and 64 bit project*/
+	do_div(time, HZ);
+	pr_info("----------------------wait for peer block info-----------------------\n");
+	pr_info("[mtk_net][sock]sockdbg %s[%d] is blocking because wait for peer more than %lld sec\n",
+		wait_info->process, wait_info->pid, time);
+}
+#endif
+
 static long unix_wait_for_peer(struct sock *other, long timeo)
 {
 	struct unix_sock *u = unix_sk(other);
 	int sched;
 	DEFINE_WAIT(wait);
+
+#ifdef CONFIG_MTK_NET_LOGGING
+	struct timer_list wait_peer_timer;
+	struct wait_for_peer_info_t wait_sk_info;
+
+	wait_sk_info.pid = current->pid;
+	wait_sk_info.process = current->comm;
+	wait_sk_info.when = jiffies;
+	init_timer(&wait_peer_timer);
+	wait_peer_timer.function = print_wait_peer_sock_info;
+	wait_peer_timer.expires = jiffies + 10*HZ;
+	wait_peer_timer.data = (unsigned long)&wait_sk_info;
+	add_timer(&wait_peer_timer);
+#endif
 
 	prepare_to_wait_exclusive(&u->peer_wait, &wait, TASK_INTERRUPTIBLE);
 
@@ -1198,6 +1219,10 @@ static long unix_wait_for_peer(struct sock *other, long timeo)
 		timeo = schedule_timeout(timeo);
 
 	finish_wait(&u->peer_wait, &wait);
+#ifdef CONFIG_MTK_NET_LOGGING
+	del_timer(&wait_peer_timer);
+#endif
+
 	return timeo;
 }
 
@@ -1362,12 +1387,14 @@ restart:
 
 #ifdef CONFIG_MTK_NET_LOGGING
 	if ((SOCK_INODE(sock) != NULL) && (sunaddr != NULL) && (other->sk_socket != NULL) &&
-	    (SOCK_INODE(other->sk_socket) != NULL)) {
-		unsigned long sk_ino = SOCK_INODE(sock)->i_ino;
-		unsigned long other_ino = SOCK_INODE(other->sk_socket)->i_ino;
+		(SOCK_INODE(other->sk_socket) != NULL)) {
+			unsigned long sk_ino = SOCK_INODE(sock)->i_ino;
+			unsigned long other_ino = SOCK_INODE(other->sk_socket)->i_ino;
 
-		pr_debug("[mtk_net][socket]unix_stream_connect[%lu ]: connect [%s] other[%lu]\n",
-			 sk_ino, sunaddr->sun_path, other_ino);
+			if (!strstr(sunaddr->sun_path, "property_service") && !strstr(sunaddr->sun_path, "fwmarkd")) {
+				pr_info("[mtk_net][socket]unix_stream_connect[%lu ]: connect [%s] other[%lu]\n",
+					sk_ino, sunaddr->sun_path, other_ino);
+			}
 	}
 #endif
 
@@ -1506,7 +1533,7 @@ static void unix_detach_fds(struct scm_cookie *scm, struct sk_buff *skb)
 	UNIXCB(skb).fp = NULL;
 
 	for (i = scm->fp->count-1; i >= 0; i--)
-		unix_notinflight(scm->fp->fp[i]);
+		unix_notinflight(scm->fp->user, scm->fp->fp[i]);
 }
 
 static void unix_destruct_scm(struct sk_buff *skb)
@@ -1571,7 +1598,7 @@ static int unix_attach_fds(struct scm_cookie *scm, struct sk_buff *skb)
 		return -ENOMEM;
 
 	for (i = scm->fp->count - 1; i >= 0; i--)
-		unix_inflight(scm->fp->fp[i]);
+		unix_inflight(scm->fp->user, scm->fp->fp[i]);
 	return max_level;
 }
 
@@ -2625,6 +2652,85 @@ static void unix_seq_stop(struct seq_file *seq, void *v)
 	spin_unlock(&unix_table_lock);
 }
 
+#ifdef CONFIG_MTK_NET_LOGGING
+static int unix_seq_show(struct seq_file *seq, void *v)
+{
+	if (v == SEQ_START_TOKEN)
+		seq_puts(seq,
+			 "Num       RefCount Protocol Flags    Type St    Inode PeerNode Path  PeerPath\n");
+	else {
+		struct sock *s = v;
+		struct unix_sock *u = unix_sk(s);
+
+		unix_state_lock(s);
+		if (u->peer != NULL) {
+			seq_printf(seq, "%pK: %08X %08X %08X %04X %02X %5lu %5lu",
+				   s,
+				   atomic_read(&s->sk_refcnt),
+				   0,
+				   s->sk_state == TCP_LISTEN ? __SO_ACCEPTCON : 0,
+				   s->sk_type,
+				   s->sk_socket ?
+				   (s->sk_state == TCP_ESTABLISHED ? SS_CONNECTED : SS_UNCONNECTED) :
+				   (s->sk_state == TCP_ESTABLISHED ? SS_CONNECTING : SS_DISCONNECTING),
+				   sock_i_ino(s),
+				   sock_i_ino(u->peer));
+		} else {
+			seq_printf(seq, "%pK: %08X %08X %08X %04X %02X %5lu %d",
+				   s,
+				   atomic_read(&s->sk_refcnt),
+				   0,
+				   s->sk_state == TCP_LISTEN ? __SO_ACCEPTCON : 0,
+				   s->sk_type,
+				   s->sk_socket ?
+				   (s->sk_state == TCP_ESTABLISHED ? SS_CONNECTED : SS_UNCONNECTED) :
+				   (s->sk_state == TCP_ESTABLISHED ? SS_CONNECTING : SS_DISCONNECTING),
+				   sock_i_ino(s),
+				   0);
+			}
+			if (u->addr) {
+				int i, len;
+
+				seq_putc(seq, ' ');
+				i = 0;
+				len = u->addr->len - sizeof(short);
+				if (!UNIX_ABSTRACT(s)) {
+					len--;
+				} else {
+					seq_putc(seq, '@');
+					i++;
+				}
+				for ( ; i < len; i++)
+					seq_putc(seq, u->addr->name->sun_path[i]);
+			}
+
+			if (u->peer != NULL) {
+				struct unix_sock *pu = unix_sk(u->peer);
+
+				if (pu->addr) {
+					int a, length;
+
+					seq_putc(seq, ' ');
+					seq_putc(seq, '*');
+					a = 0;
+					length = pu->addr->len - sizeof(short);
+					if (!UNIX_ABSTRACT(u->peer)) {
+							length--;
+					} else {
+							seq_putc(seq, '@');
+							a++;
+				}
+				for ( ; a < length; a++)
+						seq_putc(seq, pu->addr->name->sun_path[a]);
+				}
+}
+
+			unix_state_unlock(s);
+			seq_putc(seq, '\n');
+		}
+		return 0;
+}
+#else
 static int unix_seq_show(struct seq_file *seq, void *v)
 {
 
@@ -2668,6 +2774,7 @@ static int unix_seq_show(struct seq_file *seq, void *v)
 
 	return 0;
 }
+#endif
 
 static const struct seq_operations unix_seq_ops = {
 	.start  = unix_seq_start,

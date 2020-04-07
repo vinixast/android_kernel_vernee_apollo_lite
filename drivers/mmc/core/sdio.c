@@ -576,6 +576,7 @@ static int mmc_sdio_init_uhs_card(struct mmc_card *card)
 	    ((card->host->ios.timing == MMC_TIMING_UHS_SDR50) ||
 	      (card->host->ios.timing == MMC_TIMING_UHS_SDR104)))
 		err = mmc_execute_tuning(card);
+
 out:
 	return err;
 }

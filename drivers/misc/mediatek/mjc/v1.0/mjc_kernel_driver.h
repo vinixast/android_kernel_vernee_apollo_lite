@@ -17,7 +17,7 @@
 extern u32 get_devinfo_with_index(u32 index);
 extern void mt_irq_set_sens(unsigned int irq, unsigned int sens);
 extern void mt_irq_set_polarity(unsigned int irq, unsigned int polarity);
-extern void mmdvfs_mjc_enable(int enable);
+
 
 typedef struct _MJC_EVENT_T {
 	void *pvWaitQueue;	/* /< [IN]     The waitqueue discription */

@@ -96,6 +96,7 @@ static struct pdr_context *pdr_context_alloc_object(void)
 
 	struct pdr_context *obj = kzalloc(sizeof(*obj), GFP_KERNEL);
 
+	/*PDR_ERR("[Bai]>>pdr_context_alloc_object++++\n"); */
 	if (!obj) {
 		PDR_ERR("Alloc pdr object error!\n");
 		return NULL;
@@ -112,6 +113,7 @@ static struct pdr_context *pdr_context_alloc_object(void)
 	obj->is_polling_run = false;
 	mutex_init(&obj->pdr_op_mutex);
 	obj->is_batch_enable = false;	/* for batch mode init */
+	/*PDR_ERR("[Bai]>>pdr_context_alloc_object end\n"); */
 	return obj;
 }
 
@@ -346,9 +348,14 @@ static ssize_t pdr_show_sensordevnum(struct device *dev, struct device_attribute
 {
 	struct pdr_context *cxt = NULL;
 	char *devname = NULL;
+	struct input_handle *handle;
 
 	cxt = pdr_context_obj;
-	devname = (char *)dev_name(&cxt->idev->dev);
+	list_for_each_entry(handle, &cxt->idev->h_list, d_node)
+		if (strncmp(handle->name, "event", 5) == 0) {
+			devname = handle->name;
+			break;
+		}
 	return snprintf(buf, PAGE_SIZE, "%s\n", devname + 5);
 }
 
@@ -469,8 +476,8 @@ static int pdr_misc_init(struct pdr_context *cxt)
 {
 
 	int err = 0;
-/*As MISC_DYNAMIC_MINOR is just support max 64 minors_ID(0-63), assign the minor_ID manually that range of  64-254*/
-	cxt->mdev.minor = 254;/*MISC_DYNAMIC_MINOR;*/
+
+	cxt->mdev.minor = MISC_DYNAMIC_MINOR;
 	cxt->mdev.name = PDR_MISC_DEV_NAME;
 
 	err = misc_register(&cxt->mdev);
@@ -613,6 +620,8 @@ static int pdr_probe(void)
 {
 	int err = 0;
 
+	/*PDR_ERR("[Bai]>> pdr_probe start==>!!\n"); */
+
 	pdr_context_obj = pdr_context_alloc_object();
 	if (!pdr_context_obj) {
 		err = -ENOMEM;
@@ -634,13 +643,16 @@ static int pdr_probe(void)
 		goto exit_alloc_input_dev_failed;
 	}
 
+	PDR_ERR("[Bai]>> pdr_probe OK !!\n");
 	return 0;
 
 exit_alloc_input_dev_failed:
+	PDR_ERR("[Bai]>> sysfs node creation error\n");
 	pdr_input_destroy(pdr_context_obj);
 real_driver_init_fail:
 	kfree(pdr_context_obj);
 exit_alloc_data_failed:
+	PDR_ERR("[Bai]>> pdr_probe fail !!!\n");
 	return err;
 }
 
@@ -725,6 +737,8 @@ int pdr_driver_add(struct pdr_init_info *obj)
 			PDR_LOG("register gensor driver for the first time\n");
 			if (platform_driver_register(&pdrsensor_driver))
 				PDR_ERR("failed to register pdrsensor driver already exist\n");
+			else
+				PDR_ERR("[Bai]>> register pdrsensor driver OK\n");
 		}
 
 		if (NULL == pdr_init_list[i]) {
@@ -744,6 +758,9 @@ EXPORT_SYMBOL_GPL(pdr_driver_add);
 static int __init pdr_init(void)
 {
 	/*PDR_FUN(); */
+
+	PDR_ERR("[Bai]>> pdr_init\n");
+
 	if (pdr_probe()) {
 		PDR_ERR("failed to register pdr driver\n");
 		return -ENODEV;

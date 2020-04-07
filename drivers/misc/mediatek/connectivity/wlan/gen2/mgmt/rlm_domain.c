@@ -1,89 +1,14 @@
 /*
-** Id: //Department/DaVinci/BRANCHES/MT6620_WIFI_DRIVER_V2_3/mgmt/rlm_domain.c#1
-*/
-
-/*! \file   "rlm_domain.c"
-    \brief
-
-*/
-
-/*
-** Log: rlm_domain.c
- *
- * 11 10 2011 cm.chang
- * NULL
- * Modify debug message for XLOG
- *
- * 09 29 2011 cm.chang
- * NULL
- * Change the function prototype of rlmDomainGetChnlList()
- *
- * 09 23 2011 cm.chang
- * [WCXRP00000969] [MT6620 Wi-Fi][Driver][FW] Channel list for 5G band based on country code
- * Let channel number to zero if band is illegal
- *
- * 09 22 2011 cm.chang
- * [WCXRP00000969] [MT6620 Wi-Fi][Driver][FW] Channel list for 5G band based on country code
- * Exclude channel list with illegal band
- *
- * 09 15 2011 cm.chang
- * [WCXRP00000969] [MT6620 Wi-Fi][Driver][FW] Channel list for 5G band based on country code
- * Use defined country group to have a change to add new group
- *
- * 09 08 2011 cm.chang
- * [WCXRP00000969] [MT6620 Wi-Fi][Driver][FW] Channel list for 5G band based on country code
- * Use new fields ucChannelListMap and ucChannelListIndex in NVRAM
- *
- * 08 31 2011 cm.chang
- * [WCXRP00000969] [MT6620 Wi-Fi][Driver][FW] Channel list for 5G band based on country code
- * .
- *
- * 06 01 2011 cm.chang
- * [WCXRP00000756] [MT6620 Wi-Fi][Driver] 1. AIS follow channel of BOW 2. Provide legal channel function
- * Provide legal channel function based on domain
- *
- * 03 19 2011 yuche.tsai
- * [WCXRP00000584] [Volunteer Patch][MT6620][Driver] Add beacon timeout support for WiFi Direct.
- * Add beacon timeout support for WiFi Direct Network.
- *
- * 03 02 2011 terry.wu
- * [WCXRP00000505] [MT6620 Wi-Fi][Driver/FW] WiFi Direct Integration
- * Export rlmDomainGetDomainInfo for p2p driver.
- *
- * 01 12 2011 cm.chang
- * [WCXRP00000354] [MT6620 Wi-Fi][Driver][FW] Follow NVRAM bandwidth setting
- * User-defined bandwidth is for 2.4G and 5G individually
- *
- * 12 07 2010 cm.chang
- * [WCXRP00000238] MT6620 Wi-Fi][Driver][FW] Support regulation domain setting from NVRAM and supplicant
- * 1. Country code is from NVRAM or supplicant
- * 2. Change band definition in CMD/EVENT.
- *
- * 07 08 2010 cp.wu
- *
- * [WPD00003833] [MT6620 and MT5931] Driver migration - move to new repository.
- *
- * 07 08 2010 cm.chang
- * [WPD00003841][LITE Driver] Migrate RLM/CNM to host driver
- * Check draft RLM code for HT cap
- *
- * 03 25 2010 cm.chang
- * [BORA00000018]Integrate WIFI part into BORA for the 1st time
- * Filter out not supported RF freq when reporting available chnl list
- *
- * 01 22 2010 cm.chang
- * [BORA00000018]Integrate WIFI part into BORA for the 1st time
- * Support protection and bandwidth switch
- *
- * 01 13 2010 cm.chang
- * [BORA00000018]Integrate WIFI part into BORA for the 1st time
- * Provide query function about full channel list.
- *
- * Dec 1 2009 mtk01104
- * [BORA00000018] Integrate WIFI part into BORA for the 1st time
- *
- *
-**
+* Copyright (C) 2016 MediaTek Inc.
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License version 2 as
+* published by the Free Software Foundation.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+* See http://www.gnu.org/licenses/gpl-2.0.html for more details.
 */
 
 /*******************************************************************************
@@ -136,9 +61,9 @@ static const UINT_16 g_u2CountryGroup0[] = {
 };
 
 static const UINT_16 g_u2CountryGroup1[] = {
-	COUNTRY_CODE_AS, COUNTRY_CODE_AI, COUNTRY_CODE_BM, COUNTRY_CODE_CA,
-	COUNTRY_CODE_KY, COUNTRY_CODE_GU, COUNTRY_CODE_FM, COUNTRY_CODE_PR,
-	COUNTRY_CODE_US, COUNTRY_CODE_VI
+	COUNTRY_CODE_AS, COUNTRY_CODE_AI, COUNTRY_CODE_BM, COUNTRY_CODE_KY,
+	COUNTRY_CODE_GU, COUNTRY_CODE_FM, COUNTRY_CODE_PR, COUNTRY_CODE_US,
+	COUNTRY_CODE_VI
 };
 
 static const UINT_16 g_u2CountryGroup2[] = {
@@ -229,7 +154,9 @@ static const UINT_16 g_u2CountryGroup17[] = { COUNTRY_CODE_MP };
 
 static const UINT_16 g_u2CountryGroup18[] = { COUNTRY_CODE_TW };
 
-static const UINT_16 g_u2CountryGroup19[] = {
+static const UINT_16 g_u2CountryGroup19[] = { COUNTRY_CODE_CA };
+
+static const UINT_16 g_u2CountryGroup20[] = {
 	COUNTRY_CODE_CK, COUNTRY_CODE_CU, COUNTRY_CODE_TL, COUNTRY_CODE_FO,
 	COUNTRY_CODE_GI, COUNTRY_CODE_GG, COUNTRY_CODE_IR, COUNTRY_CODE_IM,
 	COUNTRY_CODE_JE, COUNTRY_CODE_KP, COUNTRY_CODE_MH, COUNTRY_CODE_NU,
@@ -237,14 +164,14 @@ static const UINT_16 g_u2CountryGroup19[] = {
 	COUNTRY_CODE_SS, COUNTRY_CODE_SD, COUNTRY_CODE_SY
 };
 
-static const UINT_16 g_u2CountryGroup20[] = {
+static const UINT_16 g_u2CountryGroup21[] = {
 	COUNTRY_CODE_DF, COUNTRY_CODE_FF
 	/* When country code is not found and no matched NVRAM setting,
-	 * this domain info will be used.
+	 * the default group will be used.
 	 */
 };
 
-static const UINT_16 g_u2CountryGroup21[] = {
+static const UINT_16 g_u2CountryGroup22[] = {
 	COUNTRY_CODE_UDF
 };
 
@@ -509,9 +436,9 @@ DOMAIN_INFO_ENTRY arSupportedRegDomains[] = {
 
 	  {115, BAND_5G, CHNL_SPAN_20, 36, 4, FALSE}
 	  ,			/* CH_SET_UNII_LOW_36_48 */
-	  {118, BAND_5G, CHNL_SPAN_20, 52, 4, FALSE}
+	  {118, BAND_5G, CHNL_SPAN_20, 52, 4, TRUE}
 	  ,			/* CH_SET_UNII_MID_52_64 */
-	  {121, BAND_5G, CHNL_SPAN_20, 100, 8, FALSE}
+	  {121, BAND_5G, CHNL_SPAN_20, 100, 8, TRUE}
 	  ,			/* CH_SET_UNII_WW_100_128 */
 	  {125, BAND_5G, CHNL_SPAN_20, 149, 4, FALSE}
 	  ,			/* CH_SET_UNII_UPPER_149_161 */
@@ -545,7 +472,7 @@ DOMAIN_INFO_ENTRY arSupportedRegDomains[] = {
 
 	  {115, BAND_5G, CHNL_SPAN_20, 36, 4, FALSE}
 	  ,			/* CH_SET_UNII_LOW_36_48 */
-	  {118, BAND_5G, CHNL_SPAN_20, 52, 4, FALSE}
+	  {118, BAND_5G, CHNL_SPAN_20, 52, 4, TRUE}
 	  ,			/* CH_SET_UNII_MID_52_64 */
 	  {121, BAND_5G, CHNL_SPAN_20, 100, 11, TRUE}
 	  ,			/* CH_SET_UNII_WW_100_140 */
@@ -581,9 +508,9 @@ DOMAIN_INFO_ENTRY arSupportedRegDomains[] = {
 
 	  {115, BAND_5G, CHNL_SPAN_20, 36, 4, FALSE}
 	  ,			/* CH_SET_UNII_LOW_36_48 */
-	  {118, BAND_5G, CHNL_SPAN_20, 52, 4, FALSE}
+	  {118, BAND_5G, CHNL_SPAN_20, 52, 4, TRUE}
 	  ,			/* CH_SET_UNII_MID_52_64 */
-	  {121, BAND_5G, CHNL_SPAN_20, 100, 11, FALSE}
+	  {121, BAND_5G, CHNL_SPAN_20, 100, 11, TRUE}
 	  ,			/* CH_SET_UNII_WW_100_140 */
 	  {125, BAND_5G, CHNL_SPAN_20, 149, 5, FALSE}
 	  ,			/* CH_SET_UNII_UPPER_149_165 */
@@ -594,23 +521,23 @@ DOMAIN_INFO_ENTRY arSupportedRegDomains[] = {
 	{
 	 (PUINT_16) g_u2CountryGroup19, sizeof(g_u2CountryGroup19) / 2,
 	 {
-	  {81, BAND_2G4, CHNL_SPAN_5, 1, 13, FALSE}
-	  ,			/* CH_SET_2G4_1_13 */
+	  {81, BAND_2G4, CHNL_SPAN_5, 1, 11, FALSE}
+	  ,			/* CH_SET_2G4_1_11 */
 
 	  {115, BAND_5G, CHNL_SPAN_20, 36, 4, FALSE}
 	  ,			/* CH_SET_UNII_LOW_36_48 */
 	  {118, BAND_5G, CHNL_SPAN_20, 52, 4, TRUE}
 	  ,			/* CH_SET_UNII_MID_52_64 */
-	  {121, BAND_5G, CHNL_SPAN_20, 100, 12, TRUE}
-	  ,			/* CH_SET_UNII_WW_100_144 */
+	  {121, BAND_5G, CHNL_SPAN_20, 100, 5, TRUE}
+	  ,			/* CH_SET_UNII_WW_100_116 */
+	  {121, BAND_5G, CHNL_SPAN_20, 132, 4, TRUE}
+	  ,			/* CH_SET_UNII_WW_132_144 */
 	  {125, BAND_5G, CHNL_SPAN_20, 149, 5, FALSE}
-	  ,			/* CH_SET_UNII_UPPER_149_165 */
-	  {0, BAND_NULL, 0, 0, 0, FALSE}
+				/* CH_SET_UNII_UPPER_149_165 */
 	 }
 	}
 	,
 	{
-	 /* Note: Default group if no matched country code */
 	 (PUINT_16) g_u2CountryGroup20, sizeof(g_u2CountryGroup20) / 2,
 	 {
 	  {81, BAND_2G4, CHNL_SPAN_5, 1, 13, FALSE}
@@ -629,11 +556,30 @@ DOMAIN_INFO_ENTRY arSupportedRegDomains[] = {
 	}
 	,
 	{
-	 /* Note: for customer configured their own scanning list and passive scan list */
+	 /* Note: Default group if no matched country code */
 	 (PUINT_16) g_u2CountryGroup21, sizeof(g_u2CountryGroup21) / 2,
 	 {
-	  {81, BAND_2G4, CHNL_SPAN_5, 1, 12, FALSE}
+	  {81, BAND_2G4, CHNL_SPAN_5, 1, 13, FALSE}
 	  ,			/* CH_SET_2G4_1_13 */
+
+	  {115, BAND_5G, CHNL_SPAN_20, 36, 4, FALSE}
+	  ,			/* CH_SET_UNII_LOW_36_48 */
+	  {118, BAND_5G, CHNL_SPAN_20, 52, 4, TRUE}
+	  ,			/* CH_SET_UNII_MID_52_64 */
+	  {121, BAND_5G, CHNL_SPAN_20, 100, 12, TRUE}
+	  ,			/* CH_SET_UNII_WW_100_144 */
+	  {125, BAND_5G, CHNL_SPAN_20, 149, 5, FALSE}
+	  ,			/* CH_SET_UNII_UPPER_149_165 */
+	  {0, BAND_NULL, 0, 0, 0, FALSE}
+	 }
+	}
+	,
+	{
+	 /* Note: User defined group for customer configured regulation */
+	 (PUINT_16) g_u2CountryGroup22, sizeof(g_u2CountryGroup22) / 2,
+	 {
+	  {81, BAND_2G4, CHNL_SPAN_5, 1, 12, FALSE}
+	  ,			/* CH_SET_2G4_1_12 */
 
 	  {115, BAND_5G, CHNL_SPAN_20, 36, 0, FALSE}
 	  ,
@@ -728,7 +674,7 @@ SUBBAND_CHANNEL_T g_rRlmSubBand[] = {
 /*----------------------------------------------------------------------------*/
 P_DOMAIN_INFO_ENTRY rlmDomainGetDomainInfo(P_ADAPTER_T prAdapter)
 {
-#define REG_DOMAIN_DEF_IDX             20 /* Default country domain */
+#define REG_DOMAIN_DEF_IDX             21 /* Default regulatory domain */
 #define REG_DOMAIN_GROUP_NUM  \
 	(sizeof(arSupportedRegDomains) / sizeof(DOMAIN_INFO_ENTRY))
 
@@ -779,9 +725,9 @@ P_DOMAIN_INFO_ENTRY rlmDomainGetDomainInfo(P_ADAPTER_T prAdapter)
 			}
 		}
 
-		/* If no matched country code, use the default country domain */
+		/* If no matched country code, use the default regulatory domain */
 		if (i >= REG_DOMAIN_GROUP_NUM) {
-			DBGLOG(RLM, INFO, "No matched country code, use the default country domain\n");
+			DBGLOG(RLM, INFO, "No matched country code, use the default regulatory domain\n");
 			prDomainInfo = &arSupportedRegDomains[REG_DOMAIN_DEF_IDX];
 		}
 	}
@@ -792,18 +738,20 @@ P_DOMAIN_INFO_ENTRY rlmDomainGetDomainInfo(P_ADAPTER_T prAdapter)
 
 /*----------------------------------------------------------------------------*/
 /*!
-* \brief
+* \brief Retrieve the supported channel list of specified band
 *
-* \param[in/out] The input variable pointed by pucNumOfChannel is the max
-*                arrary size. The return value indciates meaning list size.
+* \param[in/out] eSpecificBand:   BAND_2G4, BAND_5G or BAND_NULL (both 2.4G and 5G)
+*                fgNoDfs:         whether to exculde DFS channels
+*                ucMaxChannelNum: max array size
+*                pucNumOfChannel: pointer to returned channel number
+*                paucChannelList: pointer to returned channel list array
 *
 * \return none
 */
 /*----------------------------------------------------------------------------*/
-VOID
-rlmDomainGetChnlList(P_ADAPTER_T prAdapter,
-		     ENUM_BAND_T eSpecificBand, BOOLEAN fgNoDfs,
-		     UINT_8 ucMaxChannelNum, PUINT_8 pucNumOfChannel, P_RF_CHANNEL_INFO_T paucChannelList)
+VOID rlmDomainGetChnlList(P_ADAPTER_T prAdapter,
+			  ENUM_BAND_T eSpecificBand, BOOLEAN fgNoDfs,
+			  UINT_8 ucMaxChannelNum, PUINT_8 pucNumOfChannel, P_RF_CHANNEL_INFO_T paucChannelList)
 {
 	UINT_8 i, j, ucNum;
 	P_DOMAIN_SUBBAND_INFO prSubband;
@@ -835,6 +783,55 @@ rlmDomainGetChnlList(P_ADAPTER_T prAdapter,
 				paucChannelList[ucNum].ucChannelNum =
 				    prSubband->ucFirstChannelNum + j * prSubband->ucChannelSpan;
 				ucNum++;
+			}
+		}
+	}
+
+	*pucNumOfChannel = ucNum;
+}
+
+/*----------------------------------------------------------------------------*/
+/*!
+* \brief Retrieve DFS channels from 5G band
+*
+* \param[in/out] ucMaxChannelNum: max array size
+*                pucNumOfChannel: pointer to returned channel number
+*                paucChannelList: pointer to returned channel list array
+*
+* \return none
+*/
+/*----------------------------------------------------------------------------*/
+VOID rlmDomainGetDfsChnls(P_ADAPTER_T prAdapter,
+			  UINT_8 ucMaxChannelNum, PUINT_8 pucNumOfChannel, P_RF_CHANNEL_INFO_T paucChannelList)
+{
+	UINT_8 i, j, ucNum;
+	P_DOMAIN_SUBBAND_INFO prSubband;
+	P_DOMAIN_INFO_ENTRY prDomainInfo;
+
+	ASSERT(prAdapter);
+	ASSERT(paucChannelList);
+	ASSERT(pucNumOfChannel);
+
+	prDomainInfo = rlmDomainGetDomainInfo(prAdapter);
+	ASSERT(prDomainInfo);
+
+	ucNum = 0;
+	for (i = 0; i < MAX_SUBBAND_NUM; i++) {
+		prSubband = &prDomainInfo->rSubBand[i];
+
+		if (prSubband->ucBand == BAND_5G) {
+			if (!prAdapter->fgEnable5GBand)
+				continue;
+
+			if (prSubband->fgDfs == TRUE) {
+				for (j = 0; j < prSubband->ucNumChannels; j++) {
+					if (ucNum >= ucMaxChannelNum)
+						break;
+					paucChannelList[ucNum].eBand = prSubband->ucBand;
+					paucChannelList[ucNum].ucChannelNum =
+					    prSubband->ucFirstChannelNum + j * prSubband->ucChannelSpan;
+					ucNum++;
+				}
 			}
 		}
 	}
@@ -936,11 +933,14 @@ VOID rlmDomainSendPassiveScanInfoCmd(P_ADAPTER_T prAdapter, BOOLEAN fgIsOid)
 {
 #define REG_DOMAIN_PASSIVE_DEF_IDX      0
 #define REG_DOMAIN_PASSIVE_UDF_IDX      1
+#define REG_DOMAIN_PASSIVE_GROUP_NUM \
+	(sizeof(arSupportedRegDomains_Passive) / sizeof(DOMAIN_INFO_ENTRY))
 
 	P_DOMAIN_INFO_ENTRY prDomainInfo;
 	P_CMD_SET_DOMAIN_INFO_T prCmd;
 	P_DOMAIN_SUBBAND_INFO prSubBand;
-	UINT_8 i;
+	UINT_16 u2TargetCountryCode;
+	UINT_8 i, j;
 
 	prCmd = cnmMemAlloc(prAdapter, RAM_TYPE_BUF, sizeof(CMD_SET_DOMAIN_INFO_T));
 	if (!prCmd) {
@@ -958,9 +958,19 @@ VOID rlmDomainSendPassiveScanInfoCmd(P_ADAPTER_T prAdapter, BOOLEAN fgIsOid)
 
 	DBGLOG(RLM, TRACE, "u2CountryCode=0x%04x\n", prAdapter->rWifiVar.rConnSettings.u2CountryCode);
 
-	if (prAdapter->rWifiVar.rConnSettings.u2CountryCode == COUNTRY_CODE_UDF)
-		prDomainInfo = &arSupportedRegDomains_Passive[REG_DOMAIN_PASSIVE_UDF_IDX];
-	else
+	u2TargetCountryCode = prAdapter->rWifiVar.rConnSettings.u2CountryCode;
+	for (i = 0; i < REG_DOMAIN_PASSIVE_GROUP_NUM; i++) {
+		prDomainInfo = &arSupportedRegDomains_Passive[i];
+
+		for (j = 0; j < prDomainInfo->u4CountryNum; j++) {
+			if (prDomainInfo->pu2CountryGroup[j] == u2TargetCountryCode)
+				break;
+		}
+		if (j < prDomainInfo->u4CountryNum)
+			break;	/* Found */
+	}
+
+	if (i >= REG_DOMAIN_PASSIVE_GROUP_NUM)
 		prDomainInfo = &arSupportedRegDomains_Passive[REG_DOMAIN_PASSIVE_DEF_IDX];
 
 	for (i = 0; i < MAX_SUBBAND_NUM; i++) {

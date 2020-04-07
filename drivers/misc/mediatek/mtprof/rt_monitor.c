@@ -25,6 +25,7 @@
 #include <linux/module.h>
 #include <linux/list_sort.h>
 #include "mt_sched_mon.h"
+#include "mtk_ram_console.h"
 
 #define MAX_THROTTLE_COUNT 5
 
@@ -53,6 +54,7 @@ static DEFINE_SPINLOCK(mt_rt_mon_lock);
 static struct mt_rt_mon_struct buffer[MAX_THROTTLE_COUNT];
 static int rt_mon_count_buffer;
 static unsigned long long rt_start_ts_buffer, rt_end_ts_buffer, rt_dur_ts_buffer;
+char rt_monitor_print_at_AEE_buffer[124];
 /*
  * Ease the printing of nsec fields:
  */
@@ -85,7 +87,7 @@ static void store_rt_mon_info(int cpu, u64 delta_exec, struct task_struct *p)
 	struct mt_rt_mon_struct *mtmon;
 	unsigned long irq_flags;
 
-	mtmon = kmalloc(sizeof(struct mt_rt_mon_struct), GFP_ATOMIC);
+	mtmon = kmalloc(sizeof(struct mt_rt_mon_struct), GFP_ATOMIC | __GFP_NO_KSWAPD);
 	if (!mtmon)
 		return;
 	memset(mtmon, 0, sizeof(struct mt_rt_mon_struct));
@@ -97,6 +99,7 @@ static void store_rt_mon_info(int cpu, u64 delta_exec, struct task_struct *p)
 	mtmon->pid = p->pid;
 	mtmon->prio = p->prio;
 	strncpy(mtmon->comm, p->comm, sizeof(mtmon->comm));
+	mtmon->comm[sizeof(mtmon->comm) - 1] = 0;
 	mtmon->cputime = delta_exec;
 	mtmon->isr_time = p->se.mtk_isr_time;
 	mtmon->isr_time_init = p->se.mtk_isr_time;
@@ -136,6 +139,7 @@ void stop_rt_mon_task(int cpu)
 	do_div(dur_ts, 1000000);	/* put prof_dur_ts to ms */
 	list_head = &(__raw_get_cpu_var(mt_rt_mon_head).list);
 
+	rcu_read_lock();
 	list_for_each_entry(tmp, list_head, list) {
 		tsk = find_task_by_vpid(tmp->pid);
 		if (tsk && task_has_rt_policy(tsk)) {
@@ -160,6 +164,7 @@ void stop_rt_mon_task(int cpu)
 			tmp->cost_isrtime = 0;
 		}
 	}
+	rcu_read_unlock();
 	spin_unlock_irqrestore(&mt_rt_mon_lock, irq_flags);
 }
 
@@ -175,6 +180,7 @@ void reset_rt_mon_list(int cpu)
 	list_head = &(per_cpu(mt_rt_mon_head, cpu).list);
 	per_cpu(mt_rt_mon_enabled, cpu) = 0;
 
+	rcu_read_lock();
 	list_for_each_entry_safe(tmp, tmp2, list_head, list) {
 		tsk = find_task_by_vpid(tmp->pid);
 		if (tsk) {
@@ -191,6 +197,7 @@ void reset_rt_mon_list(int cpu)
 			kfree(tmp);
 		}
 	}
+	rcu_read_unlock();
 	per_cpu(rt_end_ts, cpu) = 0;
 	spin_unlock_irqrestore(&mt_rt_mon_lock, irq_flags);
 
@@ -222,8 +229,8 @@ void mt_rt_mon_print_task(int cpu)
 	rt_end_ts_buffer =  __raw_get_cpu_var(rt_end_ts);
 	rt_dur_ts_buffer = __raw_get_cpu_var(rt_dur_ts);
 
-	pr_err(
-		"sched: mon_count = %d monitor start[%lld.%06lu ms] end[%lld.%06lu ms] dur[%lld.%06lu ms]\n",
+	printk_deferred(
+	"[name:rt_monitor&]sched: mon_count = %d monitor start[%lld.%06lu ms] end[%lld.%06lu ms] dur[%lld.%06lu ms]\n",
 		per_cpu(rt_mon_count, cpu),
 		SPLIT_NS_H(per_cpu(rt_start_ts, cpu)), SPLIT_NS_L(per_cpu(rt_start_ts, cpu)),
 		SPLIT_NS_H(per_cpu(rt_end_ts, cpu)), SPLIT_NS_L(per_cpu(rt_end_ts, cpu)),
@@ -236,7 +243,7 @@ void mt_rt_mon_print_task(int cpu)
 	list_for_each_entry(tmp, list_head, list) {
 		memcpy(&buffer[count], tmp, sizeof(struct mt_rt_mon_struct));
 		count++;
-		pr_err("sched:[%s] pid:%d prio:%d exec_time[%lld.%06lu ms] percen[%d.%04d%%] isr_time[%lld.%06lu ms]\n",
+		printk_deferred("[name:rt_monitor&]sched:[%s] pid:%d prio:%d exec_time[%lld.%06lu ms] percen[%d.%04d%%] isr_time[%lld.%06lu ms]\n",
 			tmp->comm, tmp->pid, tmp->prio,
 			SPLIT_NS_H(tmp->cost_cputime), SPLIT_NS_L(tmp->cost_cputime),
 			tmp->cputime_percen_6 / 10000, tmp->cputime_percen_6 % 10000,
@@ -247,27 +254,30 @@ void mt_rt_mon_print_task(int cpu)
 	}
 	spin_unlock_irqrestore(&mt_rt_mon_lock, irq_flags);
 }
+#define printf_at_AEE(x...)			\
+do {						\
+	snprintf(rt_monitor_print_at_AEE_buffer, sizeof(rt_monitor_print_at_AEE_buffer), x);	\
+	aee_sram_fiq_log(rt_monitor_print_at_AEE_buffer);	\
+} while (0)
 
 void mt_rt_mon_print_task_from_buffer(void)
 {
 	int i;
 
-	pr_err("last throttle information start\n");
-	pr_err("sched: mon_count = %d monitor start[%lld.%06lu] end[%lld.%06lu] dur[%lld.%06lu]\n",
-		rt_mon_count_buffer, SPLIT_NS_H(rt_start_ts_buffer), SPLIT_NS_L(rt_start_ts_buffer),
-		SPLIT_NS_H(rt_end_ts_buffer), SPLIT_NS_L(rt_end_ts_buffer),
-		SPLIT_NS_H((rt_end_ts_buffer - rt_start_ts_buffer)),
-		SPLIT_NS_L((rt_end_ts_buffer - rt_start_ts_buffer)));
-
+	printf_at_AEE("last throttle information start\n");
+	printf_at_AEE("sched: mon_count = %d monitor start[%lld.%06lu] end[%lld.%06lu] dur[%lld.%06lu]\n",
+			rt_mon_count_buffer, SPLIT_NS_H(rt_start_ts_buffer), SPLIT_NS_L(rt_start_ts_buffer),
+			SPLIT_NS_H(rt_end_ts_buffer), SPLIT_NS_L(rt_end_ts_buffer),
+			SPLIT_NS_H((rt_end_ts_buffer - rt_start_ts_buffer)),
+			SPLIT_NS_L((rt_end_ts_buffer - rt_start_ts_buffer)));
 	for (i = 0 ; i < MAX_THROTTLE_COUNT ; i++)  {
-		pr_err("sched:[%s] pid:%d prio:%d cputime[%lld.%06lu] percen[%d.%04d%%] isr_time[%lld.%06lu]\n",
-			buffer[i].comm, buffer[i].pid, buffer[i].prio,
-			SPLIT_NS_H(buffer[i].cost_cputime), SPLIT_NS_L(buffer[i].cost_cputime),
-			buffer[i].cputime_percen_6 / 10000, buffer[i].cputime_percen_6 % 10000,
-			SPLIT_NS_H(buffer[i].isr_time), SPLIT_NS_L(buffer[i].isr_time));
+		printf_at_AEE("sched:[%s] pid:%d prio:%d cputime[%lld.%06lu] percen[%d.%04d%%] isr_time[%lld.%06lu]\n",
+				buffer[i].comm, buffer[i].pid, buffer[i].prio,
+				SPLIT_NS_H(buffer[i].cost_cputime), SPLIT_NS_L(buffer[i].cost_cputime),
+				buffer[i].cputime_percen_6 / 10000, buffer[i].cputime_percen_6 % 10000,
+				SPLIT_NS_H(buffer[i].isr_time), SPLIT_NS_L(buffer[i].isr_time));
 	}
-
-	pr_err("last throttle information end\n");
+	printf_at_AEE("last throttle information end\n");
 }
 
 void mt_rt_mon_switch(int on, int cpu)

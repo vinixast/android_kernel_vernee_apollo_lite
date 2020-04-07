@@ -50,7 +50,6 @@
 
 #include <linux/compat.h>
 
-#include <linux/rtpm_prio.h>
 #include <linux/ktime.h>
 #include <linux/of_irq.h>
 
@@ -124,7 +123,6 @@ static int set_low_refresh_rate_task_wakeup;
 static int rrc_curr_refresh_rate;
 static int _rrc_avg_fps_range;
 static int _is_new_change_refresh_event;
-static int _is_new_change_set_low_refresh_now;
 static int _is_video_120hz_en;
 
 
@@ -252,12 +250,10 @@ static int rrc_get_next_refresh_rate(void)
 			video_state++;
 			if (_is_video_120hz_en
 				&& (i == RRC_DRV_TYPE_VIDEO_SWDEC_PLAYBACK || i == RRC_DRV_TYPE_VIDEO_PLAYBACK)) {
-				_is_new_change_set_low_refresh_now = 0;
 				rrc_set_refresh_state(RRC_STATE_VIDEO_120Hz);
 				break;
 			}
 
-			_is_new_change_set_low_refresh_now = 1;
 			rrc_set_refresh_state(RRC_STATE_VIDEO);
 
 		}
@@ -292,7 +288,7 @@ static int rrc_is_touch_event(void)
 static int rrc_monitor_fps_kthread_func(void *data)
 {
 
-	struct sched_param param = { .sched_priority = RTPM_PRIO_SCRN_UPDATE };
+	struct sched_param param = { .sched_priority = 94 };
 
 	sched_setscheduler(current, SCHED_RR, &param);
 
@@ -316,8 +312,9 @@ static int rrc_set_low_refresh_rate_kthread_func(void *data)
 	int rrc_low_sample_cnt = 0;
 	int curr_refresh;
 	int state;
+	int run_flag;
 
-	struct sched_param param = { .sched_priority = RTPM_PRIO_SCRN_UPDATE };
+	struct sched_param param = { .sched_priority = 94 };
 
 	sched_setscheduler(current, SCHED_RR, &param);
 
@@ -333,37 +330,49 @@ static int rrc_set_low_refresh_rate_kthread_func(void *data)
 		/* reset new change event */
 		/* _is_new_change_refresh_event = 0; */
 
-		while (1) {
 
-			/* sleep for a while*/
-			msleep_interruptible(RRC_SAMPLE_INTERVAL);
+		run_flag = 1;
+		rrc_low_sample_cnt = 0;
 
-			/* check if still low state */
-			if (_is_new_change_refresh_event && _is_new_change_set_low_refresh_now == 0) {
+
+		while (run_flag) {
+
+			state = rrc_get_refresh_state();
+			curr_refresh = rrc_get_curr_refresh_rate();
+
+			if (RRC_STATE_VIDEO == state) {
+				/* video state needs set low refresh rate immediately */
+				RRC_WRN("[RRC_DRV] state %d, force set low refresh rate now!!\n", state);
+				rrc_set_curr_refresh_rate(RRC_DRV_60Hz);
+				run_flag = 0;
+			}
+
+			/* check new refresh rate when new event happens */
+			if (run_flag && _is_new_change_refresh_event) {
+
 				_is_new_change_refresh_event = 0;
-				curr_refresh = rrc_get_curr_refresh_rate();
-				/* RRC_WRN("[RRC_DRV] kthread_func : set_low_refresh curr %d, sample_cnt %d !!\n",
-					curr_refresh, rrc_low_sample_cnt); */
+				rrc_low_sample_cnt = 0;
+
 				if (curr_refresh == RRC_DRV_120Hz) {
 					/* go back to sleep for next touch DOWN event */
+					run_flag = 0;
 					RRC_WRN("[RRC_DRV] sample new 120Hz event, skip set low refresh rate!!\n");
-					break;
 				}
-
-				rrc_low_sample_cnt = 0;
-
 			}
+
 			/* increment low sample count */
-			if (++rrc_low_sample_cnt == RRC_DRV_LOW_SAMPLE_COUNT || _is_new_change_set_low_refresh_now) {
+			if (run_flag && (++rrc_low_sample_cnt == RRC_DRV_LOW_SAMPLE_COUNT)) {
 				rrc_low_sample_cnt = 0;
-				state = rrc_get_refresh_state();
-				if (RRC_STATE_VIDEO_120Hz != state) {
-					RRC_WRN("[RRC_DRV] state %d, now %d, set low refresh rate!!\n",
-						state, _is_new_change_set_low_refresh_now);
+				if (curr_refresh == RRC_DRV_60Hz) {
+					/* go back to sleep for next touch DOWN event */
 					rrc_set_curr_refresh_rate(RRC_DRV_60Hz);
+					run_flag = 0;
 				}
-				_is_new_change_set_low_refresh_now = 0;
-				break;
+			}
+
+			if (run_flag) {
+				/* sleep for a while*/
+				msleep_interruptible(RRC_SAMPLE_INTERVAL);
 			}
 
 		}
@@ -384,7 +393,7 @@ static int rrc_set_refresh_rate_kthread_func(void *data)
 	/* int event;	*/
 	/* int enable; */
 
-	struct sched_param param = { .sched_priority = RTPM_PRIO_SCRN_UPDATE };
+	struct sched_param param = { .sched_priority = 94 };
 
 	sched_setscheduler(current, SCHED_RR, &param);
 

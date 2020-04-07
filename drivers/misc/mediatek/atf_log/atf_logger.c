@@ -11,7 +11,6 @@
  * GNU General Public License for more details.
  */
 
-#define DEBUG
 #include <linux/module.h>
 #include <linux/file.h>
 #include <linux/fs.h>
@@ -20,16 +19,20 @@
 #include <linux/kernel.h>       /* min() */
 #include <linux/uaccess.h>      /* copy_to_user() */
 #include <linux/sched.h>        /* TASK_INTERRUPTIBLE/signal_pending/schedule */
+#include <linux/syscore_ops.h>
 #include <linux/poll.h>
 #include <linux/io.h>           /* ioremap() */
 #include <linux/of_fdt.h>
 #include <linux/of_reserved_mem.h>
+#include <linux/of_irq.h>
+#include <linux/of.h>
 #include <linux/seq_file.h>
 #include <asm/setup.h>
 #include <linux/interrupt.h>
 #include <linux/proc_fs.h>
 #include <linux/atomic.h>
 #include <linux/irq.h>
+#include <mach/mt_secure_api.h>
 
 /*#define ATF_LOGGER_DEBUG*/
 #define ATF_LOG_CTRL_BUF_SIZE 256
@@ -504,6 +507,25 @@ static const struct file_operations proc_atf_crash_file_operations = {
 	.release = single_release,
 };
 
+#ifdef MTK_SIP_KERNEL_TIME_SYNC
+static void atf_time_sync_resume(void)
+{
+	/* Get local_clock and sync to ATF */
+	u64 time_to_sync = local_clock();
+
+#ifdef CONFIG_ARM64
+	mt_secure_call(MTK_SIP_KERNEL_TIME_SYNC, time_to_sync, 0, 0);
+#else
+	mt_secure_call(MTK_SIP_KERNEL_TIME_SYNC, (u32)time_to_sync, (u32)(time_to_sync >> 32), 0);
+#endif
+	pr_notice("atf_time_sync: resume sync");
+}
+
+static struct syscore_ops atf_time_sync_syscore_ops = {
+	.resume = atf_time_sync_resume,
+};
+#endif
+
 #ifdef CONFIG_ARCH_MT6797
 
 static int atf_dump_show(struct seq_file *m, void *v)
@@ -534,11 +556,16 @@ static int __init atf_log_init(void)
 	int err;
 	struct proc_dir_entry *atf_log_proc_dir;
 	struct proc_dir_entry *atf_log_proc_file;
+	struct device_node *node = NULL;
+	int irq_num;
 #ifdef CONFIG_ARCH_MT6797
 	struct proc_dir_entry *atf_log_dump_proc_file;
 #endif
 	struct proc_dir_entry *atf_crash_proc_file;
 	struct proc_dir_entry *atf_last_proc_file;
+#ifdef MTK_SIP_KERNEL_TIME_SYNC
+	u64 time_to_sync;
+#endif
 
 	err = misc_register(&atf_log_dev);
 	if (unlikely(err)) {
@@ -569,17 +596,19 @@ static int __init atf_log_init(void)
 	/* initial wait queue */
 	init_waitqueue_head(&atf_log_wq);
 
-#ifdef CONFIG_ARCH_MT6797
-	if (request_irq(325, (irq_handler_t)ATF_log_irq_handler, IRQ_TYPE_EDGE_RISING, "ATF_irq", NULL) != 0) {
+	node = of_find_compatible_node(NULL, NULL, "mediatek,atf_logger");
+	if (!node) {
+		pr_err("[SCP] Can't find node:mediatek,atf_logger.n");
+		return -1;
+	}
+
+	irq_num = irq_of_parse_and_map(node, 0);
+	pr_notice("atf irq num %d.\n", irq_num);
+
+	if (request_irq(irq_num, (irq_handler_t)ATF_log_irq_handler, IRQF_TRIGGER_NONE, "ATF_irq", NULL) != 0) {
 		pr_crit("Fail to request ATF_log_irq interrupt!\n");
 		return -1;
 	}
-#else
-	if (request_irq(281, (irq_handler_t)ATF_log_irq_handler, IRQF_TRIGGER_NONE, "ATF_irq", NULL) != 0) {
-		pr_crit("Fail to request ATF_log_irq interrupt!\n");
-		return -1;
-	}
-#endif
 
 	/* create /proc/atf_log */
 	atf_log_proc_dir = proc_mkdir("atf_log", NULL);
@@ -621,6 +650,20 @@ static int __init atf_log_init(void)
 		atf_crash_log_buf = ioremap_wc(atf_buf_vir_ctl->info.atf_crash_log_addr,
 				atf_buf_vir_ctl->info.atf_crash_log_size);
 	}
+
+#ifdef MTK_SIP_KERNEL_TIME_SYNC
+	register_syscore_ops(&atf_time_sync_syscore_ops);
+
+	/* Get local_clock and sync to ATF */
+	time_to_sync = local_clock();
+
+#ifdef CONFIG_ARM64
+	mt_secure_call(MTK_SIP_KERNEL_TIME_SYNC, time_to_sync, 0, 0);
+#else
+	mt_secure_call(MTK_SIP_KERNEL_TIME_SYNC, (u32)time_to_sync, (u32)(time_to_sync >> 32), 0);
+#endif
+	pr_notice("atf_time_sync: inited");
+#endif
 
 	return 0;
 }

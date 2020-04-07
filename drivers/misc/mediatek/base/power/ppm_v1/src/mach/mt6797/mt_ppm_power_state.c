@@ -1697,20 +1697,20 @@ int *delta_power_LxLL[5][5];
 
 void ppm_init_efficiency_table(void)
 {
-	int i,j;
+	int i, j;
 
-	if(ppm_main_info.dvfs_tbl_type == DVFS_TABLE_TYPE_SB) {
+	if (ppm_main_info.dvfs_tbl_type == DVFS_TABLE_TYPE_SB) {
 		freq_idx_mapping_tbl = freq_idx_mapping_tbl_sb;
 		freq_idx_mapping_tbl_r = freq_idx_mapping_tbl_sb_r;
 		freq_idx_mapping_tbl_big = freq_idx_mapping_tbl_sb_big;
 		freq_idx_mapping_tbl_big_r = freq_idx_mapping_tbl_sb_big_r;
 
-		for(i = 0; i < 3; i++) {
+		for (i = 0; i < 3; i++) {
 			efficiency_B[i] = efficiency_B_SB[i];
 			delta_power_B[i] = delta_power_B_SB[i];
 		}
-		for(i = 0; i < 5; i++) {
-			for(j = 0; j < 5; j++) {
+		for (i = 0; i < 5; i++) {
+			for (j = 0; j < 5; j++) {
 				efficiency_LxLL[i][j] = efficiency_LxLL_SB[i][j];
 				delta_power_LxLL[i][j] = delta_power_LxLL_SB[i][j];
 			}
@@ -1721,12 +1721,12 @@ void ppm_init_efficiency_table(void)
 		freq_idx_mapping_tbl_big = freq_idx_mapping_tbl_fy_big;
 		freq_idx_mapping_tbl_big_r = freq_idx_mapping_tbl_fy_big_r;
 
-		for(i = 0; i < 3; i++) {
+		for (i = 0; i < 3; i++) {
 			efficiency_B[i] = efficiency_B_FY[i];
 			delta_power_B[i] = delta_power_B_FY[i];
 		}
-		for(i = 0; i < 5; i++) {
-			for(j = 0; j < 5; j++) {
+		for (i = 0; i < 5; i++) {
+			for (j = 0; j < 5; j++) {
 				efficiency_LxLL[i][j] = efficiency_LxLL_FY[i][j];
 				delta_power_LxLL[i][j] = delta_power_LxLL_FY[i][j];
 			}

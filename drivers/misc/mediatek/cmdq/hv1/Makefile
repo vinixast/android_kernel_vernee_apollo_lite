@@ -11,11 +11,9 @@
 # GNU General Public License for more details.
 #
 
-# include $(srctree)/drivers/misc/mediatek/Makefile.custom
-
 # drivers/cmdq
 $(warning start to build cmdq normal)
-
+ccflags-y += -I$(srctree)/drivers/misc/mediatek/video/$(MTK_PLATFORM)/
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/video/$(MTK_PLATFORM)/dispsys
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/cmdq/hv1/$(MTK_PLATFORM)
 ccflags-y += -I$(srctree)/include/linux
@@ -29,9 +27,9 @@ $(warning start to build cmdq secure)
 	ccflags-y += -I$(srctree)/include/trustzone
 
 #	ccflags-y += -DMTK_SEC_VIDEO_PATH_SUPPORT
-ifeq ($(MTK_PLATFORM), mt8173)
+
 	ccflags-y += -DCMDQ_SECURE_PATH_SUPPORT
-endif
+
 	ccflags-y += -DDEBUG_SVP_INFO
 	obj-y += cmdq_sec.o
 else
@@ -42,6 +40,12 @@ ifeq ($(CONFIG_MTK_IN_HOUSE_TEE_SUPPORT),yes)
 endif
 #ccflags-y += -DMTK_SEC_VIDEO_PATH_SUPPORT	#need to modify jiaguang.zhang
 #ccflags-y += -DCONFIG_MTK_IN_HOUSE_TEE_SUPPORT
+
+
+ifneq ($(TARGET_BUILD_VARIANT),user)
+ccflags-y += -D_CMDQ_TEST_PROC_
+endif
+
 # Enable MET
 ccflags-y += -DMET_USER_EVENT_SUPPORT
 ccflags-y += -DDEBUG_INFO

@@ -17,6 +17,9 @@ subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include
 subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
 subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat
 
+obj-$(CONFIG_MTK_PUMP_EXPRESS_PLUS_SUPPORT) += mtk_pep_intf.o
+obj-$(CONFIG_MTK_PUMP_EXPRESS_PLUS_20_SUPPORT) += mtk_pep20_intf.o
+
 ifeq ($(CONFIG_MTK_HAFG_20),y)
 	obj-$(CONFIG_MTK_SMART_BATTERY) += battery_meter_fg_20.o battery_common_fg_20.o
 else
@@ -68,7 +71,11 @@ else
 													ifeq ($(CONFIG_MTK_BQ25898_DUAL_SUPPORT),y)
 														obj-$(CONFIG_MTK_SMART_BATTERY) += switch_charging.o
 													else
-														obj-$(CONFIG_MTK_SMART_BATTERY) += linear_charging.o
+														ifeq ($(CONFIG_MTK_RT9466_SUPPORT),y)
+															obj-$(CONFIG_MTK_SMART_BATTERY) += switch_charging.o
+														else
+															obj-$(CONFIG_MTK_SMART_BATTERY) += linear_charging.o
+														endif
 													endif
 												endif
 											endif
@@ -82,7 +89,4 @@ else
 			endif
 		endif
 	endif
-endif
-ifeq ($(TARGET_BUILD_VARIANT),user)
-ccflags-y += -DUSER_BUILD_KERNEL
 endif

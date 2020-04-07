@@ -1,4 +1,3 @@
-#include $(srctree)/drivers/misc/mediatek/Makefile.custom
 
 obj-y += rrc_driver.o
 
@@ -13,6 +12,7 @@ ccflags-y += -I$(srctree)/drivers/misc/mediatek/video/include/     \
              -I$(srctree)/drivers/misc/mediatek/video/common/   \
              -I$(srctree)/drivers/misc/mediatek/video/common/rdma10/ \
              -I$(srctree)/drivers/misc/mediatek/video/common/wdma10/ \
+             -I$(srctree)/drivers/misc/mediatek/video/$(MTK_PLATFORM)/   \
              -I$(srctree)/drivers/misc/mediatek/video/$(MTK_PLATFORM)/dispsys/   \
              -I$(srctree)/drivers/misc/mediatek/sync/      \
              -I$(srctree)/drivers/misc/mediatek/mach/$(MTK_PLATFORM)/include/mach/ \

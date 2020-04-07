@@ -412,6 +412,11 @@ void musb_g_tx(struct musb *musb, u8 epnum)
 			writel((txcsr0 & TX_W1C_BITS) | TX_TXPKTRDY,
 			       musb->endpoints[epnum].addr_txcsr0);
 			request->zero = 0;
+			/*
+			 * Return from here with the expectation of the endpoint
+			 * interrupt for further action.
+			 */
+			return;
 		}
 
 		if (request->actual == request->length) {
@@ -715,7 +720,7 @@ static int musb_gadget_enable(struct usb_ep *ep, const struct usb_endpoint_descr
 #ifdef USE_SSUSB_QMU
 	_ex_mu3d_hal_ep_enable(epnum, dir, type, maxp, 0, MAX_SLOT, 0, 0);
 #else
-	/*TODO: Check support mulitslots on real ship */
+	/* note multi-slot is not supported in PIO mode currently, need to revise driver to support it */
 	_ex_mu3d_hal_ep_enable(epnum, dir, type, maxp, 0, 0, 0, 0);
 #endif
 
@@ -737,8 +742,8 @@ static int musb_gadget_enable(struct usb_ep *ep, const struct usb_endpoint_descr
 	musb_ep->wedged = 0;
 	status = 0;
 
-	musb->active_ep++;
-	os_printk(K_DEBUG, "[U3D]%s active_ep=%d\n", __func__, musb->active_ep);
+	musb->active_ep = musb->active_ep | (EP_FLAGS(epnum, dir));
+	os_printk(K_INFO, "[U3D]%s active_ep=0x%08X %d %d\n", __func__, musb->active_ep, epnum, dir);
 
 	/* pr_debug("%s periph: enabled %s for %s %s, %smaxpacket %d\n", */
 	os_printk(K_DEBUG, "[U3D]%s periph: enabled %s for %s %s, %smaxpacket %d\n",
@@ -818,8 +823,9 @@ static int musb_gadget_disable(struct usb_ep *ep)
 
 	schedule_work(&musb->irq_work);
 
-	musb->active_ep--;
-	/* os_printk(K_INFO, "[U3D]%s active_ep=%d\n", __func__, musb->active_ep);*/
+	musb->active_ep = musb->active_ep & ~(EP_FLAGS(epnum, (musb_ep->is_in ? USB_TX : USB_RX)));
+	os_printk(K_INFO, "[U3D]%s active_ep=0x%08X %d %d\n", __func__,
+			musb->active_ep, epnum, (musb_ep->is_in ? USB_TX : USB_RX));
 
 	if (musb->active_ep == 0 && musb->is_active == 0)
 		schedule_work(&musb->suspend_work);
@@ -1644,7 +1650,11 @@ int musb_gadget_setup(struct musb *musb)
 	 */
 
 	musb->g.ops = &musb_gadget_operations;
+#ifdef SUPPORT_U3
 	musb->g.max_speed = USB_SPEED_SUPER;
+#else
+	musb->g.max_speed = USB_SPEED_HIGH;
+#endif
 	musb->g.speed = USB_SPEED_UNKNOWN;
 
 	/* this "gadget" abstracts/virtualizes the controller */

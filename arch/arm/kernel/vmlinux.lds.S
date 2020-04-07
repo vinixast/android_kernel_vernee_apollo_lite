@@ -120,13 +120,11 @@ SECTIONS
 			ARM_CPU_KEEP(PROC_INFO)
 	}
 
-#ifdef CONFIG_MTK_AEE_MRDUMP
-	.mrdump ALIGN (0x400): {
-	}
-#endif
 #ifdef CONFIG_DEBUG_RODATA
 	. = ALIGN(1<<SECTION_SHIFT);
 #endif
+	_etext = .;			/* End of text section */
+
 	RO_DATA(PAGE_SIZE)
 
 	. = ALIGN(4);
@@ -157,7 +155,17 @@ SECTIONS
 
 	NOTES
 
-	_etext = .;			/* End of text and rodata section */
+#ifndef CONFIG_XIP_KERNEL
+# ifdef CONFIG_ARM_KERNMEM_PERMS
+	. = ALIGN(1<<SECTION_SHIFT);
+# else
+	. = ALIGN(PAGE_SIZE);
+# endif
+#endif
+#ifdef CONFIG_MTK_AEE_MRDUMP
+	.mrdump ALIGN (0x400): {
+	}
+#endif
 
 #ifndef CONFIG_XIP_KERNEL
 # ifdef CONFIG_ARM_KERNMEM_PERMS
@@ -279,6 +287,7 @@ SECTIONS
 		_edata = .;
 	}
 	_edata_loc = __data_loc + SIZEOF(.data);
+
 
 #ifdef CONFIG_HAVE_TCM
         /*

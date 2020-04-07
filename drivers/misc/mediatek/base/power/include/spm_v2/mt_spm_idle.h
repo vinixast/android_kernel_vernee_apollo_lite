@@ -80,26 +80,18 @@ wake_reason_t spm_go_to_sodi(u32 spm_flags, u32 spm_data, u32 sodi_flags);
 void spm_enable_sodi(bool);
 bool spm_get_sodi_en(void);
 
-#if defined(CONFIG_ARCH_MT6797)
 void spm_sodi_set_vdo_mode(bool vdo_mode);
 bool spm_get_cmd_mode(void);
-#endif
 void spm_sodi_mempll_pwr_mode(bool pwr_mode);
 bool spm_get_sodi_mempll(void);
 
-void spm_sodi_twam_disable(void);
-void spm_sodi_twam_enable(u32 event);
-
 enum mt_sodi_flag {
-	SODI_FLAG_V3          = (1 << 0),
+	SODI_FLAG_3P0         = (1 << 0),
 	SODI_FLAG_RESIDENCY   = (1 << 1),
 	SODI_FLAG_REDUCE_LOG  = (1 << 2),
 	SODI_FLAG_NO_LOG      = (1 << 3),
 	SODI_FLAG_DUMP_REG    = (1 << 4),
 };
-
-#define APXGPT_SYS_TICKS_PER_US ((u32)(13))
-#define APXGPT_RTC_TICKS_PER_MS ((u32)(32))
 
 /*
  * for Multi Core Deep Idle

@@ -1,4 +1,18 @@
 /*
+* Copyright (C) 2016 MediaTek Inc.
+*
+* This program is free software: you can redistribute it and/or modify it under the terms of the
+* GNU General Public License version 2 as published by the Free Software Foundation.
+*
+* This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+* without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+* See the GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License along with this program.
+* If not, see <http://www.gnu.org/licenses/>.
+*/
+
+/*
 ** Id: @(#) gl_p2p_cfg80211.c@@
 */
 
@@ -883,7 +897,7 @@ VOID kalP2PIndicateScanDone(IN P_GLUE_INFO_T prGlueInfo, IN UINT_8 ucRoleIndex, 
 			ASSERT(FALSE);
 			break;
 		}
-		DBGLOG(P2P, INFO, "scan complete, cfg80211 scan request is %p\n", prGlueInfo->prScanRequest);
+		DBGLOG(P2P, TRACE, "scan complete, cfg80211 scan request is %p\n", prGlueP2pInfo->prScanRequest);
 
 		GLUE_ACQUIRE_SPIN_LOCK(prGlueInfo, SPIN_LOCK_NET_DEV);
 
@@ -931,7 +945,7 @@ kalP2PIndicateBssInfo(IN P_GLUE_INFO_T prGlueInfo,
 		prChannelEntry = kalP2pFuncGetChannelEntry(prGlueP2pInfo, prChannelInfo);
 
 		if (prChannelEntry == NULL) {
-			DBGLOG(P2P, TRACE, "Unknown channel info\n");
+			DBGLOG(P2P, WARN, "Unknown channel info\n");
 			break;
 		}
 
@@ -940,10 +954,11 @@ kalP2PIndicateBssInfo(IN P_GLUE_INFO_T prGlueInfo,
 		prCfg80211Bss = cfg80211_inform_bss_frame(prGlueP2pInfo->prWdev->wiphy,	/* struct wiphy * wiphy, */
 							  prChannelEntry,
 							  prBcnProbeRspFrame, u4BufLen, i4SignalStrength, GFP_KERNEL);
-
 		/* Return this structure. */
-		cfg80211_put_bss(prGlueP2pInfo->prWdev->wiphy, prCfg80211Bss);
-
+		if (prCfg80211Bss)
+			cfg80211_put_bss(prGlueP2pInfo->prWdev->wiphy, prCfg80211Bss);
+		else
+			DBGLOG(P2P, WARN, "Indicate bss to cfg80211 failed\n");
 	} while (FALSE);
 
 	return;
@@ -958,7 +973,7 @@ VOID kalP2PIndicateMgmtTxStatus(IN P_GLUE_INFO_T prGlueInfo, IN P_MSDU_INFO_T pr
 
 	do {
 		if ((prGlueInfo == NULL) || (prMsduInfo == NULL)) {
-			DBGLOG(P2P, WARN, "Unexpected pointer PARAM. 0x%lx, 0x%lx.\n", prGlueInfo, prMsduInfo);
+			DBGLOG(P2P, WARN, "Unexpected pointer PARAM. 0x%p, 0x%p.\n", prGlueInfo, prMsduInfo);
 			ASSERT(FALSE);
 			break;
 		}
@@ -1055,8 +1070,7 @@ VOID
 kalP2PGCIndicateConnectionStatus(IN P_GLUE_INFO_T prGlueInfo,
 				 IN UINT_8 ucRoleIndex,
 				 IN P_P2P_CONNECTION_REQ_INFO_T prP2pConnInfo,
-				 IN PUINT_8 pucRxIEBuf, IN UINT_16 u2RxIELen, IN UINT_16 u2StatusReason,
-				 IN WLAN_STATUS eStatus)
+				 IN PUINT_8 pucRxIEBuf, IN UINT_16 u2RxIELen, IN UINT_16 u2StatusReason)
 {
 	P_GL_P2P_INFO_T prGlueP2pInfo = (P_GL_P2P_INFO_T) NULL;
 
@@ -1084,8 +1098,7 @@ kalP2PGCIndicateConnectionStatus(IN P_GLUE_INFO_T prGlueInfo,
 			/* Disconnect, what if u2StatusReason == 0? */
 			cfg80211_disconnected(prGlueP2pInfo->aprRoleHandler[ucRoleIndex],
 						/* struct net_device * dev, */
-					      u2StatusReason, pucRxIEBuf, u2RxIELen,
-					      eStatus == WLAN_STATUS_MEDIA_DISCONNECT_LOCALLY, GFP_KERNEL);
+					      u2StatusReason, pucRxIEBuf, u2RxIELen, GFP_KERNEL);
 		}
 
 	} while (FALSE);

@@ -214,8 +214,10 @@ static void lcm_get_params(LCM_PARAMS *params)
 	params->dsi.horizontal_frontporch = 80;
 	params->dsi.horizontal_active_pixel = FRAME_WIDTH;
 	/* params->dsi.ssc_disable                                                       = 1; */
-	params->physical_width  = 68000; 
-	params->physical_height = 122000;
+	params->physical_width  = 68000/1000; 
+	params->physical_height = 122000/1000;
+	params->physical_width_um  = 68000; 
+	params->physical_height_um = 122000;
 #if (LCM_DSI_CMD_MODE)
 	params->dsi.PLL_CLOCK = 200;
 #else

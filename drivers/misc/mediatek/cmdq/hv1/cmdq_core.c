@@ -41,7 +41,6 @@
 
 #include <linux/kthread.h>
 #include <linux/delay.h>
-#include <linux/rtpm_prio.h>
 
 
 #ifdef CMDQ_SECURE_PATH_SUPPORT
@@ -149,7 +148,7 @@ static int cmdq_core_print_log_kthread(void *data)
 	uint32_t msgOffset;
 	int32_t msgMAXSize;
 	bool needPrintLog;
-	struct sched_param param = {.sched_priority = RTPM_PRIO_SCRN_UPDATE };
+	struct sched_param param = {.sched_priority = 94};
 
 	sched_setscheduler(current, SCHED_RR, &param);
 
@@ -597,9 +596,9 @@ ssize_t cmdqCorePrintStatus(struct device *dev, struct device_attribute *attr, c
 	};
 	static const char *const listNames[] = { "Free", "Active", "Wait" };
 
-	const enum CMDQ_ENG_ENUM engines[] = { CMDQ_FOREACH_STATUS_MODULE_PRINT(GENERATE_ENUM) };
-	static const char *const engineNames[] = {
-	    CMDQ_FOREACH_STATUS_MODULE_PRINT(GENERATE_STRING) };
+	const enum CMDQ_ENG_ENUM engines[] = CMDQ_FOREACH_STATUS_MODULE_PRINT(GENERATE_ENUM);
+	static const char *const engineNames[] =
+	    CMDQ_FOREACH_STATUS_MODULE_PRINT(GENERATE_STRING);
 
 	cmdqCorePrintStatus_idv(pBuffer);
 
@@ -1068,9 +1067,9 @@ int cmdqCorePrintStatusSeq(struct seq_file *m, void *v)
 	};
 	static const char *const listNames[] = { "Free", "Active", "Wait" };
 
-	const enum CMDQ_ENG_ENUM engines[] = { CMDQ_FOREACH_STATUS_MODULE_PRINT(GENERATE_ENUM) };
-	static const char *const engineNames[] = {
-	    CMDQ_FOREACH_STATUS_MODULE_PRINT(GENERATE_STRING) };
+	const enum CMDQ_ENG_ENUM engines[] = CMDQ_FOREACH_STATUS_MODULE_PRINT(GENERATE_ENUM);
+	static const char *const engineNames[] =
+	    CMDQ_FOREACH_STATUS_MODULE_PRINT(GENERATE_STRING);
 
 	cmdqCorePrintStatusSeq_idv(m);
 

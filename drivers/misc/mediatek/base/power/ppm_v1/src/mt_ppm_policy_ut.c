@@ -56,7 +56,6 @@ static enum ppm_power_state ppm_ut_get_power_state_cb(enum ppm_power_state cur_s
 
 static void ppm_ut_update_limit_cb(enum ppm_power_state new_state)
 {
-	return;
 }
 
 static int ppm_ut_fix_core_num_proc_show(struct seq_file *m, void *v)

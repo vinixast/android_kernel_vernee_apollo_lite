@@ -36,6 +36,7 @@
 #include <linux/compiler.h>
 /* #include <mach/fiq_smp_call.h> */
 #include <mach/wd_api.h>
+#include <ext_wd_drv.h>
 #include <smp.h>
 #ifndef CONFIG_ARM64
 #include <mach/irqs.h>
@@ -68,6 +69,9 @@ static char str_buf[NR_CPUS][PRINTK_BUFFER_SIZE];
 
 #define ATF_AEE_DEBUG_BUF_LENGTH	0x4000
 static void *atf_aee_debug_virt_addr;
+
+static atomic_t aee_wdt_zap_lock;
+int no_zap_locks;
 
 struct atf_aee_regs {
 	__u64 regs[31];
@@ -309,7 +313,7 @@ static void aee_wdt_dump_backtrace(unsigned int cpu, struct pt_regs *regs)
 	cur_frame.fp = regs->reg_fp;
 	cur_frame.pc = regs->reg_pc;
 	cur_frame.sp = regs->reg_sp;
-	wdt_percpu_stackframe[cpu][0] = regs->reg_lr;
+	wdt_percpu_stackframe[cpu][0] = regs->reg_pc;
 	for (i = 1; i < MAX_EXCEPTION_FRAME; i++) {
 		fp = cur_frame.fp;
 		if ((fp < bottom) || (fp >= (high + THREAD_SIZE))) {
@@ -381,11 +385,13 @@ static void aee_save_reg_stack_sram(int cpu)
 
 		memset(str_buf[cpu], 0, sizeof(str_buf[cpu]));
 		len = snprintf(str_buf[cpu], sizeof(str_buf[cpu]), "cpu %d backtrace : ", cpu);
+
 		for (i = 0; i < MAX_EXCEPTION_FRAME; i++) {
 			if (wdt_percpu_stackframe[cpu][i] == 0)
 				break;
 			len += snprintf((str_buf[cpu] + len), (sizeof(str_buf[cpu]) - len),
 					"%08lx, ", wdt_percpu_stackframe[cpu][i]);
+
 		}
 		aee_sram_fiq_log(str_buf[cpu]);
 		memset(str_buf[cpu], 0, sizeof(str_buf[cpu]));
@@ -406,7 +412,7 @@ void aee_wdt_atf_info(unsigned int cpu, struct pt_regs *regs)
 	unsigned long nanosec_rem;
 	int res = 0;
 	struct wd_api *wd_api = NULL;
-
+	char uart_buf[64];
 	aee_wdt_percpu_printf(cpu, "===> aee_wdt_atf_info : cpu %d\n", cpu);
 	if (!cpu_possible(cpu)) {
 		aee_wdt_printf("FIQ: Watchdog time out at incorrect CPU %d ?\n", cpu);
@@ -429,7 +435,6 @@ void aee_wdt_atf_info(unsigned int cpu, struct pt_regs *regs)
 	if (atomic_xchg(&wdt_enter_fiq, 1) != 0) {
 		aee_rr_rec_fiq_step(AEE_FIQ_STEP_WDT_FIQ_LOOP);
 		aee_wdt_percpu_printf(cpu, "Other CPU already enter WDT FIQ handler\n");
-		set_cpu_online(cpu, false);
 		local_fiq_disable();
 		local_irq_disable();
 
@@ -437,8 +442,23 @@ void aee_wdt_atf_info(unsigned int cpu, struct pt_regs *regs)
 			cpu_relax();
 	}
 
+
 	/* Wait for other cpu dump */
 	mdelay(1000);
+
+	/* printk lock: exec aee_wdt_zap_lock() only one time */
+	if (atomic_xchg(&aee_wdt_zap_lock, 0)) {
+		if (!no_zap_locks) {
+			aee_wdt_zap_locks();
+			uart_buf[0] = 0;
+			mtk_uart_dump_reg(uart_buf);
+			snprintf(str_buf[cpu], sizeof(str_buf[cpu]),
+				"\nCPU%d: zap printk locks uart register=%s\n",
+				cpu, uart_buf);
+			aee_sram_fiq_log(str_buf[cpu]);
+			memset(str_buf[cpu], 0, sizeof(str_buf[cpu]));
+		}
+	}
 
 	aee_rr_rec_fiq_step(AEE_FIQ_STEP_WDT_IRQ_KICK);
 	res = get_wd_api(&wd_api);
@@ -456,8 +476,10 @@ void aee_wdt_atf_info(unsigned int cpu, struct pt_regs *regs)
 	aee_wdt_printf("\nQwdt at [%5lu.%06lu]\n", (unsigned long)t, nanosec_rem / 1000);
 	aee_sram_fiq_log(wdt_log_buf);
 
+#ifdef CONFIG_MTK_WD_KICKER
 	/* dump bind info */
 	dump_wdk_bind_info();
+#endif
 
 	if (regs) {
 		aee_rr_rec_fiq_step(AEE_FIQ_STEP_WDT_IRQ_STACK);
@@ -476,7 +498,6 @@ void aee_wdt_atf_info(unsigned int cpu, struct pt_regs *regs)
 	/* avoid lock prove to dump_stack in __debug_locks_off() */
 	xchg(&debug_locks, 0);
 	aee_rr_rec_fiq_step(AEE_FIQ_STEP_WDT_IRQ_DONE);
-	aee_rr_rec_exp_type(1);
 	BUG();
 }
 
@@ -488,6 +509,8 @@ void notrace aee_wdt_atf_entry(void)
 	void *regs;
 	struct pt_regs pregs;
 	int cpu = get_HW_cpuid();
+
+	aee_rr_rec_exp_type(1);
 
 	if (atf_aee_debug_virt_addr) {
 		regs = (void *)(atf_aee_debug_virt_addr + (cpu * sizeof(struct atf_aee_regs)));
@@ -543,6 +566,8 @@ static int __init aee_wdt_init(void)
 	phys_addr_t atf_aee_debug_phy_addr;
 
 	atomic_set(&wdt_enter_fiq, 0);
+	atomic_set(&aee_wdt_zap_lock, 1);
+
 	for (i = 0; i < NR_CPUS; i++) {
 		wdt_percpu_log_buf[i] = kzalloc(WDT_PERCPU_LOG_SIZE, GFP_KERNEL);
 		if (wdt_percpu_log_buf[i] == NULL)

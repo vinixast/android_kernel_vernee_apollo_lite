@@ -333,7 +333,7 @@ static void process_dbg_opt(const char *opt)
 	} else if (0 == strncmp(opt, "pwm_test:", 9)) {
 		disp_pwm_test(opt + 9, buf);
 	} else if (0 == strncmp(opt, "dither_test:", 12)) {
-		/*dither_test(opt + 12, buf);*/
+		dither_test(opt + 12, buf);
 	} else if (0 == strncmp(opt, "ccorr_test:", 11)) {
 		/*ccorr_test(opt + 11, buf);*/
 	} else if (0 == strncmp(opt, "od_test:", 8)) {
@@ -526,13 +526,17 @@ static const struct file_operations low_power_cust_fops = {
 
 static ssize_t debug_dump_read(struct file *file, char __user *buf, size_t size, loff_t *ppos)
 {
+	char *str = "idlemgr disable mtcmos now, all the regs may 0x00000000\n";
+
 	dprec_logger_dump_reset();
 	dump_to_buffer = 1;
 	/* dump all */
 	dpmgr_debug_path_status(-1);
 	dump_to_buffer = 0;
-
-	return simple_read_from_buffer(buf, size, ppos, dprec_logger_get_dump_addr(),
+	if (is_mipi_enterulps())
+		return simple_read_from_buffer(buf, size, ppos, str, strlen(str));
+	else
+		return simple_read_from_buffer(buf, size, ppos, dprec_logger_get_dump_addr(),
 				       dprec_logger_get_dump_len());
 }
 

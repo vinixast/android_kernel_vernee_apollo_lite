@@ -265,4 +265,3 @@ module_exit(hall_exit);
 MODULE_DESCRIPTION("Prowave Hall driver");
 MODULE_AUTHOR("Aka.Jiang <aka.jiang@hotmail.com>");
 MODULE_LICENSE("GPL");
-

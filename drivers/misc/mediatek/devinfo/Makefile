@@ -12,7 +12,10 @@
 #
 
 # HEADER FILE
-ccflags-y += -I$(srctree)/drivers/misc/mediatek/devinfo/$(subst ",,$(CONFIG_MTK_PLATFORM))
 
-obj-y += devinfo.o
-obj-y += devinfosys.o
+ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat
+
+ccflags-$(CONFIG_MTK_DEVINFO_DRIVER_V2) += -I$(srctree)/drivers/misc/mediatek/devinfo/v2/
+obj-$(CONFIG_MTK_DEVINFO_DRIVER_V2) += v2/
+ccflags-$(CONFIG_MTK_DEVINFO_DRIVER) += -I$(srctree)/drivers/misc/mediatek/devinfo/v1/
+obj-$(CONFIG_MTK_DEVINFO_DRIVER) += v1/

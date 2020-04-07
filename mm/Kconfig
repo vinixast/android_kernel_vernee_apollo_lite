@@ -509,7 +509,7 @@ config CMA
 
 config ZONE_MOVABLE_CMA
 	bool "Contiguous Memory Allocator by ZONE_MOVABLE"
-	depends on HAVE_MEMBLOCK && MMU && CMA
+	depends on HAVE_MEMBLOCK && MMU && CMA && MTK_MEM
 	default n
 	help
 	  This enable the support of ZONE MOVALBE Contiguous Memory Allocator.
@@ -614,6 +614,16 @@ config PGTABLE_MAPPING
 
 	  You can check speed with zsmalloc benchmark:
 	  https://github.com/spartacus06/zsmapbench
+
+config ZSMALLOC_STAT
+	bool "Export zsmalloc statistics"
+	depends on ZSMALLOC
+	select DEBUG_FS
+	help
+	  This option enables code in the zsmalloc to collect various
+	  statistics about whats happening in zsmalloc and exports that
+	  information to userspace via debugfs.
+	  If unsure, say N.
 
 config GENERIC_EARLY_IOREMAP
 	bool

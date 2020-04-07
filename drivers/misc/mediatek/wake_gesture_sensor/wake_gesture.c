@@ -53,11 +53,11 @@ int wag_notify(void)
 
 	if (true == cxt->is_active_data) {
 		pr_err("wag_notify++++\n");
-		
+
 		value = 1;
 		input_report_rel(cxt->idev, EVENT_TYPE_WAG_VALUE, value);
 		input_sync(cxt->idev);
-		
+
 		wake_lock(&wag_lock);
 		mod_timer(&cxt->notify_timer, jiffies + HZ / 5);
 	}
@@ -255,9 +255,15 @@ static ssize_t wag_show_flush(struct device *dev, struct device_attribute *attr,
 static ssize_t wag_show_devnum(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	const char *devname = NULL;
+	struct input_handle *handle;
 
-	devname = dev_name(&wag_context_obj->idev->dev);
-	return snprintf(buf, PAGE_SIZE, "%s\n", devname + 5);	/* TODO: why +5? */
+	list_for_each_entry(handle, &wag_context_obj->idev->h_list, d_node)
+		if (strncmp(handle->name, "event", 5) == 0) {
+			devname = handle->name;
+			break;
+		}
+
+	return snprintf(buf, PAGE_SIZE, "%s\n", devname + 5);
 }
 
 static int wake_gesture_remove(struct platform_device *pdev)

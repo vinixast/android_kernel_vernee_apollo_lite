@@ -28,6 +28,7 @@
 #include <linux/slab.h>
 #include <linux/dmi.h>
 #include <linux/dma-mapping.h>
+#include <linux/kernel.h>
 
 #include "xhci.h"
 #include "xhci-trace.h"
@@ -1579,19 +1580,6 @@ int xhci_urb_dequeue(struct usb_hcd *hcd, struct urb *urb, int status)
 		xhci_urb_free_priv(xhci, urb_priv);
 		return ret;
 	}
-	if ((xhci->xhc_state & XHCI_STATE_DYING) ||
-			(xhci->xhc_state & XHCI_STATE_HALTED)) {
-		xhci_dbg_trace(xhci, trace_xhci_dbg_cancel_urb,
-				"Ep 0x%x: URB %p to be canceled on "
-				"non-responsive xHCI host.",
-				urb->ep->desc.bEndpointAddress, urb);
-		/* Let the stop endpoint command watchdog timer (which set this
-		 * state) finish cleaning up the endpoint TD lists.  We must
-		 * have caught it in the middle of dropping a lock and giving
-		 * back an URB.
-		 */
-		goto done;
-	}
 
 	ep_index = xhci_get_endpoint_index(&urb->ep->desc);
 	ep = &xhci->devs[urb->dev->slot_id]->eps[ep_index];
@@ -1665,12 +1653,6 @@ int xhci_drop_endpoint(struct usb_hcd *hcd, struct usb_device *udev,
 	u32 drop_flag;
 	u32 new_add_flags, new_drop_flags;
 	int ret;
-#ifdef CONFIG_USB_XHCI_MTK
-	struct xhci_slot_ctx *slot_ctx;
-	struct sch_ep *sch_ep = NULL;
-	int isTT;
-	int ep_type = 0;
-#endif
 
 	ret = xhci_check_args(hcd, udev, ep, 1, true, __func__);
 	if (ret <= 0)
@@ -1719,24 +1701,7 @@ int xhci_drop_endpoint(struct usb_hcd *hcd, struct usb_device *udev,
 	xhci_endpoint_zero(xhci, xhci->devs[udev->slot_id], ep);
 
 #ifdef CONFIG_USB_XHCI_MTK
-	slot_ctx = xhci_get_slot_ctx(xhci, xhci->devs[udev->slot_id]->out_ctx);
-	if ((slot_ctx->tt_info & 0xff) > 0)
-		isTT = 1;
-	else
-		isTT = 0;
-
-	if (usb_endpoint_xfer_int(&ep->desc))
-		ep_type = USB_EP_INT;
-	else if (usb_endpoint_xfer_isoc(&ep->desc))
-		ep_type = USB_EP_ISOC;
-	else if (usb_endpoint_xfer_bulk(&ep->desc))
-		ep_type = USB_EP_BULK;
-	sch_ep = mtk_xhci_scheduler_remove_ep(udev->speed, usb_endpoint_dir_in(&ep->desc)
-		, isTT, ep_type, (mtk_u32 *)ep);
-	if (sch_ep != NULL)
-		kfree(sch_ep);
-	else
-		xhci_warn(xhci, "[MTK]Doesn't find ep_sch instance when removing endpoint\n");
+	xhci_mtk_drop_ep_quirk(hcd, udev, ep);
 #endif
 #ifdef CONFIG_SSUSB_MTK_XHCI
 	if (xhci->quirks & XHCI_MTK_HOST)
@@ -1776,17 +1741,7 @@ int xhci_add_endpoint(struct usb_hcd *hcd, struct usb_device *udev,
 	u32 new_add_flags, new_drop_flags;
 	struct xhci_virt_device *virt_dev;
 	int ret = 0;
-#ifdef CONFIG_USB_XHCI_MTK
-	struct xhci_slot_ctx *slot_ctx;
-	struct xhci_ep_ctx *in_ep_ctx;
-	struct sch_ep *sch_ep;
-	int isTT;
-	int ep_type = 0;
-	int maxp = 0;
-	int burst = 0;
-	int mult = 0;
-	int interval = 0;
-#endif
+
 	ret = xhci_check_args(hcd, udev, ep, 1, true, __func__);
 	if (ret <= 0) {
 		/* So we won't queue a reset ep command for a root hub */
@@ -1853,47 +1808,21 @@ int xhci_add_endpoint(struct usb_hcd *hcd, struct usb_device *udev,
 	}
 
 #ifdef CONFIG_USB_XHCI_MTK
-	in_ep_ctx = xhci_get_ep_ctx(xhci, in_ctx, ep_index);
-	slot_ctx = xhci_get_slot_ctx(xhci, virt_dev->out_ctx);
-
-	if ((slot_ctx->tt_info & 0xff) > 0)
-		isTT = 1;
-	else
-		isTT = 0;
-
-	if (usb_endpoint_xfer_int(&ep->desc))
-		ep_type = USB_EP_INT;
-	else if (usb_endpoint_xfer_isoc(&ep->desc))
-		ep_type = USB_EP_ISOC;
-	else if (usb_endpoint_xfer_bulk(&ep->desc))
-		ep_type = USB_EP_BULK;
-
-	if (udev->speed == USB_SPEED_FULL || udev->speed == USB_SPEED_HIGH
-		|| udev->speed == USB_SPEED_LOW) {
-		maxp = ep->desc.wMaxPacketSize & 0x7FF;
-		burst = ep->desc.wMaxPacketSize >> 11;
-		mult = 0;
-	} else if (udev->speed == USB_SPEED_SUPER) {
-		maxp = ep->desc.wMaxPacketSize & 0x7FF;
-		burst = ep->ss_ep_comp.bMaxBurst;
-		mult = ep->ss_ep_comp.bmAttributes & 0x3;
-	}
-	interval = (1 << ((in_ep_ctx->ep_info >> 16) & 0xff));
-	sch_ep = kmalloc(sizeof(struct sch_ep), GFP_KERNEL);
-	if (mtk_xhci_scheduler_add_ep(udev->speed, usb_endpoint_dir_in(&ep->desc),
-		isTT, ep_type, maxp, interval, burst, mult, (mtk_u32 *)ep
-		, (mtk_u32 *)in_ep_ctx, sch_ep) != SCH_SUCCESS) {
-		xhci_err(xhci, "[MTK] not enough bandwidth\n");
-		return -ENOSPC;
+	ret = xhci_mtk_add_ep_quirk(hcd, udev, ep);
+	if (ret < 0) {
+		xhci_free_or_cache_endpoint_ring(xhci,
+			virt_dev, ep_index);
+			return ret;
 	}
 #endif
 #ifdef CONFIG_SSUSB_MTK_XHCI
-if (xhci->quirks & XHCI_MTK_HOST) {
-		ret = xhci_mtk_add_ep_quirk(hcd, udev, ep);
-		if (ret < 0)
-			return ret;
-}
+		if (xhci->quirks & XHCI_MTK_HOST) {
+				ret = xhci_mtk_add_ep_quirk(hcd, udev, ep);
+				if (ret < 0)
+					return ret;
+		}
 #endif
+
 	ctrl_ctx->add_flags |= cpu_to_le32(added_ctxs);
 	new_add_flags = le32_to_cpu(ctrl_ctx->add_flags);
 
@@ -5048,6 +4977,9 @@ int xhci_gen_setup(struct usb_hcd *hcd, xhci_get_quirks_t get_quirks)
 	xhci_dbg(xhci, "Called HCD init\n");
 	return 0;
 error:
+#ifdef CONFIG_USB_XHCI_MTK
+	mtk_xhci_reset(xhci);
+#endif
 	kfree(xhci);
 	return retval;
 }

@@ -297,6 +297,7 @@ static void MMProfileInitBuffer(void)
 		} else if (MMProfileGlobals.buffer_size_record !=
 			   MMProfileGlobals.new_buffer_size_record) {
 			vfree(pMMProfileRingBuffer);
+			pMMProfileRingBuffer = NULL;
 			MMProfileGlobals.buffer_size_record =
 			    MMProfileGlobals.new_buffer_size_record;
 			MMProfileGlobals.buffer_size_bytes =
@@ -322,6 +323,7 @@ static void MMProfileInitBuffer(void)
 		} else if (MMProfileGlobals.meta_buffer_size !=
 			   MMProfileGlobals.new_meta_buffer_size) {
 			vfree(pMMProfileMetaBuffer);
+			pMMProfileMetaBuffer = NULL;
 			MMProfileGlobals.meta_buffer_size = MMProfileGlobals.new_meta_buffer_size;
 			bResetMetaBuffer = 1;
 		}
@@ -537,7 +539,7 @@ static int MMProfileGetEventName(MMP_Event event, char *name, size_t *size)
 		}
 
 		for (i = infoCntUsed - 1; i >= 0; i--) {
-			strcpy(&name[actualLen], eventInfo[i]->name);
+			strncpy(&name[actualLen], eventInfo[i]->name, strlen(eventInfo[i]->name) + 1);
 			actualLen += strlen(eventInfo[i]->name);
 			if (i > 0) {
 				/* not the last name */
@@ -678,6 +680,9 @@ static void MMProfileLog_Int(MMP_Event event, MMP_LogType type, unsigned long da
 
 	if (!MMProfileGlobals.enable)
 		return;
+	if ((event >= MMP_MaxStaticEvent) ||
+	    (event >= MMProfileMaxEventCount) || (event == MMP_InvalidEvent))
+		return;
 	if (bMMProfileInitBuffer && MMProfileGlobals.start
 	    && (MMProfileGlobals.event_state[event] & MMP_EVENT_STATE_ENABLED)) {
 		MMProfile_Event_t *pEvent = NULL;
@@ -752,9 +757,13 @@ static long MMProfileLogMetaInt(MMP_Event event, MMP_LogType type, MMP_MetaData_
 				long bFromUser)
 {
 	unsigned long retn;
+	void __user *pData;
 
 	if (!MMProfileGlobals.enable)
 		return 0;
+	if ((event >= MMP_MaxStaticEvent) ||
+	    (event >= MMProfileMaxEventCount) || (event == MMP_InvalidEvent))
+		return -3;
 	if (bMMProfileInitBuffer && MMProfileGlobals.start
 	    && (MMProfileGlobals.event_state[event] & MMP_EVENT_STATE_ENABLED)) {
 		MMProfile_MetaDataBlock_t *pNode = NULL;
@@ -822,6 +831,7 @@ static long MMProfileLogMetaInt(MMP_Event event, MMP_LogType type, MMP_MetaData_
 		MMProfile_MetaDataCookie++;
 		if (MMProfile_MetaDataCookie == 0)
 			MMProfile_MetaDataCookie++;
+		pData = (void __user *)(pMetaData->pData);
 		if (((unsigned long)(pNode->meta_data) + pMetaData->size) >
 		    ((unsigned long)pMMProfileMetaBuffer + MMProfileGlobals.meta_buffer_size)) {
 			unsigned long left_size =
@@ -829,25 +839,25 @@ static long MMProfileLogMetaInt(MMP_Event event, MMP_LogType type, MMP_MetaData_
 			    MMProfileGlobals.meta_buffer_size - (unsigned long)(pNode->meta_data);
 			if (bFromUser) {
 				retn =
-				    copy_from_user(pNode->meta_data, pMetaData->pData, left_size);
+				    copy_from_user(pNode->meta_data, pData, left_size);
 				retn =
 				    copy_from_user(pMMProfileMetaBuffer,
-						   (void *)((unsigned long)(pMetaData->pData) +
+						   (void *)((unsigned long)pData +
 							    left_size),
 						   pMetaData->size - left_size);
 			} else {
-				memcpy(pNode->meta_data, pMetaData->pData, left_size);
+				memcpy(pNode->meta_data, pData, left_size);
 				memcpy(pMMProfileMetaBuffer,
-				       (void *)((unsigned long)(pMetaData->pData) + left_size),
+				       (void *)((unsigned long)pData + left_size),
 				       pMetaData->size - left_size);
 			}
 		} else {
 			if (bFromUser)
 				retn =
-				    copy_from_user(pNode->meta_data, pMetaData->pData,
+				    copy_from_user(pNode->meta_data, pData,
 						   pMetaData->size);
 			else
-				memcpy(pNode->meta_data, pMetaData->pData, pMetaData->size);
+				memcpy(pNode->meta_data, pData, pMetaData->size);
 		}
 		mutex_unlock(&MMProfile_MetaBufferMutex);
 	}
@@ -894,7 +904,7 @@ MMP_Event MMProfileRegisterEvent(MMP_Event parent, const char *name)
 		memcpy(pRegTable->event_info.name, name, MMProfileEventNameMaxLen);
 		pRegTable->event_info.name[MMProfileEventNameMaxLen] = 0;
 	} else
-		strcpy(pRegTable->event_info.name, name);
+		strncpy(pRegTable->event_info.name, name, strlen(name) + 1);
 	pRegTable->event_info.parentId = parent;
 	list_add_tail(&(pRegTable->list), &(MMProfile_RegTable.list));
 	MMProfileGlobals.event_state[index] = 0;
@@ -975,6 +985,9 @@ long MMProfileQueryEnable(MMP_Event event)
 {
 	if (!MMProfileGlobals.enable)
 		return 0;
+	if ((event >= MMP_MaxStaticEvent) ||
+	    (event >= MMProfileMaxEventCount) || (event == MMP_InvalidEvent))
+		return 0;
 	if (event == MMP_InvalidEvent)
 		return MMProfileGlobals.enable;
 	return !!(MMProfileGlobals.event_state[event] & MMP_EVENT_STATE_ENABLED);
@@ -1010,7 +1023,12 @@ long MMProfileLogMetaStructure(MMP_Event event, MMP_LogType type,
 
 	if (!MMProfileGlobals.enable)
 		return 0;
+	if (event >= MMProfileMaxEventCount)
+		return -3;
 	if (in_interrupt())
+		return 0;
+	if ((event >= MMP_MaxStaticEvent) ||
+	    (event >= MMProfileMaxEventCount) || (event == MMP_InvalidEvent))
 		return 0;
 	if (bMMProfileInitBuffer && MMProfileGlobals.start
 	    && (MMProfileGlobals.event_state[event] & MMP_EVENT_STATE_ENABLED)) {
@@ -1040,7 +1058,12 @@ long MMProfileLogMetaStringEx(MMP_Event event, MMP_LogType type, unsigned long d
 
 	if (!MMProfileGlobals.enable)
 		return 0;
+	if (event >= MMProfileMaxEventCount)
+		return -3;
 	if (in_interrupt())
+		return 0;
+	if ((event >= MMP_MaxStaticEvent) ||
+	    (event >= MMProfileMaxEventCount) || (event == MMP_InvalidEvent))
 		return 0;
 	if (bMMProfileInitBuffer && MMProfileGlobals.start
 	    && (MMProfileGlobals.event_state[event] & MMP_EVENT_STATE_ENABLED)) {
@@ -1053,7 +1076,7 @@ long MMProfileLogMetaStringEx(MMP_Event event, MMP_LogType type, unsigned long d
 		MetaData.pData = vmalloc(MetaData.size);
 		if (!MetaData.pData)
 			return -1;
-		strcpy((char *)MetaData.pData, str);
+		strncpy((char *)MetaData.pData, str, strlen(str) + 1);
 		ret = MMProfileLogMeta(event, type, &MetaData);
 		vfree(MetaData.pData);
 	}
@@ -1073,7 +1096,12 @@ long MMProfileLogMetaBitmap(MMP_Event event, MMP_LogType type, MMP_MetaDataBitma
 
 	if (!MMProfileGlobals.enable)
 		return 0;
+	if (event >= MMProfileMaxEventCount)
+		return -3;
 	if (in_interrupt())
+		return 0;
+	if ((event >= MMP_MaxStaticEvent) ||
+	    (event >= MMProfileMaxEventCount) || (event == MMP_InvalidEvent))
 		return 0;
 	if (bMMProfileInitBuffer && MMProfileGlobals.start
 	    && (MMProfileGlobals.event_state[event] & MMP_EVENT_STATE_ENABLED)) {
@@ -1484,9 +1512,13 @@ static long mmprofile_ioctl(struct file *file, unsigned int cmd, unsigned long a
 		{
 			MMProfile_MetaLog_t MetaLog;
 			MMProfile_MetaLog_t __user *pMetaLogUser = (MMProfile_MetaLog_t __user *)arg;
+			MMP_MetaData_t MetaData;
+			MMP_MetaData_t __user *pMetaDataUser;
 
 			retn = copy_from_user(&MetaLog, pMetaLogUser, sizeof(MMProfile_MetaLog_t));
-			MMProfileLogMetaInt(MetaLog.id, MetaLog.type, &(MetaLog.meta_data), 1);
+			pMetaDataUser = (MMP_MetaData_t __user *)&(pMetaLogUser->meta_data);
+			retn = copy_from_user(&MetaData, pMetaDataUser, sizeof(MMP_MetaData_t));
+			MMProfileLogMetaInt(MetaLog.id, MetaLog.type, &MetaData, 1);
 		}
 		break;
 	case MMP_IOC_DUMPMETADATA:
@@ -1559,8 +1591,11 @@ static long mmprofile_ioctl(struct file *file, unsigned int cmd, unsigned long a
 		if ((!MMProfileGlobals.enable) ||
 		    (!bMMProfileInitBuffer) ||
 		    (!MMProfileGlobals.start) ||
+		    (arg >= MMP_MaxStaticEvent) ||
 		    (arg >= MMProfileMaxEventCount) ||
-		    (!(MMProfileGlobals.event_state[arg] & MMP_EVENT_STATE_ENABLED)))
+		    (arg == MMP_InvalidEvent))
+			ret = -EINVAL;
+		else if (!(MMProfileGlobals.event_state[arg] & MMP_EVENT_STATE_ENABLED))
 			ret = -EINVAL;
 		break;
 	case MMP_IOC_ISENABLE:
@@ -1587,6 +1622,7 @@ static long mmprofile_ioctl(struct file *file, unsigned int cmd, unsigned long a
 
 #ifdef CONFIG_COMPAT
 #define COMPAT_MMP_IOC_METADATALOG     _IOW(MMP_IOC_MAGIC, 9, struct Compat_MMProfile_MetaLog_t)
+#define COMPAT_MMP_IOC_DUMPMETADATA    _IOR(MMP_IOC_MAGIC, 10, struct Compat_MMProfile_MetaLog_t)
 static long mmprofile_ioctl_compat(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	long ret = 0;
@@ -1740,7 +1776,7 @@ static long mmprofile_ioctl_compat(struct file *file, unsigned int cmd, unsigned
 			MMProfileLogMetaInt(MetaLog.id, MetaLog.type, &(MetaLog.meta_data), 1);
 		}
 		break;
-	case MMP_IOC_DUMPMETADATA:
+	case COMPAT_MMP_IOC_DUMPMETADATA:
 		{
 			unsigned int meta_data_count = 0;
 			unsigned int offset = 0;
@@ -1952,40 +1988,6 @@ static int mmprofile_probe(void)
 		    debugfs_create_file("reset", S_IWUSR, g_pDebugFSDir, NULL,
 					&mmprofile_dbgfs_reset_fops);
 	}
-	/* // Read NVRAM configuration */
-	/* { */
-	/* struct file *filp; */
-	/* unsigned int enable; */
-	/* unsigned int start; */
-	/* mm_segment_t old_fs; */
-	/* old_fs = get_fs(); */
-	/* set_fs(KERNEL_DS); */
-	/* filp = filp_open(CONFIG_MMPROFILE_PATH, O_RDONLY, 0777); */
-	/* if (IS_ERR(filp)) */
-	/* { */
-	/* pr_debug("[mmprofile] NVM: Cannot open configuration file %s\n", CONFIG_MMPROFILE_PATH); */
-	/* MMProfileEnable(0); */
-	/* } */
-	/* else */
-	/* { */
-	/* filp->f_op->llseek(filp, 0, SEEK_SET); */
-	/* filp->f_op->read(filp, (char*)(&enable), 4, &filp->f_pos); */
-	/* filp->f_op->read(filp, (char*)(&start), 4, &filp->f_pos); */
-	/* filp_close(filp, NULL); */
-	/* pr_debug("[mmprofile] NVM: enable=%d start=%d.\n", enable, start); */
-	/* if (enable == 1) */
-	/* { */
-	/* MMProfileEnable(1); */
-	/* if (start == 1) */
-	/* MMProfileStart(1); */
-	/* else */
-	/* MMProfileStart(0); */
-	/* } */
-	/* else */
-	/* MMProfileEnable(0); */
-	/* } */
-	/* set_fs(old_fs); */
-	/* } */
 	return 0;
 }
 

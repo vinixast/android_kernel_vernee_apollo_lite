@@ -1,19 +1,17 @@
 /*
- * mt65xx pinctrl driver based on Allwinner A1X pinctrl driver.
- * Copyright (c) 2014 MediaTek Inc.
- * Author:
- *  Hongzhou.Yang <hongzhou.yang@mediatek.com>
- *  Maoguang.Meng <maoguang.meng@mediatek.com>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- */
+* Copyright (C) 2016 MediaTek Inc.
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License version 2 as
+* published by the Free Software Foundation.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+* See http://www.gnu.org/licenses/gpl-2.0.html for more details.
+*/
+
+
 
 #include <linux/device.h>
 #include <linux/io.h>
@@ -48,6 +46,7 @@
 
 #define MAX_GPIO_MODE_PER_REG 5
 #define GPIO_MODE_BITS        3
+#define GPIO_MODE_PREFIX "GPIO"
 
 static const char * const mtk_gpio_functions[] = {
 	"func0", "func1", "func2", "func3",
@@ -433,6 +432,7 @@ static int mtk_pconf_parse_conf(struct pinctrl_dev *pctldev,
 		ret = mtk_pconf_set_pull_select(pctl, pin, true, false, arg);
 		break;
 	case PIN_CONFIG_INPUT_ENABLE:
+		mtk_pmx_gpio_set_direction(pctldev, NULL, pin, true);
 		ret = mtk_pconf_set_ies_smt(pctl, pin, arg, param);
 		break;
 	case PIN_CONFIG_OUTPUT:
@@ -440,6 +440,7 @@ static int mtk_pconf_parse_conf(struct pinctrl_dev *pctldev,
 		ret = mtk_pmx_gpio_set_direction(pctldev, NULL, pin, false);
 		break;
 	case PIN_CONFIG_INPUT_SCHMITT_ENABLE:
+		mtk_pmx_gpio_set_direction(pctldev, NULL, pin, true);
 		ret = mtk_pconf_set_ies_smt(pctl, pin, arg, param);
 		break;
 	case PIN_CONFIG_DRIVE_STRENGTH:
@@ -828,12 +829,48 @@ static int mtk_pmx_set_mux(struct pinctrl_dev *pctldev,
 	return 0;
 }
 
+static int mtk_pmx_find_gpio_mode(struct mtk_pinctrl *pctl,
+				unsigned offset)
+{
+	const struct mtk_desc_pin *pin = pctl->devdata->pins + offset;
+	const struct mtk_desc_function *func = pin->functions;
+
+	while (func && func->name) {
+		if (!strncmp(func->name, GPIO_MODE_PREFIX,
+			sizeof(GPIO_MODE_PREFIX)-1))
+			return func->muxval;
+		func++;
+	}
+	return -EINVAL;
+}
+
+static int mtk_pmx_gpio_request_enable(struct pinctrl_dev *pctldev,
+				    struct pinctrl_gpio_range *range,
+				    unsigned offset)
+{
+	int muxval;
+	struct mtk_pinctrl *pctl = pinctrl_dev_get_drvdata(pctldev);
+
+	muxval = mtk_pmx_find_gpio_mode(pctl, offset);
+
+	if (muxval < 0) {
+		dev_err(pctl->dev, "invalid gpio pin %d.\n", offset);
+		return -EINVAL;
+	}
+
+	mtk_pmx_set_mode(pctldev, offset, muxval);
+	mtk_pconf_set_ies_smt(pctl, offset, 1, PIN_CONFIG_INPUT_ENABLE);
+
+	return 0;
+}
+
 static const struct pinmux_ops mtk_pmx_ops = {
 	.get_functions_count	= mtk_pmx_get_funcs_cnt,
 	.get_function_name	= mtk_pmx_get_func_name,
 	.get_function_groups	= mtk_pmx_get_func_groups,
 	.set_mux		= mtk_pmx_set_mux,
 	.gpio_set_direction	= mtk_pmx_gpio_set_direction,
+	.gpio_request_enable	= mtk_pmx_gpio_request_enable,
 };
 
 static int mtk_gpio_request(struct gpio_chip *chip, unsigned offset)
@@ -958,6 +995,10 @@ static int mtk_pinctrl_irq_request_resources(struct irq_data *d)
 
 	/* set mux to INT mode */
 	mtk_pmx_set_mode(pctl->pctl_dev, pin->pin.number, pin->eint.eintmux);
+	/* set gpio direction to input */
+	mtk_pmx_gpio_set_direction(pctl->pctl_dev, NULL, pin->pin.number, true);
+	/* set input-enable */
+	mtk_pconf_set_ies_smt(pctl, pin->pin.number, 1, PIN_CONFIG_INPUT_ENABLE);
 
 	return 0;
 }
@@ -1154,7 +1195,7 @@ static int mtk_pinmux_get(struct gpio_chip *chip, unsigned offset)
 {
 	unsigned int reg_addr;
 	unsigned char bit;
-	unsigned int pinmux;
+	unsigned int pinmux = 0;
 	unsigned int mask = (1L << GPIO_MODE_BITS) - 1;
 	struct mtk_pinctrl *pctl = dev_get_drvdata(chip->dev);
 
@@ -1227,7 +1268,7 @@ int mtk_spec_pull_get_samereg(struct regmap *regmap,
 {
 	unsigned int i;
 	unsigned int reg_pupd;
-	unsigned int val, bit_pupd, bit_r0, bit_r1;
+	unsigned int val = 0, bit_pupd, bit_r0, bit_r1;
 	const struct mtk_pin_spec_pupd_set_samereg *spec_pupd_pin;
 	bool find = false;
 
@@ -1280,7 +1321,7 @@ int mtk_spec_get_ies_smt_range(struct regmap *regmap,
 		unsigned int info_num,
 		unsigned int pin)
 {
-	unsigned int i, reg_addr, bit, val;
+	unsigned int i, reg_addr, bit, val = 0;
 
 	for (i = 0; i < info_num; i++) {
 		if (pin >= ies_smt_infos[i].start &&
@@ -1358,7 +1399,7 @@ static int mtk_smt_get(struct gpio_chip *chip, unsigned offset)
 static int mtk_driving_get(struct gpio_chip *chip, unsigned offset)
 {
 	const struct mtk_pin_drv_grp *pin_drv;
-	unsigned int val;
+	unsigned int val = 0;
 	unsigned int bits, mask, shift;
 	const struct mtk_drv_group_desc *drv_grp;
 	struct mtk_pinctrl *pctl = dev_get_drvdata(chip->dev);
@@ -1590,8 +1631,8 @@ static int mtk_eint_resume(struct device *device)
 }
 
 const struct dev_pm_ops mtk_eint_pm_ops = {
-	.suspend = mtk_eint_suspend,
-	.resume = mtk_eint_resume,
+	.suspend_noirq = mtk_eint_suspend,
+	.resume_noirq = mtk_eint_resume,
 };
 
 static void mtk_eint_ack(struct irq_data *d)
@@ -1665,7 +1706,6 @@ static void mtk_eint_irq_handler(unsigned irq, struct irq_desc *desc)
 	chained_irq_enter(chip, desc);
 	for (eint_num = 0; eint_num < pctl->devdata->ap_num; eint_num += 32) {
 		status = readl(reg);
-		reg += 4;
 		while (status) {
 			offset = __ffs(status);
 			index = eint_num + offset;
@@ -1700,6 +1740,7 @@ static void mtk_eint_irq_handler(unsigned irq, struct irq_desc *desc)
 			if (index < pctl->devdata->db_cnt)
 				mtk_eint_debounce_process(pctl , index);
 		}
+		reg += 4;
 	}
 	chained_irq_exit(chip, desc);
 }

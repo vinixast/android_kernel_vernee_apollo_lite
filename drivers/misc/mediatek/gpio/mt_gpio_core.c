@@ -1,12 +1,15 @@
-/******************************************************************************
- * mt_gpio.c - MTKLinux GPIO Device Driver
- *
- * Copyright 2008-2009 MediaTek Co.,Ltd.
- *
- * DESCRIPTION:
- *     This file provid the other drivers GPIO relative functions
- *
- ******************************************************************************/
+/*
+* Copyright (C) 2016 MediaTek Inc.
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License version 2 as
+* published by the Free Software Foundation.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+* See http://www.gnu.org/licenses/gpl-2.0.html for more details.
+*/
 
 #include <linux/init.h>
 #include <linux/module.h>
@@ -317,13 +320,13 @@ int mt_set_gpio_pull_resistor(unsigned long pin, unsigned long resistors)
 	}
 	return MT_GPIO_OPS_SET(pin, set_pull_resistor, resistors);
 }
-EXPORT_SYMBOL(mt_get_gpio_pull_resistor);
+EXPORT_SYMBOL(mt_set_gpio_pull_resistor);
 /*---------------------------------------------------------------------------*/
 int mt_get_gpio_pull_resistor(unsigned long pin)
 {
 	return MT_GPIO_OPS_GET(pin, get_pull_resistor);
 }
-EXPORT_SYMBOL(mt_set_gpio_pull_resistor);
+EXPORT_SYMBOL(mt_get_gpio_pull_resistor);
 /*---------------------------------------------------------------------------*/
 int mt_set_gpio_inversion(unsigned long pin, unsigned long enable)
 {

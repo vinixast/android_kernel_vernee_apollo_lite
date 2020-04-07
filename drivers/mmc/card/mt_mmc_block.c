@@ -1,9 +1,14 @@
 /*
-  MMC BLOCK TAG trace
-  Copyright (C) 2016  Perry Hsu <perry.hsu@mediatek.com>"
-
-  This program can be distributed under the terms of the GNU GPL.
-  See the file COPYING.
+* Copyright (C) 2016 MediaTek Inc.
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License version 2 as
+* published by the Free Software Foundation.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+* See http://www.gnu.org/licenses/gpl-2.0.html for more details.
 */
 
 #define DEBUG 1
@@ -27,6 +32,7 @@
 #include <linux/blk_types.h>
 #include <linux/mmc/core.h>
 #include <linux/mmc/host.h>
+#include <linux/mmc/card.h>
 
 #ifdef CONFIG_MTK_EXTMEM
 #include <linux/exm_driver.h>
@@ -54,6 +60,9 @@ struct mt_bio_context *mt_ctx_map[MMC_BIOLOG_CONTEXTS] = { 0 };
 enum {
 	CTX_MMCQD0 = 0,
 	CTX_MMCQD1 = 1,
+	CTX_MMCQD0_BOOT0 = 2,
+	CTX_MMCQD0_BOOT1 = 3,
+	CTX_MMCQD0_RPMB  = 4,
 	CTX_EXECQ  = 9
 };
 
@@ -94,48 +103,17 @@ unsigned int mt_bio_used_mem = 0;
 #define MT_BIO_TRACE_TIMEOUT ((MT_BIO_TRACE_LATENCY)*10)
 
 #define biolog_fmt "wl:%d%%,%lld,%lld,%d.vm:%lld,%lld,%lld,%lld,%lld.cpu:%llu,%llu,%llu,%llu,%llu,%llu,%llu.pid:%d,"
-#define biolog_arg(tr) \
-	(tr)->workload.percent, \
-	(tr)->workload.usage, \
-	(tr)->workload.period, \
-	(tr)->workload.count, \
-	(tr)->vmstat.file_pages, \
-	(tr)->vmstat.file_dirty, \
-	(tr)->vmstat.dirtied, \
-	(tr)->vmstat.writeback, \
-	(tr)->vmstat.written, \
-	(tr)->cpu.user, \
-	(tr)->cpu.nice, \
-	(tr)->cpu.system, \
-	(tr)->cpu.idle, \
-	(tr)->cpu.iowait, \
-	(tr)->cpu.irq, \
-	(tr)->cpu.softirq, \
-	(tr)->pid
-
 #define biolog_fmt_wt "wt:%d,%d,%lld."
-#define biolog_arg_wt(tr) \
-	(tr)->throughput.w.speed, \
-	((tr)->throughput.w.size << SECTOR_SHIFT), \
-	(tr)->throughput.w.usage
-
 #define biolog_fmt_rt "rt:%d,%d,%lld."
-#define biolog_arg_rt(tr) \
-	(tr)->throughput.r.speed, \
-	((tr)->throughput.r.size << SECTOR_SHIFT), \
-	(tr)->throughput.r.usage
-
 #define pidlog_fmt "{%05d:%05d:%08d:%05d:%08d}"
-#define pidlog_arg(pe) \
-	(pe)->pid, \
-	(pe)->w.count, \
-	(pe)->w.length, \
-	(pe)->r.count, \
-	(pe)->r.length
 
 #define REQ_EXECQ  "exe_cq"
 #define REQ_MMCQD0 "mmcqd/0"
+#define REQ_MMCQD0_BOOT0 "mmcqd/0boot0"
+#define REQ_MMCQD0_BOOT1 "mmcqd/0boot1"
+#define REQ_MMCQD0_RPMB  "mmcqd/0rpmb"
 #define REQ_MMCQD1 "mmcqd/1"
+
 
 /*
    queue id:
@@ -144,11 +122,11 @@ unsigned int mt_bio_used_mem = 0;
 */
 static int get_qid_by_name(const char *str)
 {
-	if (strncmp(str, REQ_EXECQ, 6) == 0)
+	if (strncmp(str, REQ_EXECQ, strlen(REQ_EXECQ)) == 0)
 		return 0;
-	if (strncmp(str, REQ_MMCQD0, 7) == 0)
-		return 0;
-	if (strncmp(str, REQ_MMCQD1, 7) == 0)
+	if (strncmp(str, REQ_MMCQD0, strlen(REQ_MMCQD0)) == 0)
+		return 0;  /* this includes boot0, boot1 */
+	if (strncmp(str, REQ_MMCQD1, strlen(REQ_MMCQD1)) == 0)
 		return 1;
 	return 99;
 }
@@ -156,11 +134,17 @@ static int get_qid_by_name(const char *str)
 /* get context id to mt_ctx_map[] by name */
 static int get_ctxid_by_name(const char *str)
 {
-	if (strncmp(str, REQ_EXECQ, 6) == 0)
+	if (strncmp(str, REQ_EXECQ, strlen(REQ_EXECQ)) == 0)
 		return CTX_EXECQ;
-	if (strncmp(str, REQ_MMCQD0, 7) == 0)
+	if (strncmp(str, REQ_MMCQD0_RPMB, strlen(REQ_MMCQD0_RPMB)) == 0)
+		return CTX_MMCQD0_RPMB;
+	if (strncmp(str, REQ_MMCQD0_BOOT0, strlen(REQ_MMCQD0_BOOT0)) == 0)
+		return CTX_MMCQD0_BOOT0;
+	if (strncmp(str, REQ_MMCQD0_BOOT1, strlen(REQ_MMCQD0_BOOT1)) == 0)
+		return CTX_MMCQD0_BOOT1;
+	if (strncmp(str, REQ_MMCQD0, strlen(REQ_MMCQD0)) == 0)
 		return CTX_MMCQD0;
-	if (strncmp(str, REQ_MMCQD1, 7) == 0)
+	if (strncmp(str, REQ_MMCQD1, strlen(REQ_MMCQD1)) == 0)
 		return CTX_MMCQD1;
 	return -1;
 }
@@ -175,12 +159,12 @@ static void mt_bio_init_task(struct mt_bio_context_task *tsk)
 	tsk->wait_start_t = 0;
 }
 
-static void mt_bio_init_ctx(struct mt_bio_context *ctx, pid_t qd_pid)
+static void mt_bio_init_ctx(struct mt_bio_context *ctx, struct task_struct *thread)
 {
 	int i;
 
-	ctx->pid = qd_pid;
-	get_task_comm(ctx->comm, current);
+	ctx->pid = task_pid_nr(thread);
+	get_task_comm(ctx->comm, thread);
 	ctx->qid = get_qid_by_name(ctx->comm);
 	spin_lock_init(&ctx->lock);
 	ctx->id = get_ctxid_by_name(ctx->comm);
@@ -190,6 +174,43 @@ static void mt_bio_init_ctx(struct mt_bio_context *ctx, pid_t qd_pid)
 
 	for (i = 0; i < MMC_BIOLOG_CONTEXT_TASKS; i++)
 		mt_bio_init_task(&ctx->task[i]);
+}
+
+void mt_bio_queue_alloc(struct task_struct *thread)
+{
+	int i;
+	pid_t pid;
+
+	pid = task_pid_nr(thread);
+
+	for (i = 0; i < MMC_BIOLOG_CONTEXTS; i++)	{
+		struct mt_bio_context *ctx = &mt_bio_reqctx[i];
+
+		if (ctx->pid == pid)
+			break;
+		if (ctx->pid == 0) {
+			mt_bio_init_ctx(ctx, thread);
+			break;
+		}
+	}
+}
+
+void mt_bio_queue_free(struct task_struct *thread)
+{
+	int i;
+	pid_t pid;
+
+	pid = task_pid_nr(thread);
+
+	for (i = 0; i < MMC_BIOLOG_CONTEXTS; i++)	{
+		struct mt_bio_context *ctx = &mt_bio_reqctx[i];
+
+		if (ctx->pid == pid) {
+			mt_ctx_map[ctx->id] = NULL;
+			memset(ctx, 0, sizeof(struct mt_bio_context));
+			break;
+		}
+	}
 }
 
 /* get context correspond to current process */
@@ -207,7 +228,7 @@ static struct mt_bio_context *mt_bio_curr_ctx(void)
 		struct mt_bio_context *ctx = &mt_bio_reqctx[i];
 
 		if (ctx->pid == 0)
-			mt_bio_init_ctx(ctx, qd_pid);
+			continue;
 		if (qd_pid == ctx->pid)
 			return ctx;
 	}
@@ -390,7 +411,7 @@ static void mt_bio_pidlog_eval(struct mt_bio_pidlogger *pl)
 
 	spin_lock_irqsave(&ctx->lock, flags);
 
-	for (i = 0; i < MMC_BIOLOG_PIDLOG_ENTRIES ; i++) {
+	for (i = 0; i < MMC_BIOLOG_PIDLOG_ENTRIES; i++) {
 		if (ctx->pidlog.info[i].pid == 0)
 			break;
 	}
@@ -540,26 +561,49 @@ static void mt_bio_print_klog(struct mt_bio_trace *tr)
 	spin_lock_irqsave(&mt_bio_prbuf_lock, flags);
 
 	if (tr->throughput.r.usage) {
-		n = snprintf(ptr, len, biolog_fmt_rt, biolog_arg_rt(tr));
+		n = snprintf(ptr, len, biolog_fmt_rt,
+			tr->throughput.r.speed,
+			(tr->throughput.r.size << 9),
+			tr->throughput.r.usage);
 		boundary_check();
 		if (len < 0)
 			goto overflow;
 	}
 
 	if (tr->throughput.w.usage) {
-		n = snprintf(ptr, len, biolog_fmt_wt, biolog_arg_wt(tr));
+		n = snprintf(ptr, len, biolog_fmt_wt,
+			tr->throughput.w.speed,
+			(tr->throughput.w.size << 9),
+			tr->throughput.w.usage);
 		boundary_check();
 		if (len < 0)
 			goto overflow;
 
 	}
 
-	n = snprintf(ptr, len, biolog_fmt, biolog_arg(tr));
+	n = snprintf(ptr, len, biolog_fmt,
+		tr->workload.percent,
+		tr->workload.usage,
+		tr->workload.period,
+		tr->workload.count,
+		tr->vmstat.file_pages,
+		tr->vmstat.file_dirty,
+		tr->vmstat.dirtied,
+		tr->vmstat.writeback,
+		tr->vmstat.written,
+		tr->cpu.user,
+		tr->cpu.nice,
+		tr->cpu.system,
+		tr->cpu.idle,
+		tr->cpu.iowait,
+		tr->cpu.irq,
+		tr->cpu.softirq,
+		tr->pid);
 	boundary_check();
 	if (len < 0)
 		goto overflow;
 
-	for (i = 0; i < MMC_BIOLOG_PIDLOG_ENTRIES ; i++) {
+	for (i = 0; i < MMC_BIOLOG_PIDLOG_ENTRIES; i++) {
 		struct mt_bio_pidlogger_entry *pe;
 
 		pe = &tr->pidlog.info[i];
@@ -567,7 +611,12 @@ static void mt_bio_print_klog(struct mt_bio_trace *tr)
 		if (pe->pid == 0)
 			break;
 
-		n = snprintf(ptr, len, pidlog_fmt, pidlog_arg(pe));
+		n = snprintf(ptr, len, pidlog_fmt,
+			pe->pid,
+			pe->w.count,
+			pe->w.length,
+			pe->r.count,
+			pe->r.length);
 		boundary_check();
 		if (len < 0)
 			goto overflow;
@@ -830,7 +879,7 @@ void mt_biolog_cmdq_isdone_end(unsigned int task_id)
 	if (!tsk)
 		return;
 
-	/* return if there's no on-going reqeust  */
+	/* return if there's no on-going request  */
 	if (!tsk->request_start_t || !tsk->transfer_start_t || !tsk->wait_start_t)
 		return;
 
@@ -936,7 +985,7 @@ void mt_biolog_mmcqd_req_end(struct mmc_data *data)
 	if (!tsk)
 		return;
 
-	/* return if there's no on-going reqeust */
+	/* return if there's no on-going request */
 	if (!tsk->request_start_t)
 		return;
 
@@ -1009,13 +1058,36 @@ static void mt_bio_seq_trace(struct seq_file *seq, unsigned int idx)
 	seq_printf(seq, "q:%d.", tr->qid);
 
 	if (tr->throughput.r.usage)
-		seq_printf(seq, biolog_fmt_rt, biolog_arg_rt(tr));
+		seq_printf(seq, biolog_fmt_rt,
+			tr->throughput.r.speed,
+			(tr->throughput.r.size << 9),
+			tr->throughput.r.usage);
 	if (tr->throughput.w.usage)
-		seq_printf(seq, biolog_fmt_wt, biolog_arg_wt(tr));
+		seq_printf(seq, biolog_fmt_wt,
+			tr->throughput.w.speed,
+			(tr->throughput.w.size << 9),
+			tr->throughput.w.usage);
 
-	seq_printf(seq, biolog_fmt, biolog_arg(tr));
+	seq_printf(seq, biolog_fmt,
+		tr->workload.percent,
+		tr->workload.usage,
+		tr->workload.period,
+		tr->workload.count,
+		tr->vmstat.file_pages,
+		tr->vmstat.file_dirty,
+		tr->vmstat.dirtied,
+		tr->vmstat.writeback,
+		tr->vmstat.written,
+		tr->cpu.user,
+		tr->cpu.nice,
+		tr->cpu.system,
+		tr->cpu.idle,
+		tr->cpu.iowait,
+		tr->cpu.irq,
+		tr->cpu.softirq,
+		tr->pid);
 
-	for (i = 0; i < MMC_BIOLOG_PIDLOG_ENTRIES ; i++) {
+	for (i = 0; i < MMC_BIOLOG_PIDLOG_ENTRIES; i++) {
 		struct mt_bio_pidlogger_entry *pe;
 
 		pe = &tr->pidlog.info[i];
@@ -1023,7 +1095,12 @@ static void mt_bio_seq_trace(struct seq_file *seq, unsigned int idx)
 		if (pe->pid == 0)
 			break;
 
-		seq_printf(seq, pidlog_fmt, pidlog_arg(pe));
+		seq_printf(seq, pidlog_fmt,
+			pe->pid,
+			pe->w.count,
+			pe->w.length,
+			pe->r.count,
+			pe->r.length);
 	}
 	seq_puts(seq, ".\n");
 }
@@ -1040,7 +1117,7 @@ static void mt_bio_seq_debug_show_info(struct seq_file *seq)
 	seq_puts(seq, "<Queue Info>\n");
 	for (i = 0; i < MMC_BIOLOG_CONTEXTS; i++)	{
 		if (mt_bio_reqctx[i].pid == 0)
-			break;
+			continue;
 		seq_printf(seq, "mt_bio_reqctx[%d]=mt_ctx_map[%d]=%s,pid:%4d,q:%d\n",
 			i,
 			mt_bio_reqctx[i].id,
@@ -1089,7 +1166,7 @@ static void mt_bio_seq_debug_show_ringbuf(struct seq_file *seq)
 
 	mutex_lock(&mt_bio_ringbuf_lock);
 	end = (mt_bio_ringbuf_index > 0) ? mt_bio_ringbuf_index-1 : MMC_BIOLOG_RINGBUF_MAX-1;
-	for (i = mt_bio_ringbuf_index; ;) {
+	for (i = mt_bio_ringbuf_index;;) {
 		mt_bio_seq_trace(seq, i);
 		if (i == end)
 			break;
@@ -1146,7 +1223,7 @@ static int __init mt_bio_early_memory_info(void)
 	start = memblock_start_of_DRAM();
 	end = memblock_end_of_DRAM();
 	mt_bio_system_dram_size = (unsigned long long)(end - start);
-	pr_debug("DRAM: %pa - %pa, size: 0x%llx\n", &start,
+	pr_debug("[BLOCK_TAG] DRAM: %pa - %pa, size: 0x%llx\n", &start,
 		&end, (unsigned long long)(end - start));
 	return 0;
 }

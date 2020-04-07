@@ -11,8 +11,6 @@
  * GNU General Public License for more details.
  */
 
-#include "disp_drv_log.h"
-#include "ion_drv.h"
 #include <linux/slab.h>
 #include <linux/wait.h>
 #include <linux/sched.h>
@@ -20,18 +18,28 @@
 
 #include <linux/wait.h>
 #include <linux/file.h>
-
+#include "ion_drv.h"
 #include "m4u.h"
 #include "mtk_sync.h"
-#include "debug.h"
-#include "ddp_ovl.h"
 #include "mtkfb_fence.h"
 #include "ddp_path.h"
 #include "disp_drv_platform.h"
-#include "display_recorder.h"
 #include "ddp_mmp.h"
 #include "primary_display.h"
 #include "mtk_disp_mgr.h"
+
+#if defined(COMMON_DISP_LOG)
+#include "disp_log.h"
+#include "disp_debug.h"
+#include "disp_recorder.h"
+#include "mtkfb_debug.h"
+#else
+#include "debug.h"
+#include "ddp_log.h"
+#include "disp_drv_log.h"
+#include "display_recorder.h"
+#endif
+
 /************************* log*********************/
 
 static bool mtkfb_fence_on;
@@ -211,7 +219,7 @@ static disp_session_sync_info *_get_session_sync_info(unsigned int session_id)
 				layer_info->inited = 1;
 				layer_info->timeline = timeline_create(name);
 				if (layer_info->timeline)
-					DISPDBG("create timeline success: %s=%p, layer_info=%p\n",
+					DISPMSG("create timeline success: %s=%p, layer_info=%p\n",
 						name, layer_info->timeline, layer_info);
 
 				INIT_LIST_HEAD(&layer_info->buf_list);
@@ -488,13 +496,13 @@ unsigned int mtkfb_query_release_idx(unsigned int session_id, unsigned int layer
 
 			/* /idx = buf->idx; */
 			buf->buf_state = reg_updated;
-			DISPDBG("mva query1:idx=0x%x, mva=0x%lx, off=%d st %x\n", buf->idx,
+			DISPMSG("mva query1:idx=0x%x, mva=0x%lx, off=%d st %x\n", buf->idx,
 				buf->mva, buf->mva_offset, buf->buf_state);
 		} else if (((buf->mva + buf->mva_offset) != phy_addr)
 			   && (buf->buf_state == reg_updated)) {
 
 			buf->buf_state = read_done;
-			DISPDBG("mva query2:idx=0x%x, mva=0x%lx, off=%d st %x\n", buf->idx,
+			DISPMSG("mva query2:idx=0x%x, mva=0x%lx, off=%d st %x\n", buf->idx,
 				buf->mva, buf->mva_offset, buf->buf_state);
 		} else if ((phy_addr == 0) && (buf->buf_state > create)) {
 			buf->buf_state = read_done;

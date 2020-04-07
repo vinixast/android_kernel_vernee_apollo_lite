@@ -395,7 +395,7 @@ static void fiq_debugger_work(struct work_struct *work)
 		cmd += 6;
 		while (*cmd == ' ')
 			cmd++;
-		if (cmd != '\0')
+		if ((*cmd != '\0') && sysrq_on())
 			kernel_restart(cmd);
 		else
 			kernel_restart(NULL);
@@ -429,8 +429,7 @@ static void fiq_debugger_help(struct fiq_debugger_state *state)
 				" pc            PC status\n"
 				" regs          Register dump\n"
 				" allregs       Extended Register dump\n"
-				" bt            Stack trace\n");
-	fiq_debugger_printf(&state->output,
+				" bt            Stack trace\n"
 				" reboot [<c>]  Reboot with command <c>\n"
 				" reset [<c>]   Hard reset with command <c>\n"
 				" irqs          Interupt status\n"

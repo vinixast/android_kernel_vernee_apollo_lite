@@ -100,14 +100,14 @@ static void ged_notify_sw_sync_work_handle(struct work_struct *psWork)
 	if (psNotify)
 	{
 		ged_sw_vsync_event(false); // if this callback is queued, send mode off to real driver
-#ifdef ENABLE_TIMER_BACKUP				
+#ifdef ENABLE_TIMER_BACKUP		
 		temp = ged_get_time();
 		
 		if(temp-sw_vsync_ts>GED_DVFS_TIMER_TIMEOUT)
 		{
 			do_div(temp,1000);
 			psNotify->t = temp;
-			ged_dvfs_run(psNotify->t, psNotify->phase, psNotify->ul3DFenceDoneTime);
+		ged_dvfs_run(psNotify->t, psNotify->phase, psNotify->ul3DFenceDoneTime);
 			ged_log_buf_print(ghLogBuf_DVFS, "[GED_K] Timer kicked	(ts=%llu) ", temp);
 		}
 		else
@@ -204,7 +204,7 @@ GED_ERROR ged_notify_sw_vsync(GED_VSYNC_TYPE eType, GED_DVFS_UM_QUERY_PACK* psQu
 	if(g_gpu_timer_based_emu) 
 	{
 		ged_log_buf_print(ghLogBuf_DVFS, "[GED_K] Vsync ignored (ts=%llu)", temp);
-		return GED_INTENTIONAL_BLOCK;
+		return GED_ERROR_INTENTIONAL_BLOCK;
 	}
 
 
@@ -327,7 +327,7 @@ GED_ERROR ged_notify_sw_vsync(GED_VSYNC_TYPE eType, GED_DVFS_UM_QUERY_PACK* psQu
 		}				
 
 #endif			///	#ifdef ENABLE_TIMER_BACKUP		
-	return GED_INTENTIONAL_BLOCK; // not to do further operations
+	return GED_ERROR_INTENTIONAL_BLOCK; /* not to do further operations */
 #endif
 
 	return GED_OK;
@@ -369,7 +369,7 @@ enum hrtimer_restart ged_sw_vsync_check_cb( struct hrtimer *timer )
 			INIT_WORK(&psNotify->sWork, ged_notify_sw_sync_work_handle);
 			/*
 			psNotify->t = temp;
-			do_div(psNotify->t,1000);			
+			do_div(psNotify->t,1000);
 			*/
 			psNotify->phase = GED_DVFS_TIMER_BACKUP;
 			psNotify->ul3DFenceDoneTime = 0;

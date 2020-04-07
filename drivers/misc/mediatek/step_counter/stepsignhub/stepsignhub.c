@@ -301,7 +301,7 @@ static int step_chub_local_init(void)
 		STEP_CDS_ERR("register hmdy batch support err = %d\n", err);
 		goto exit_create_attr_failed;
 	}
-	
+
 	return 0;
 exit:
 	step_chub_delete_attr(&(step_cdshub_init_info.platform_diver_addr->driver));

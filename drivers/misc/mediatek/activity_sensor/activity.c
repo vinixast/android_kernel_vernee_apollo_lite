@@ -31,7 +31,7 @@ static void act_work_func(struct work_struct *work)
 	int64_t nt;
 	struct timespec time;
 	int err = 0;
-	static int64_t last_time_stamp = 0;
+	static int64_t last_time_stamp;
 	cxt = act_context_obj;
 
 	if (cxt->act_data.get_data == NULL)
@@ -434,8 +434,13 @@ static ssize_t act_show_flush(struct device *dev, struct device_attribute *attr,
 static ssize_t act_show_devnum(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	const char *devname = NULL;
+	struct input_handle *handle;
 
-	devname = dev_name(&act_context_obj->idev->dev);
+	list_for_each_entry(handle, &act_context_obj->idev->h_list, d_node)
+		if (strncmp(handle->name, "event", 5) == 0) {
+			devname = handle->name;
+			break;
+		}
 	return snprintf(buf, PAGE_SIZE, "%s\n", devname + 5);
 }
 

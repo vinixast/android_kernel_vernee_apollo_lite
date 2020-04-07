@@ -755,7 +755,7 @@ int msdc_reinit(struct msdc_host *host)
 	int ret = -1;
 
 	if (!host) {
-		ERR_MSG("msdc_host is NULL");
+		pr_err("msdc_host is NULL\n");
 		return -1;
 	}
 	mmc = host->mmc;
@@ -763,7 +763,6 @@ int msdc_reinit(struct msdc_host *host)
 		ERR_MSG("mmc is NULL");
 		return -1;
 	}
-
 	card = mmc->card;
 	if (card == NULL)
 		ERR_MSG("mmc->card is NULL");
@@ -821,7 +820,7 @@ static void msdc_get_field(struct seq_file *m, void __iomem *address,
 {
 	unsigned long field;
 
-	if (start_bit > 31 || start_bit < 0 || len > 32 || len <= 0) {
+	if (start_bit > 31 || start_bit < 0 || len > 32 || len <= 0 || ((len == 32) && (start_bit == 0))) {
 		seq_puts(m, "[SD_Debug]invalid reg field range or length\n");
 	} else {
 		field = ((1 << len) - 1) << start_bit;
@@ -1094,6 +1093,11 @@ static int multi_rw_compare_core(int host_num, int read, uint address,
 	rPtr = wPtr = (u8 *)multi_rwbuf;
 
 	host_ctl = mtk_msdc_host[host_num];
+	if (!host_ctl) {
+		pr_err(" host_ctl in host[%d]\n", host_num);
+		result = -1;
+		goto free;
+	}
 	mmc = host_ctl->mmc;
 	if (!host_ctl || !host_ctl->mmc || !host_ctl->mmc->card) {
 		pr_err(" No card initialized in host[%d]\n", host_num);
@@ -1779,7 +1783,12 @@ void msdc_dump_ext_csd(struct seq_file *m, struct msdc_host *host)
 		"4.0", "4.1", "4.2", "4.3", "Obsolete", "4.41", "4.5", "5.0", "5.1"};
 
 	mmc_claim_host(host->mmc);
-	mmc_send_ext_csd(host->mmc->card, ext_csd);
+
+	if (mmc_send_ext_csd(host->mmc->card, ext_csd)) {
+		seq_puts(m, "mmc_send_ext_csd failed\n");
+		mmc_release_host(host->mmc);
+		return;
+	}
 	mmc_release_host(host->mmc);
 
 	seq_puts(m, "===========================================================\n");
@@ -2260,8 +2269,10 @@ static int msdc_debug_proc_show(struct seq_file *m, void *v)
 		if ((offset == 0x18 || offset == 0x1C) && p1 != 4)
 			seq_puts(m, "[SD_Debug] Err: Accessing TXDATA and RXDATA is forbidden\n");
 
-		msdc_clk_enable(host);
-
+		if (msdc_clk_enable(host)) {
+			seq_puts(m, "[SD_Debug] msdc_clk_enable failed\n");
+			return 1;
+		}
 		if (p1 == 0) {
 			if (offset > 0x228) {
 				seq_puts(m, "invalid register offset\n");
@@ -2288,6 +2299,7 @@ static int msdc_debug_proc_show(struct seq_file *m, void *v)
 		}
 
 		msdc_clk_disable(host);
+
 		break;
 	case SD_TOOL_SET_DRIVING:
 		id = p2;
@@ -2655,9 +2667,9 @@ static int msdc_debug_proc_show(struct seq_file *m, void *v)
 #endif
 	case ENABLE_AXI_MODULE:
 		if (p1)
-			strcpy("enable", enable_str);
+			strcpy(enable_str, "enable");
 		else
-			strcpy("disable", enable_str);
+			strcpy(enable_str, "disable");
 		seq_printf(m, "==== %s AXI MODULE ====\n", enable_str);
 		if (p2 == 0 || p2 == 5) {
 			seq_printf(m, "%s %s transaction on AXI bus\n",
@@ -2829,8 +2841,10 @@ static int msdc_debug_proc_read_FT_show(struct seq_file *m, void *data)
 		pr_err("Invalid Host number: %d\n", CONFIG_MTK_WCN_CMB_SDIO_SLOT);
 		break;
 	}
-	msdc_clk_enable(host);
-
+	if (msdc_clk_enable(host)) {
+		seq_puts(m, "[SD_Debug] msdc_clk_enable failed\n");
+		return 1;
+	}
 	MSDC_GET_FIELD((base+0x04), MSDC_IOCON_RSPL, cmd_edge);
 	MSDC_GET_FIELD((base+0x04), MSDC_IOCON_R_D_SMPL, data_edge);
 /*
@@ -3029,6 +3043,11 @@ static ssize_t msdc_debug_proc_write_DVT(struct file *file,
 
 	struct msdc_host *host;
 
+	if (count == 0)
+		return -1;
+	if (count > 255)
+		count = 255;
+
 	ret = copy_from_user(cmd_buf, buf, count);
 	if (ret < 0)
 		return -1;
@@ -3047,10 +3066,11 @@ static ssize_t msdc_debug_proc_write_DVT(struct file *file,
 	}
 
 	host = mtk_msdc_host[i_msdc_id];
-
-	pr_err("[SD_Debug] Start Online Tuning DVT test\n");
-	mt_msdc_online_tuning_test(host, 0, 0, 0);
-	pr_err("[SD_Debug] Finish Online Tuning DVT test\n");
+	if (host) {
+		pr_err("[SD_Debug] Start Online Tuning DVT test\n");
+		mt_msdc_online_tuning_test(host, 0, 0, 0);
+		pr_err("[SD_Debug] Finish Online Tuning DVT test\n");
+	}
 
 	return count;
 }
@@ -3240,6 +3260,11 @@ static ssize_t msdc_voltage_proc_write(struct file *file,
 	int ret;
 	int sscanf_num;
 
+	if (count == 0)
+		return -1;
+	if (count > 255)
+		count = 255;
+
 	ret = copy_from_user(cmd_buf, buf, count);
 	if (ret < 0)
 		return -1;
@@ -3310,17 +3335,21 @@ static const struct file_operations msdc_voltage_flag_fops = {
 
 int msdc_debug_proc_init(void)
 {
+#if 0
 	struct proc_dir_entry *prEntry;
 	struct proc_dir_entry *tune;
 	struct proc_dir_entry *tune_flag;
+#endif
 	kuid_t uid;
 	kgid_t gid;
+#if 0
 #ifdef MSDC_HQA
 	struct proc_dir_entry *voltage_flag;
 #endif
+#endif
 	uid = make_kuid(&init_user_ns, 0);
 	gid = make_kgid(&init_user_ns, 1001);
-
+#if 0
 	prEntry = proc_create("msdc_debug", PROC_PERM, NULL, &msdc_proc_fops);
 
 	if (prEntry)
@@ -3368,6 +3397,7 @@ int msdc_debug_proc_init(void)
 	else
 		pr_err("[%s]: failed to create /proc/msdc_voltage_flag\n",
 			__func__);
+#endif
 #endif
 
 #ifdef MSDC_DMA_ADDR_DEBUG

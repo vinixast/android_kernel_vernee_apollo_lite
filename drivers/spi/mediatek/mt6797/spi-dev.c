@@ -1,3 +1,15 @@
+/*
+* Copyright (C) 2016 MediaTek Inc.
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License version 2 as
+* published by the Free Software Foundation.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+* See http://www.gnu.org/licenses/gpl-2.0.html for more details.
+*/
 #include <linux/spi/spi.h>
 #include <linux/init.h>
 #include <linux/module.h>
@@ -21,7 +33,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/sched.h>
 #include "mt_spi_hal.h"
-#include <mt_spi.h>
+#include "mt_spi.h"
 #ifdef CONFIG_TRUSTONIC_TEE_SUPPORT
 #define SPI_TRUSTONIC_TEE_SUPPORT
 #endif
@@ -282,7 +294,7 @@ static void spi_complete(void *arg)
 
 static int threadfunc1(void *data)
 {
-	struct spi_transfer transfer;
+	struct spi_transfer transfer = {0,};
 	struct spi_message msg;
 	struct spi_device *spi = (struct spi_device *)data;
 	u32 len = 8;
@@ -315,7 +327,7 @@ static int threadfunc1(void *data)
 
 static int threadfunc2(void *data)
 {
-	struct spi_transfer transfer;
+	struct spi_transfer transfer = {0,};
 	struct spi_message msg;
 	struct spi_device *spi = (struct spi_device *)data;
 
@@ -429,8 +441,16 @@ static int threadfunc4(void *data)
 #ifdef SPI_TRUSTONIC_TEE_SUPPORT
 #define DEFAULT_HANDLES_NUM (64)
 #define MAX_OPEN_SESSIONS (0xffffffff - 1)
+/*
+* Trustlet UUID.
+*/
+u8 spi_uuid[6][16] = {{0x09, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+	{0x09, 0x15, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+	{0x09, 0x16, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+	{0x09, 0x17, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+	{0x09, 0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+	{0x09, 0x19, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00} };
 
-static const struct mc_uuid_t secspi_uuid = { TL_SPI_UUID };
 static struct mc_session_handle secspi_session = { 0 };
 
 static u32 secspi_session_ref;
@@ -439,7 +459,7 @@ static tciSpiMessage_t *secspi_tci;
 
 static DEFINE_MUTEX(secspi_lock);
 
-int secspi_session_open(void)
+int secspi_session_open(u32 spinum)
 {
 	enum mc_result mc_ret = MC_DRV_OK;
 
@@ -476,7 +496,8 @@ int secspi_session_open(void)
 
 		/* open session */
 		secspi_session.device_id = secspi_devid;
-		mc_ret = mc_open_session(&secspi_session, &secspi_uuid, (uint8_t *)secspi_tci, sizeof(tciSpiMessage_t));
+		mc_ret = mc_open_session(&secspi_session, (struct mc_uuid_t *)&spi_uuid[spinum][0],
+				(uint8_t *)secspi_tci, sizeof(tciSpiMessage_t));
 
 		if (MC_DRV_OK != mc_ret) {
 			SPIDEV_MSG("secspi_session_open fail: %d\n", mc_ret);
@@ -558,7 +579,7 @@ int secspi_execute(u32 cmd, tciSpiMessage_t *param, struct mt_spi_t *ms)
 
 	return 0;
 }
-#if 0
+#if 1
 static int secspi_session_close(void)
 {
 	enum mc_result mc_ret = MC_DRV_OK;
@@ -620,6 +641,9 @@ static ssize_t spi_store(struct device *dev, struct device_attribute *attr, cons
 	struct mt_chip_conf *chip_config;
 
 	u32 setuptime, holdtime, high_time, low_time;
+#ifdef CONFIG_TRUSTONIC_TEE_SUPPORT
+	u32 spinum;
+#endif
 	u32 cs_idletime, ulthgh_thrsh;
 	int cpol, cpha, tx_mlsb, rx_mlsb, tx_endian, sample_sel, cs_pol;
 	int rx_endian, com_mod, pause, finish_intr;
@@ -641,26 +665,34 @@ static ssize_t spi_store(struct device *dev, struct device_attribute *attr, cons
 		if (!chip_config)
 			return -ENOMEM;
 	}
+	if (!buf) {
+		SPIDEV_LOG("buf is NULL.\n");
+		goto out;
+	}
 #ifdef CONFIG_TRUSTONIC_TEE_SUPPORT
-	if (!strncmp(buf, "-1", 2)) {
+	if (!strncmp(buf, "send", 4) && (1 == sscanf(buf + 4, "%d", &spinum))) {
 		/*TRANSFER*/ SPIDEV_MSG("start to access TL SPI driver.\n");
-		secspi_session_open();
+		secspi_session_open(spinum);
 		secspi_execute(1, NULL, ms);
+		secspi_session_close();
 		SPIDEV_MSG("secspi_execute 1 finished!!!\n");
-	} else if (!strncmp(buf, "-2", 2)) {	/*HW CONFIG */
+	} else if (!strncmp(buf, "config", 6) && (1 == sscanf(buf + 6, "%d", &spinum))) {	/*HW CONFIG */
 		SPIDEV_MSG("start to access TL SPI driver.\n");
-		secspi_session_open();
+		secspi_session_open(spinum);
 		secspi_execute(2, NULL, ms);
+		secspi_session_close();
 		SPIDEV_MSG("secspi_execute 2 finished!!!\n");
-	} else if (!strncmp(buf, "-3", 2)) {
+	} else if (!strncmp(buf, "debug", 5) && (1 == sscanf(buf + 5, "%d", &spinum))) {
 		/*DEBUG*/ SPIDEV_MSG("start to access TL SPI driver.\n");
-		secspi_session_open();
+		secspi_session_open(spinum);
 		secspi_execute(3, NULL, ms);
+		secspi_session_close();
 		SPIDEV_MSG("secspi_execute 3 finished!!!\n");
-	} else if (!strncmp(buf, "-4", 2)) {
+	} else if (!strncmp(buf, "test", 4) && (1 == sscanf(buf + 4, "%d", &spinum))) {
 		/*TEST*/ SPIDEV_MSG("start to access TL SPI driver.\n");
-		secspi_session_open();
+		secspi_session_open(spinum);
 		secspi_execute(4, NULL, ms);
+		secspi_session_close();
 		SPIDEV_MSG("secspi_execute 4 finished!!!\n");
 #else
 	if (!strncmp(buf, "-h", 2)) {
@@ -668,10 +700,6 @@ static ssize_t spi_store(struct device *dev, struct device_attribute *attr, cons
 #endif
 	} else if (!strncmp(buf, "-w", 2)) {
 		buf += 3;
-		if (!buf) {
-			SPIDEV_LOG("buf is NULL.\n");
-			goto out;
-		}
 		if (!strncmp(buf, "setuptime=", 10) && (1 == sscanf(buf + 10, "%d", &setuptime))) {
 			SPIDEV_MSG("setuptime is:%d\n", setuptime);
 			chip_config->setuptime = setuptime;
@@ -741,6 +769,8 @@ static ssize_t spi_store(struct device *dev, struct device_attribute *attr, cons
 
 	}
  out:
+	if (!spi->controller_data)
+		kfree(chip_config);
 	return count;
 }
 
@@ -1125,12 +1155,12 @@ static struct spi_board_info spi_board_devs[] __initdata = {
 	.chip_select = 1,
 	.mode = SPI_MODE_3,
 	},
-	/*[1] = {
+	[1] = {
 	.modalias = "spi-ut1",
 	.bus_num = 1,
 	.chip_select = 1,
 	.mode = SPI_MODE_3,
-	},*/
+	},
 	[2] = {
 	.modalias = "spi-ut2",
 	.bus_num = 2,

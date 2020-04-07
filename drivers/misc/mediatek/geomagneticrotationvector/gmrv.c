@@ -351,10 +351,15 @@ static ssize_t gmrv_show_delay(struct device *dev, struct device_attribute *attr
 static ssize_t gmrv_show_sensordevnum(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct gmrv_context *cxt = NULL;
-	char *devname = NULL;
+	const char *devname = NULL;
+	struct input_handle *handle;
 
 	cxt = gmrv_context_obj;
-	devname = (char *)dev_name(&cxt->idev->dev);
+	list_for_each_entry(handle, &cxt->idev->h_list, d_node)
+		if (strncmp(handle->name, "event", 5) == 0) {
+			devname = handle->name;
+			break;
+		}
 	return snprintf(buf, PAGE_SIZE, "%s\n", devname + 5);
 }
 
@@ -614,7 +619,7 @@ int gmrv_data_report(int x, int y, int z, int scalar, int status, int64_t nt)
 	input_report_rel(cxt->idev, EVENT_TYPE_GMRV_Z, z);
 	input_report_rel(cxt->idev, EVENT_TYPE_GMRV_SCALAR, scalar);
 	input_report_rel(cxt->idev, EVENT_TYPE_GMRV_TIMESTAMP_HI, nt >> 32);
-	input_report_rel(cxt->idev, EVENT_TYPE_GMRV_TIMESTAMP_LO, nt & 0xFFFFFFFFLL);	
+	input_report_rel(cxt->idev, EVENT_TYPE_GMRV_TIMESTAMP_LO, nt & 0xFFFFFFFFLL);
 	/* input_report_rel(cxt->idev, EVENT_TYPE_GMRV_STATUS, status); */
 	input_sync(cxt->idev);
 	return 0;

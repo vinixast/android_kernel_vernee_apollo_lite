@@ -22,6 +22,10 @@
 
 #include "mt_idle_mt6755.h"
 
+#elif defined(CONFIG_ARCH_MT6757)
+
+#include "mt_idle_mt6757.h"
+
 #elif defined(CONFIG_ARCH_MT6797)
 
 #include "mt_idle_mt6797.h"
@@ -61,6 +65,7 @@ enum {
 	BY_ISO,
 #endif
 	BY_DVFSP,
+	BY_CONN,
 	NR_REASONS,
 };
 

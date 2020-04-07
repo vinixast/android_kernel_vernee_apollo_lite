@@ -1,3 +1,16 @@
+/*
+* Copyright (C) 2016 MediaTek Inc.
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License version 2 as
+* published by the Free Software Foundation.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+* See http://www.gnu.org/licenses/gpl-2.0.html for more details.
+*/
+
 #ifndef __VOW_H__
 #define __VOW_H__
 
@@ -85,8 +98,10 @@ enum VOW_MESSAGE_TEMP {
 #define VOW_SWAPTCM_TIMEOUT           50
 #define VOW_IPIMSG_TIMEOUT            50
 #define VOW_WAITCHECK_INTERVAL_MS      1
-#define MAX_VOW_INFO_LEN               4
+#define MAX_VOW_INFO_LEN               5
 #define VOW_VOICE_DATA_LENGTH_BYTES  320
+#define VOW_VOICE_RECORD_THRESHOLD   2560 /* 80ms */
+#define VOW_VOICE_RECORD_BIG_THRESHOLD 8000 /* 250ms */
 #define VOW_IPI_TIMEOUT              500 /* 500ms */
 
 /***********************************************************************************
@@ -145,6 +160,9 @@ typedef enum VOW_FLAG_TYPE {
 	VOW_FLAG_DEBUG,
 	VOW_FLAG_PRE_LEARN,
 	VOW_FLAG_DMIC_LOWPOWER,
+	VOW_FLAG_PERIODIC_ENABLE,
+	VOW_FLAG_FORCE_PHASE1_DEBUG,
+	VOW_FLAG_FORCE_PHASE2_DEBUG,
 	NUM_OF_VOW_FLAG_TYPE
 } VOW_FLAG_TYPE;
 
@@ -193,6 +211,7 @@ typedef struct {
 	long  id;
 	long  addr;
 	long  size;
+	long  return_size_addr;
 	void *data;
 } VOW_MODEL_INFO_T;
 
@@ -206,6 +225,7 @@ typedef struct {
 	compat_size_t  id;
 	compat_size_t  addr;
 	compat_size_t  size;
+	compat_size_t  return_size_addr;
 	compat_uptr_t *data;
 } VOW_MODEL_INFO_KERNEL_T;
 
@@ -220,6 +240,7 @@ typedef struct {
 	long  id;
 	long  addr;
 	long  size;
+	long  return_size_addr;
 	void *data;
 } VOW_MODEL_INFO_T;
 
@@ -227,7 +248,7 @@ typedef struct {
 #endif
 
 void VowDrv_SetFlag(VOW_FLAG_TYPE type, bool set);
-
+struct platform_device *get_vow_platformdev(void);
 /*
 #define ReadREG(_addr, _value) ((_value) = *(volatile unsigned int *)(_addr) )
 #define WriteREG(_addr, _value) (*(volatile unsigned int *)(_addr) = (_value))

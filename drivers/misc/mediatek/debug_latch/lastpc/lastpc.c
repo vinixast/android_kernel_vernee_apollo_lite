@@ -31,6 +31,7 @@ static const struct of_device_id lastpc_of_ids[] = {
 	{ .compatible = "mediatek,mt6580-mcucfg", },
 	{ .compatible = "mediatek,mt6735-mcucfg", },
 	{ .compatible = "mediatek,mt8163-mcucfg", },
+	{ .compatible = "mediatek,mt8167-mcucfg", },
 	{ .compatible = "mediatek,mt8173-mcucfg", },
 	{}
 };

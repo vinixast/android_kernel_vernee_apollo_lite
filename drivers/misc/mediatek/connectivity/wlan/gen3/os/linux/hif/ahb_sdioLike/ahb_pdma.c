@@ -1,3 +1,17 @@
+/*
+* Copyright (C) 2016 MediaTek Inc.
+*
+* This program is free software: you can redistribute it and/or modify it under the terms of the
+* GNU General Public License version 2 as published by the Free Software Foundation.
+*
+* This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+* without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+* See the GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License along with this program.
+* If not, see <http://www.gnu.org/licenses/>.
+*/
+
 /******************************************************************************
 *[File]             ahb_pdma.c
 *[Version]          v1.0
@@ -8,15 +22,6 @@
 *[Copyright]
 *    Copyright (C) 2013 MediaTek Incorporation. All Rights Reserved.
 ******************************************************************************/
-
-/*
-** Log: ahb_pdma.c
- *
- * 03 13 2013 vend_samp.lin
- * Add AHB PDMA support
- * 1) Initial version
-**
-*/
 
 /*******************************************************************************
 *                         C O M P I L E R   F L A G S
@@ -194,6 +199,13 @@ VOID HifPdmaInit(GL_HIF_INFO_T *HifInfo)
 	DBGLOG(HAL, TRACE, "[wlan] MPU region 12, 0x%08x - 0x%08x\n", (UINT_32) gConEmiPhyBase,
 	       (UINT_32) (gConEmiPhyBase + 512 * 1024));
 
+#if 0 /* defined(MT6797), MPU TODO */
+	emi_mpu_set_region_protection(gConEmiPhyBase,
+				      gConEmiPhyBase + 512 * 1024 - 1,
+				      12,
+				      SET_ACCESS_PERMISSON(FORBIDDEN, FORBIDDEN, FORBIDDEN, FORBIDDEN, FORBIDDEN,
+							   NO_PROTECTION, FORBIDDEN, FORBIDDEN));
+#endif
 
 #if !defined(CONFIG_MTK_CLKMGR)
 	g_clk_wifi_pdma = HifInfo->clk_wifi_dma;

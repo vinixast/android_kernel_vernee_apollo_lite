@@ -735,7 +735,7 @@ int sock_setsockopt(struct socket *sock, int level, int optname,
 		val = min_t(u32, val, sysctl_wmem_max);
 set_sndbuf:
 		sk->sk_userlocks |= SOCK_SNDBUF_LOCK;
-		sk->sk_sndbuf = max_t(u32, val * 2, SOCK_MIN_SNDBUF);
+		sk->sk_sndbuf = max_t(int, val * 2, SOCK_MIN_SNDBUF);
 		/* Wake up sending tasks if we upped the value. */
 		sk->sk_write_space(sk);
 		break;
@@ -771,7 +771,7 @@ set_rcvbuf:
 		 * returning the value we actually used in getsockopt
 		 * is the most desirable behavior.
 		 */
-		sk->sk_rcvbuf = max_t(u32, val * 2, SOCK_MIN_RCVBUF);
+		sk->sk_rcvbuf = max_t(int, val * 2, SOCK_MIN_RCVBUF);
 		break;
 
 	case SO_RCVBUFFORCE:
@@ -1422,6 +1422,11 @@ static void __sk_free(struct sock *sk)
 		pr_debug("%s: optmem leakage (%d bytes) detected\n",
 			 __func__, atomic_read(&sk->sk_omem_alloc));
 
+	if (sk->sk_frag.page) {
+		put_page(sk->sk_frag.page);
+		sk->sk_frag.page = NULL;
+	}
+
 	if (sk->sk_peer_cred)
 		put_cred(sk->sk_peer_cred);
 	put_pid(sk->sk_peer_pid);
@@ -1485,6 +1490,8 @@ struct sock *sk_clone_lock(const struct sock *sk, const gfp_t priority)
 
 		sock_copy(newsk, sk);
 
+		newsk->sk_prot_creator = sk->sk_prot;
+
 		/* SANITY */
 		get_net(sock_net(newsk));
 		sk_node_init(&newsk->sk_node);
@@ -1526,6 +1533,12 @@ struct sock *sk_clone_lock(const struct sock *sk, const gfp_t priority)
 			is_charged = sk_filter_charge(newsk, filter);
 
 		if (unlikely(!is_charged || xfrm_sk_clone_policy(newsk))) {
+			/* We need to make sure that we don't uncharge the new
+			 * socket if we couldn't charge it in the first place
+			 * as otherwise we uncharge the parent's filter.
+			 */
+			if (!is_charged)
+				RCU_INIT_POINTER(newsk->sk_filter, NULL);
 			/* It is still raw copy of parent, so invalidate
 			 * destructor and make plain sk_free() */
 			newsk->sk_destruct = NULL;
@@ -1624,17 +1637,17 @@ EXPORT_SYMBOL(sock_wfree);
 
 void skb_orphan_partial(struct sk_buff *skb)
 {
-	/* TCP stack sets skb->ooo_okay based on sk_wmem_alloc,
-	 * so we do not completely orphan skb, but transfert all
-	 * accounted bytes but one, to avoid unexpected reorders.
-	 */
 	if (skb->destructor == sock_wfree
 #ifdef CONFIG_INET
 	    || skb->destructor == tcp_wfree
 #endif
 		) {
-		atomic_sub(skb->truesize - 1, &skb->sk->sk_wmem_alloc);
-		skb->truesize = 1;
+		struct sock *sk = skb->sk;
+
+		if (atomic_inc_not_zero(&sk->sk_refcnt)) {
+			atomic_sub(skb->truesize, &sk->sk_wmem_alloc);
+			skb->destructor = sock_efree;
+		}
 	} else {
 		skb_orphan(skb);
 	}
@@ -1778,6 +1791,60 @@ static long sock_wait_for_wmem(struct sock *sk, long timeo)
 	return timeo;
 }
 
+#ifdef CONFIG_MTK_NET_LOGGING
+/*2016/8/18
+  *           1. Only AF_UNIX use this debug info
+  */
+struct sock_block_info_t {
+	char *process;
+	int pid;
+	unsigned long long when;
+	struct sock *sk;
+};
+
+void print_block_sock_info(unsigned long data)
+{
+	struct sock_block_info_t  *print_info = (struct sock_block_info_t *)data;
+	struct sock *sk = print_info->sk;
+	struct unix_sock *u = unix_sk(sk);
+	struct sock *peer = NULL;
+	unsigned long long time = jiffies - print_info->when;
+
+	if (sk->sk_family != AF_UNIX)
+		return;
+	do_div(time, HZ);
+	pr_info("----------------------sock alloc memory block info-----------------------\n");
+	pr_info("[mtk_net][sock]sockdbg %s[%d] is blocking more than %lld sec\n",
+		print_info->process, print_info->pid, time);
+	if (u->path.dentry != NULL)
+			pr_info("[mtk_net][sock]sockdbg: socket-Name:%s\n", u->path.dentry->d_iname);
+		else
+			pr_info("[mtk_net][sock]sockdbg:socket Name (NULL)\n");
+	if (sk->sk_socket && SOCK_INODE(sk->sk_socket)) {
+		pr_info("[mtk_net][sock]sockdbg:socket Inode[%lu]\n",
+			SOCK_INODE(sk->sk_socket)->i_ino);
+	}
+	peer = unix_sk(sk)->peer;
+	if (!peer) {
+		pr_info("[mtk_net][sock]sockdbg:peer is (NULL)\n");
+	} else {
+		if (((struct unix_sock *)peer)->path.dentry) {
+				pr_info("[mtk_net][sock]sockdbg: Peer Name:%s\n",
+					((struct unix_sock *)peer)->path.dentry->d_iname);
+		} else {
+			pr_info("[mtk_net][sock]sockdbg: Peer Name (NULL)\n");
+		}
+			if (peer->sk_socket && SOCK_INODE(peer->sk_socket)) {
+				pr_info("[mtk_net][sock]sockdbg: Peer Inode [%lu]\n",
+					SOCK_INODE(peer->sk_socket)->i_ino);
+		}
+			pr_info("[mtk_net][sock]sockdbg: Peer Receive Queue len:%d\n",
+				peer->sk_receive_queue.qlen);
+		}
+		pr_info("----------------------sock alloc memory block info end-----------------------\n");
+}
+#endif
+
 /*
  *	Generic send/receive buffer handlers
  */
@@ -1789,7 +1856,14 @@ struct sk_buff *sock_alloc_send_pskb(struct sock *sk, unsigned long header_len,
 	struct sk_buff *skb;
 	long timeo;
 	int err;
+#ifdef CONFIG_MTK_NET_LOGGING
+	struct sock_block_info_t debug_block;
+	struct timer_list debug_timer;
+	unsigned long long delay_time = 0;
 
+	/*init debug_block struct*/
+	memset(&debug_block, 0, sizeof(debug_block));
+#endif
 	timeo = sock_sndtimeo(sk, noblock);
 	for (;;) {
 		err = sock_error(sk);
@@ -1810,15 +1884,35 @@ struct sk_buff *sock_alloc_send_pskb(struct sock *sk, unsigned long header_len,
 			goto failure;
 		if (signal_pending(current))
 			goto interrupted;
-		#ifdef CONFIG_MTK_NET_LOGGING
-		pr_debug("[mtk_net][sock]sockdbg: wait_for_wmem, timeo =%ld, wmem =%d, snd buf =%d\n",
-			 timeo, atomic_read(&sk->sk_wmem_alloc), sk->sk_sndbuf);
-	#endif
-		timeo = sock_wait_for_wmem(sk, timeo);
-		#ifdef CONFIG_MTK_NET_LOGGING
-		pr_debug("[mtk_net][sock]sockdbg: wait_for_wmem done, header_len=0x%lx, data_len=0x%lx,timeo =%ld\n",
-			 header_len, data_len, timeo);
-	    #endif
+
+#ifdef CONFIG_MTK_NET_LOGGING
+	if (sk->sk_family == AF_UNIX) {
+		debug_block.pid = current->pid;
+		debug_block.process = current->comm;
+		debug_block.when = jiffies;
+		debug_block.sk = sk; /*Mark sk info*/
+		init_timer(&debug_timer);
+		debug_timer.function = print_block_sock_info;
+		debug_timer.expires = jiffies + 10*HZ;
+		debug_timer.data = (unsigned long)&debug_block;
+		add_timer(&debug_timer);
+	}
+#endif
+	timeo = sock_wait_for_wmem(sk, timeo);
+
+#ifdef CONFIG_MTK_NET_LOGGING
+	if (sk->sk_family == AF_UNIX) {
+		del_timer(&debug_timer);
+		delay_time = jiffies - debug_block.when;
+		do_div(delay_time, HZ);
+		if (delay_time > 5) {
+			pr_info("[mtk_net][sock]sockdbg: more than 5s wait_for_wmem done, header_len=0x%lx, data_len=0x%lx,timeo =%ld\n",
+				header_len, data_len, timeo);
+			pr_info("[mtk_net][sock]sockdbg:Warning: Process %s[%d] Block %lld s\n",
+				debug_block.process, debug_block.pid, delay_time);
+		}
+	}
+#endif
 	}
 	skb = alloc_skb_with_frags(header_len, data_len, max_page_order,
 				   errcode, sk->sk_allocation);
@@ -2307,8 +2401,11 @@ void sock_init_data(struct socket *sock, struct sock *sk)
 		sk->sk_type	=	sock->type;
 		sk->sk_wq	=	sock->wq;
 		sock->sk	=	sk;
-	} else
+		sk->sk_uid	=	SOCK_INODE(sock)->i_uid;
+	} else {
 		sk->sk_wq	=	NULL;
+		sk->sk_uid	=	make_kuid(sock_net(sk)->user_ns, 0);
+	}
 
 	spin_lock_init(&sk->sk_dst_lock);
 	rwlock_init(&sk->sk_callback_lock);
@@ -2612,11 +2709,6 @@ void sk_common_release(struct sock *sk)
 	xfrm_sk_free_policy(sk);
 
 	sk_refcnt_debug_release(sk);
-
-	if (sk->sk_frag.page) {
-		put_page(sk->sk_frag.page);
-		sk->sk_frag.page = NULL;
-	}
 
 	sock_put(sk);
 }
