@@ -976,6 +976,8 @@ static int tcp_metrics_nl_cmd_get(struct sk_buff *skb, struct genl_info *info)
 	int ret;
 	bool src = true;
 
+	saddr.family = 0;
+
 	ret = parse_nl_addr(info, &daddr, &hash, 0);
 	if (ret < 0)
 		return ret;
