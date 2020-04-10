@@ -107,7 +107,7 @@ extern unsigned char gtp_default_FW_fl[];
 #define GTP_CONFIG_MIN_LENGTH       186
 #define GTP_CONFIG_MAX_LENGTH       240
 #define GTP_WITH_PEN          0
-#define GTP_SLIDE_WAKEUP      1
+#define GTP_SLIDE_WAKEUP      0
 #define GTP_DBL_CLK_WAKEUP    0	/* double-click wakup, function together with GTP_SLIDE_WAKEUP*/
 /*#define CONFIG_HOTKNOT_BLOCK_RW      1*/
 
@@ -157,6 +157,7 @@ extern void force_reset_guitar(void);
 /***************************PART3:OTHER define*********************************/
 #define GTP_DRIVER_VERSION          "V2.1<2014/01/10>"
 #define GTP_I2C_NAME                "Goodix-TS"
+#define GT91XX_CONFIG_PROC_FILE     "gt9xx_config"
 #define GTP_POLL_TIME               10
 #define GTP_ADDR_LENGTH             2
 #define GTP_CONFIG_MIN_LENGTH       186
@@ -380,3 +381,4 @@ extern s32 gup_update_proc(void *dir);
 
 
 #endif				/* TOUCHPANEL_H__ */
+
